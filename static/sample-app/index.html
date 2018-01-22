@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Fhir Bulk Data</title>
+        <link rel="shortcut icon" href="../img/favicon.png" type="image/png" />
+        <link href="../vendor/bootstrap-3.3.6/css/bootstrap.min.css" rel="stylesheet">
+        <link href="../vendor/bootstrap-3.3.6/css/bootstrap-theme.min.css" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+            <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+        <![endif]-->
+        <style>
+            h1.page-header {
+                background: url(logo.png) left -2px no-repeat;
+                background-size: 64px;
+                padding-left: 71px;
+                line-height: 34px;
+                font-size: 32px;
+            }
+            h1.page-header small {
+                white-space: nowrap;
+                line-height: 26px;
+                display: block;
+                font-size: 16px;
+                font-weight: 400;
+                letter-spacing: 7px;
+            }
+            .file-list, .resource-check-list {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+                height: auto;
+                text-shadow: 0 1px 0 #FFF;
+            }
+            .resource-check-list label {
+                display: flex;
+                flex   : 0 1 216px;
+                margin : 2px;
+                font-weight: normal;
+            }
+            .resource-check-list label small {
+                vertical-align: top;
+                line-height: 20px;
+            }
+            label > input[type="checkbox"] {
+                margin-right: 4px;
+            }
+            .download-link {
+                display: flex;
+                flex   : 0 1 216px;
+                padding: 2px 6px;
+                border-radius: 3px;
+                align-items: flex-start;
+            }
+            .download-link:hover {
+                background: #EEE;
+                text-decoration: none;
+                box-shadow: 0 0 2px -1px #000 inset; 
+            }
+            .download-link > .fa {
+                margin-right: 6px;
+                opacity: 0.8;
+                line-height: inherit;
+                color: #999;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1 class="page-header">
+                FHIR Bulk Downloader
+                <small>sample app</small>
+            </h1>
+            <form>
+                <div class="row">
+                    <div class="col-xs-12">
+                        <h5 class="text-success">
+                            <i class="fa fa-list" aria-hidden="true"></i> Resources to Download
+                        </h5>
+                        <div class="form-control resource-check-list" readonly></div>
+                    </div>
+                </div>
+                <br/>
+                <div class="row">
+                    <div class="col-sm-6">
+                        <h5 class="text-success">
+                            <i class="fa fa-users" aria-hidden="true"></i> Patients Group
+                        </h5>
+                        <select class="form-control" id="group">
+                            <option>No Group (include all the patients)</option>
+                        </select>
+                        <p class="small text-muted help-block">Instead of exporting all patients, you can select a group and anly work with patients within that group.</p>
+                        <br/>
+                    </div>
+                    <div class="col-sm-6">
+                        <h5 class="text-success">
+                            <i class="fa fa-clock-o" aria-hidden="true"></i> Filter by Modification Date/Time
+                        </h5>
+                        <select class="form-control" id="start"></select>
+                        <p class="small text-muted help-block">You can filter the data and only include resources that have been modified after the specified date.</p>
+                        <br/>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-xs-12">
+                        <label class="text-success">
+                            <i class="fa fa-link" aria-hidden="true"></i> Download Link
+                        </label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="url">
+                            <span class="input-group-btn">
+                                <button class="btn btn-success">Prepare Download!</button>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <br/>
+                <div class="hidden preparing-progress">
+                    <label class="text-success">
+                        Preparing files. Please wait...
+                    </label>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
+                            <span class="sr-only">0% Complete</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel panel-success hidden">
+                    <div class="panel-heading"><b>Files to Download</b> <b class="badge"></b></div>
+                    <div class="panel-body file-list"></div>
+                </div>
+                <div class="panel panel-danger" style="display: none">
+                    <div class="panel-heading"><b>Error</b></div>
+                    <div class="panel-body">
+                        <pre id="error" class="text-danger"></pre>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <script src="../vendor/jquery-1.12.3.min.js"></script>
+        <script src="../vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
+        <script src="../vendor/moment.min.js"></script>
+        <script src="../lib.js"></script>
+        <script>
+            var STATE  = Lib.getUrlQuery({ camelCaseKeys: true });
+            var PARAMS = getHiddenParams(STATE.server);
+            var TIMER;
+
+            function uInt(x, defaultValue = 0) {
+                x = parseInt(x + "", 10);
+                if (isNaN(x) || !isFinite(x) || x < 0) {
+                    x = uInt(defaultValue, 0);
+                }
+                return x;
+            }
+
+            function formatNumber(n) {
+                n = uInt(n);
+                n = String(n).split("");
+                let l = 0, out = [];
+
+                for (let i = n.length - 1; i >= 0; i--) {
+                    if (l && l % 3 === 0) {
+                        out.unshift(",");
+                    }
+                    out.unshift(n[i]);
+                    l++;
+                }
+
+                return out.join("");
+            }
+
+            function getHiddenParams(url) {
+                var code;
+                try {
+                    var match = url.match(/\/([^/]+)\/fhir/);
+                    if (match && match[1]) {
+                        code = JSON.parse(Lib.base64UrlDecode(match[1]));
+                    }
+                } catch (ex) {
+                    code = null
+                }
+                finally {
+                    if (!code || typeof code != "object") {
+                        code = {}
+                    }
+                }
+                return code;
+            }
+
+            function base64UrlEscape(str) {
+                return str.replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=/g, '');
+            }
+
+            function base64UrlEncode(str) {
+                return base64UrlEscape(btoa(str));
+            }
+            
+            function buildGroupSelector(groups) {
+                var select = $("#group").html(
+                    '<option value="">No Group (include all the patients)</option>'
+                );
+                select.append(
+                    '<option value="" disabled>---------------------------------------------------</option>'
+                );
+                $.each(groups.entry, function(i, g) {
+                    var opt = $("<option/>");
+                    opt.attr("value", g.id);
+                    opt.text(g.name + " (" + formatNumber(g.quantity) + " patients)");
+                    select.append(opt);
+                });
+            }
+
+            function buildResourceCheckboxes(resources) {
+                var div = $(".resource-check-list").empty();
+
+                $.each(resources, function(i, o) {
+                    var cb = $('<input type="checkbox" />');
+                    cb.attr({
+                        value  : o.name,
+                        checked: true,
+                        name   : "type"
+                    });
+                    var label = $('<label/>');
+                    label.text(" " + o.name);
+                    label.append('<small class="text-muted">&nbsp;(' + formatNumber(o.valueInteger) + ')</small>');
+                    label.prepend(cb);
+                    div.append(label);
+                });
+            }
+
+            function buildStartSelector() {
+                $("#start").html([
+                    '<option value="">No Time Filter (include everything)</option>',
+                    '<option value="' + (moment().subtract(1 , "month").format("YYYY-MM-DD")) + '">Within the last month</option>',
+                    '<option value="' + (moment().subtract(1 , "year" ).format("YYYY-MM-DD")) + '">Within the last year</option>',
+                    '<option value="' + (moment().subtract(5 , "years").format("YYYY-MM-DD")) + '">Within the last 5 years</option>',
+                    '<option value="' + (moment().subtract(10, "years").format("YYYY-MM-DD")) + '">Within the last 10 years</option>',
+                    '<option value="' + (moment().subtract(20, "years").format("YYYY-MM-DD")) + '">Within the last 20 years</option>'
+                ].join(""));
+            }
+
+            function buildDownloadUrl() {
+                var params    = [];
+                var group     = $("#group").val();
+                var start     = $("#start").val();
+                var dur       = (PARAMS.dur || 10);
+                var type      = $(":checkbox[name=type]").get();
+                var allLength = type.length;
+                type = type.filter(function(cb) {//debugger;
+                    return !!cb.checked
+                }).map(function(cb) { return cb.value; });
+
+                var url = "/fhir/" + (group ? "Group/" + group : "Patient") + "/$everything";
+
+                if (start) {
+                    params.push("start=" + start);
+                }
+
+                if (type.length && type.length != allLength) {
+                    params.push("_type=" + type.join(","))
+                }
+
+                if (params.length) {
+                    url += "?" + params.join("&");
+                }
+
+                url = buildURL(url)
+
+                $("#url").val(url);
+                $(".progress-bar").css("transition-duration", Math.ceil(dur/20) + "s");
+                // return url;
+            }
+
+            function showError(error) {
+                var txt = "Unknown error";
+                if (error instanceof Error) {
+                    txt = String(error);
+                }
+                else if (error.responseJSON) { // XHR with JSON response
+                    txt = JSON.stringify(error.responseJSON, null, 4);
+                }
+                else if (error.status && error.statusText) { // XHR error
+                    txt = error.status + ": " + error.statusText;
+                }
+                else {
+                    console.log(txt + ": ", arguments);
+                }
+
+                $("#error").text(txt).closest(".panel").show();
+                $(".preparing-progress").addClass("hidden");
+            }
+
+            function hideError() {
+                $("#error").empty().closest(".panel").hide();
+            }
+
+            function setProgress(n) {
+                $(".progress-bar")
+                    .attr("aria-valuenow", n)
+                    .css("width", n + "%")
+                    .find(".sr-only").text(n + "% Complete");
+            }
+
+            function buildURL(path) {
+                var server = String(STATE.server || location.origin).replace(/\bfhir\/?$/, "");
+                server = server.replace(/^https?\:/, location.protocol);
+                return server + String(path || "/").replace(/^\//, "");
+            }
+
+            function prepareDownload() {
+                hideError();
+                $.ajax({
+                    url: $("#url").val(),
+                    headers: {
+                        Accept: "application/fhir+ndjson",
+                        Prefer: "respond-async"
+                    }
+                }).then(function(body, resultCode, xhr) {
+                    if (xhr.status == 202) { // Accepted
+                        var statusUrl = xhr.getResponseHeader("content-location");
+                        setProgress(0);
+                        $(".preparing-progress").removeClass("hidden");
+                        waitForFiles(statusUrl);
+                    }
+                    else if (xhr.status == 204) { // No Content
+                        $(".badge").text("0");
+                        $(".file-list").html(
+                            '<b class="text-danger">No data was found to match your parameters</b>'
+                        ).closest(".panel").removeClass("hidden");
+                    }
+                }, showError)
+            }
+
+            function waitForFiles(url) {
+                $.ajax({
+                    url: url
+                }).then(function(body, resultCode, xhr) {
+                    var dur = (PARAMS.dur || 0) * 1000;
+                    if (xhr.status == 200) {
+                        var files = xhr.getResponseHeader("link").split(",")
+                        if (dur) {
+                            setProgress(100);
+                            if (TIMER) clearTimeout(TIMER);
+                            TIMER = setTimeout(function() {
+                                listFiles(files);
+                            }, Math.ceil(dur/19));
+                        } else {
+                            listFiles(files);
+                        }
+                    }
+                    else {
+                        var pct = parseInt(xhr.getResponseHeader("x-progress"), 10);
+                        if (!isNaN(pct) && isFinite(pct)) {
+                            setProgress(pct);
+                            if (pct < 100) {
+                                if (TIMER) clearTimeout(TIMER);
+                                TIMER = setTimeout(function() {
+                                    waitForFiles(url);
+                                }, Math.ceil((dur || 10000)/20));
+                            }
+                        }
+                    }
+                }, showError);
+            }
+
+            function listFiles(files) {
+                $(".preparing-progress").addClass("hidden");
+                $fileList = $(".file-list");
+                
+                var len = files.length;
+
+                if (len > 100) {
+                    $(".badge").text("first 100 of " + len);
+                    files = files.slice(0, 100);
+                } else {
+                    $(".badge").text(len);
+                }
+
+                $fileList.html(
+                    files.map(function(f) {
+                        var url = f.replace(/^</, "").replace(/>$/, "");
+                        return '<a class="download-link text-success" rel="download" href="' + url + '">' +
+                            '<i class="fa fa-file-text-o" aria-hidden="true"></i>' + url.split("/").pop() +
+                            '</a>';
+                    }).join("")
+                );
+
+                $fileList.closest(".panel").removeClass("hidden");
+            }
+
+            jQuery(function($) {
+                var base = String(STATE.server || location.origin);
+                base = base.replace(/\bfhir\/?$/, "");
+                base = base.replace(/\/[^/]*$/, "")
+                $.when(
+                    $.get(base + "/fhir/Group"),
+                    $.get(base + "/fhir/$get-resource-counts")
+                )
+                .then(function(groups, resources) {
+                    // console.log(arguments)
+                    buildGroupSelector(groups[0]);
+                    buildResourceCheckboxes(resources[0].parameter);
+                })
+                .then(function() {
+                    buildStartSelector();
+                    $(document).on("change", "select, :checkbox", buildDownloadUrl);
+                    $("form").on("submit", function(e) {
+                        e.preventDefault();
+                        prepareDownload();
+                    });
+                    buildDownloadUrl();
+                });
+            });
+        </script>
+    </body>
+</html>

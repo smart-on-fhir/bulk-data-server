@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+        <title>SMART App Launcher</title>
+        <link rel="shortcut icon" href="/img/favicon.png" type="image/png" />
+        <link href="/vendor/bootstrap-3.3.6/css/bootstrap.min.css" rel="stylesheet">
+        <link href="/vendor/bootstrap-3.3.6/css/bootstrap-theme.min.css" rel="stylesheet">
+        <link href="/blue-nav.css" rel="stylesheet">
+        <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+        <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+            <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+        <![endif]-->
+        <script src="/vendor/jquery-1.12.3.min.js"></script>
+        <script src="/vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
+        <script src="/env.js"></script>
+        <script src="/server-config.js"></script>
+        <script src="/lib.js"></script>
+        <script src="/app.js"></script>
+    </head>
+    <body>
+        <!-- Private Key Dialog ============================================ -->
+        <div class="modal" tabindex="-1" role="dialog" id="rsa-dialog">
+            <div class="modal-dialog open" role="document">
+                <div class="modal-content">
+                    <div class="modal-header navbar-default">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                        <h5 class="modal-title">Private Key</h5>
+                    </div>
+                    <div class="modal-body navbar-default">
+                        <label class="text-right" style="display: block">    
+                            <b class="small normal-weight btn btn-info btn-xs" data-dismiss="modal" onClick="Lib.copyElement('#gen-private-key')">Copy</b>
+                            <p class="pull-left text-left">Copy this private key and use it in
+                            your app to sign the token claims<br/>(authentication JWT).</p>
+                        </label>
+                        <textarea rows="16" id="gen-private-key" class="form-control input-sm" readonly data-prop="private_key"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Navbar ======================================================== -->
+        <div class="navbar navbar-custom navbar-static-top">
+            <div class="container">
+                <div class="navbar-header">
+                    <div class="pull-left logo">
+                        <img src="/img/smart-bug.png" />
+                    </div>
+                    <a class="navbar-brand" href="/index.html" style="white-space:nowrap;text-overflow:ellipsis;text-shadow:none" title="Click here to re-start the app with it's default settings">
+                        SMART Bulk Data Server <b style="color:#efa948;text-shadow:0 0 1px #000, 0 1px 0 #000">alpha</b>
+                    </a>
+                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                </div>
+                <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+                    <ul class="nav navbar-nav navbar-right" style="margin-right: 0">
+                        <li class="dropdown">
+                            <button type="button" class="dropdown-toggle btn btn-warning" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false" style="margin:8px 0" onmousedown="$('#bookmark-preview').val(location.href);">Save <span class="caret"></span></button>
+                            <div class="dropdown-menu">
+                                <div class="panel-body">
+                                    <p>
+                                        <b>All of the options of this page are stored in the URL.<br/>
+                                        You can copy it to share your settings, or bookmark this page to save them.</b>
+                                    </p>
+                                    <textarea readonly class="form-control input-sm" rows="6" id="bookmark-preview" style="word-break: break-all;"></textarea>
+                                </div>
+                                <div class="container-fluid panel-footer">
+                                    <div class="row">
+                                        <div class="col-xs-6 text-right">
+                                            <a id="bookmark" href="#" target="_blank" class="btn btn-default" style="width:11em">Google Bookmark</a>
+                                        </div>
+                                        <div class="col-xs-6 text-left">
+                                            <button class="btn btn-default" style="width:11em" onMouseDown="Lib.copyElement('#bookmark-preview');return false;" type="button">Copy</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loader ======================================================== -->
+        <div class="container" id="loading">
+            <div class="row">
+                <div class="col-xs-12" style="text-align: center;margin-top:50px;">
+                    <img src="/img/ajax-loader.gif"/>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Contents ================================================= -->
+        <form>
+            <button type="submit" style="position: fixed; top: -100px">Submit</button>
+            <div class="container" id="content" style="display:none;">
+                <br/>
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <b class="text-primary">
+                            <i class="glyphicon glyphicon-cog"></i> Launch Options
+                        </b>
+                    </div>
+                    <div class="panel-body navbar-default">
+
+
+                        <!-- Public Key ======================================== -->
+                        <br clear="all"/>
+                        <div class="form-group col-sm-6">
+                            <label for="public-key" style="display: block">
+                                <button type="button" class="btn btn-warning btn-xs pull-right hidden" data-toggle="modal" data-target="#rsa-dialog" id="show-private-key" style="margin-left: 3px">View Private Key</button>
+                                <button type="button" class="btn btn-info btn-xs pull-right" id="generate-keys">Generate Keys</button>
+                                Public Key
+                            </label>
+                            <textarea
+                                id="public-key"
+                                data-prop="public_key"
+                                rows="5"
+                                class="form-control input-sm"
+                                placeholder="base64-encoded RSA-256 public key"
+                            ></textarea>
+                            <p class="help-block small">Paste your RSA-256 public key or use the button above to generate a new one</p>
+                            <input type="hidden" name="last-public-key">
+                        </div>
+
+                        <!-- ISS =============================================== -->
+                        <div class="form-group col-sm-6">
+                            <label for="iss">Service URL</label>
+                            <input
+                                type="text"
+                                id="iss"
+                                data-prop="iss"
+                                class="form-control"
+                                placeholder="Service URL"
+                                name="service-url"
+                                autocomplete="on"
+                            >
+                            <br/>
+                            <label>Resources per File</label>
+                            <select class="form-control" id="page" data-prop="page">
+                                <option value="10">10</option>
+                                <option value="100">100</option>
+                                <option value="1000">1,000</option>
+                                <option value="10000" selected>10,000</option>
+                                <option value="100000">100,000</option>
+                                <option value="1000000">1,000,000</option>
+                            </select>
+                        </div>
+
+                        <!-- Advanced ========================================== -->
+                        <div class="form-group col-xs-12" style="margin-bottom: 0">
+                            <label class="text-warning">Advanced</label>
+                            <hr class="solid fg-warning"/>
+                            <div class="row">
+                                <div class="col-sm-6">                                  
+                                    <label>Access Token Lifetime</label>
+                                    <select class="form-control" id="token-lifetime" data-prop="tlt">
+                                        <option value="1">1 minute</option>
+                                        <option value="15" selected>15 minutes</option>
+                                        <option value="60">1 hour</option>
+                                    </select>
+                                    <br />
+                                    <label>Database Size</label>
+                                    <select class="form-control" id="m" data-prop="m">
+                                        <option value="1">100 Patients</option>
+                                        <option value="10">1,000 Patients</option>
+                                        <option value="100">10,000 Patients</option>
+                                        <option value="1000">100,000 Patients</option>
+                                        <option value="10000">1,000,000 Patients</option>
+                                    </select>
+                                    <br />
+                                </div>
+                                <div class="col-sm-6">
+                                    <label for="sb">Simulate Error for Testing</label>
+                                    <select id="err" class="form-control" data-prop="err">
+                                        <option value="">None</option>
+                                        <option value="token_invalid_token">Token - Invalid Token</option>
+                                        <option value="token_expired_registration_token">Token - Expired Registration Token (for backend services)</option>
+                                        <option value="token_invalid_scope">Token - Invalid Scope</option>
+                                        <option value="invalid_jti">Token - Invalid 'jti' Value (for backend services)</option>
+                                        <option value="request_invalid_token">Request - Invalid Token</option>
+                                        <option value="request_expired_token">Request - Expired Token</option>
+                                        <option value="file_generation_failed">Bulk Status - File generation failed</option>
+                                        <option value="file_expired">Bulk File - File expired</option>
+                                    </select>
+                                    <br />
+                                    <label>Simulated file generation duration</label>
+                                    <select class="form-control launch launch-bulk" id="dur" data-prop="dur">
+                                        <option value="0">Immediate</option>
+                                        <option value="10" selected>10 Seconds</option>
+                                        <option value="60">1 Minute</option>
+                                        <option value="600">10 Minutes</option>
+                                    </select>
+                                    <br/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <br/>
+
+                <div class="panel panel-success navbar-default">
+                    <div class="panel-heading">
+                        <a href="#" target="_blank" class="btn btn-sm btn-success pull-right" style="margin: -4px -10px 0 0" id="download" download="config.json">Download as JSON</a>
+                        <b class="text-success">Launch Configuration</b>
+                    </div>
+                    
+                    <div class="panel-body">
+                        
+                        <div class="form-group col-sm-6">
+                            <a href="/sample-app/index.html?server=/fhir" id="try-app-link" target="_blank" class="btn btn-info btn-xs pull-right" stylr="transition: all 120ms">Try Sample App</a>
+                            <label>FHIR Server URL</label>
+                            <input type="text" class="form-control" id="fhir-server-url" data-prop="fhir_server_url" readonly>
+                        </div>
+
+                        <div class="form-group col-sm-6">
+                            <label>Authentication URL</label>
+                            <input type="text" class="form-control" id="token-url" data-prop="auth_url" readonly>
+                        </div>
+
+                        <div class="form-group col-sm-12">
+                            <label>Client ID</label>
+                            <textarea class="form-control input-sm" rows="4" id="client-id" data-prop="client_id" readonly></textarea>
+                        </div>    
+                        
+                    </div>
+                    <div class="panel-footer alert-warning list-group-item-warning text-success">
+                        <h3 class="glyphicon glyphicon-info-sign pull-left" style="margin:0;color: rgba(205, 198, 158, 0.84);text-shadow: 0px 1px 1px rgb(255, 255, 255), 0px 0px 0px rgb(0, 0, 0);"></h3>
+                        <ul style="margin: 0; list-style: none" class="text-muted">
+                            <li class="launch launch-bulk" style="line-height: 30px">
+                                <a href="http://wiki.hl7.org/index.php?title=201801_Bulk_Data" target="_blank">Bulk Data Docs <i class="glyphicon glyphicon-new-window"></i></a>
+                                &nbsp;|&nbsp;
+                                <a href="http://docs.smarthealthit.org/authorization/backend-services/" target="_blank">Backend Services Docs <i class="glyphicon glyphicon-new-window"></i></a>
+                                &nbsp;|&nbsp;
+                                <a href="https://github.com/smart-on-fhir/sample-apps-stu3/tree/master/fhir-downloader" target="_blank">View NodeJS Sample App <i class="glyphicon glyphicon-new-window"></i></a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </form>
+        <br />
+    </body>
+</html>
