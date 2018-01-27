@@ -62,7 +62,7 @@ app.use(function (err, req, res, next) {
 
 if (!module.parent) {
     app.listen(config.port, function() {
-        console.log("Example app listening on " + config.baseUrl);
+        console.log("Server listening at " + config.baseUrl);
     });
 }
 
