@@ -302,6 +302,10 @@ function handleStatus(req, res) {
                 params.offset = page * i; // overwrite offset
                 params.limit  = page;     // overwrite limit
 
+                if ("request" in params) {
+                    delete params.request;
+                }
+
                 // _params will be consumed by the file download endpoint
                 // sample: <http://localhost:8443/v/r3/sim/eyJ...H0/fhir/bulkfiles/2.Observation.ndjson>
                 let linkHref = Lib.buildUrlPath(
