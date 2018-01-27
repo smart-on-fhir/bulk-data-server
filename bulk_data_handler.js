@@ -9,7 +9,7 @@ const OpDef        = require("./fhir/OperationDefinition/index");
 const fhirStreamer = require("./fhirStreamer");
 
 // Errors as operationOutcome responses
-const ErrorOutcomes = {
+const outcomes = {
     fileExpired: res => Lib.operationOutcome(
         res,
         "Access to the target resource is no longer available at the server " +
@@ -21,6 +21,16 @@ const ErrorOutcomes = {
         res,
         "No Content - your query did not match any fhir resources",
         { httpCode: 204 }
+    ),
+    invalidAccept: (res, accept) => Lib.operationOutcome(
+        res,
+        `Invalid Accept header "${accept}". Currently we only recognize "application/fhir+ndjson" and "application/fhir+json"`,
+        { httpCode: 400 }
+    ),
+    invalidOutputFormat: (res, value) => Lib.operationOutcome(
+        res,
+        `Invalid output-format parameter "${value}". Currently we only recognize "application/fhir+ndjson"`,
+        { httpCode: 400 }
     ),
     requireAcceptNdjson: res => Lib.operationOutcome(
         res,
@@ -71,7 +81,7 @@ function extractSim(req, res, next) {
  */
 function requireNdjsonAcceptHeader(req, res, next) {
     if (req.headers.accept != "application/fhir+ndjson") {
-        return ErrorOutcomes.requireAcceptNdjson(res);
+        return outcomes.requireAcceptNdjson(res);
     }
     next();
 }
@@ -85,7 +95,7 @@ function requireNdjsonAcceptHeader(req, res, next) {
  */
 function requireRespondAsyncHeader(req, res, next) {
     if (req.headers.prefer != "respond-async") {
-        return ErrorOutcomes.requirePreferAsync(res);
+        return outcomes.requirePreferAsync(res);
     }
     next();
 }
@@ -101,13 +111,13 @@ function validateRequestStart(req, res, next) {
 
     // ensure requestStart param is present
     if (!requestStart) {
-        return ErrorOutcomes.requireRequestStart(res);
+        return outcomes.requireRequestStart(res);
     }
 
     try {
         requestStart = Lib.fhirDateTime(requestStart);
     } catch (ex) {
-        return ErrorOutcomes.invalidRequestStart(req, res);
+        return outcomes.invalidRequestStart(req, res);
     }
 
     // requestStart - ensure valid date/time note that  using try does not
@@ -115,12 +125,12 @@ function validateRequestStart(req, res, next) {
     // the first time
     try { requestStart = moment(requestStart); } catch (ex) {  }
     if (!requestStart.isValid()) {
-        return ErrorOutcomes.invalidRequestStart(req, res);
+        return outcomes.invalidRequestStart(req, res);
     }
 
     // requestStart - ensure start param is valid moment in time
     if (requestStart.isSameOrAfter(moment())) {
-        return ErrorOutcomes.futureRequestStart(res);
+        return outcomes.futureRequestStart(res);
     }
 
     next();
@@ -136,6 +146,22 @@ function validateRequestStart(req, res, next) {
  * @param {Number} groupId 
  */
 function handleRequest(req, res, groupId = null) {
+
+    // Validate the accept header
+    let accept = req.headers.accept || "application/fhir+ndjson";
+    if (!accept || accept == "*/*") {
+        accept = "application/fhir+ndjson"
+    }
+    if (accept != "application/fhir+ndjson" &&
+        accept != "application/fhir+json") {
+        return outcomes.invalidAccept(res, accept);
+    }
+
+    // validate the output-format parameter
+    let outputFormat = req.query['output-format']
+    if (outputFormat && outputFormat != "application/fhir+ndjson") {
+        return outcomes.invalidOutputFormat(res, outputFormat);
+    }
 
     // Now we need to count all the requested resources in the database.
     // This is to avoid situations where we make the clients wait certain
@@ -177,8 +203,10 @@ function handleRequest(req, res, groupId = null) {
 
         // Simulate file_generation_failed error if requested
         if (args.err == "file_generation_failed") {
-            return ErrorOutcomes.fileGenerationFailed(res);
+            return outcomes.fileGenerationFailed(res);
         }
+
+        args.request = req.originalUrl;
 
         // Prepare the status URL
         let params = base64url.encode(JSON.stringify(args));
@@ -192,6 +220,7 @@ function handleRequest(req, res, groupId = null) {
         // client can use to access the response.
         // HTTP/1.1 202 Accepted
         res.set("Content-Location", url).status(202).end();
+        
     }, error => res.send(error));
 };
 
@@ -249,11 +278,12 @@ function handleStatus(req, res) {
 
         // Exit early if we have a valid query but it doesn't match anything
         if (!len) {
-            return ErrorOutcomes.noContent(res);
+            return outcomes.noContent(res);
         }
 
         // Finally generate those download links
         let links    = "";
+        let linksArr = []
         let linksLen = 0;
         let params   = Object.assign({}, sim);
         let baseUrl  = config.baseUrl + req.originalUrl.split("?").shift().replace(/\/[^/]+\/fhir\/.*/, "");
@@ -274,12 +304,14 @@ function handleStatus(req, res) {
 
                 // _params will be consumed by the file download endpoint
                 // sample: <http://localhost:8443/v/r3/sim/eyJ...H0/fhir/bulkfiles/2.Observation.ndjson>
-                let link = "<" + Lib.buildUrlPath(
+                let linkHref = Lib.buildUrlPath(
                     baseUrl,
                     base64url.encode(JSON.stringify(params)),
                     "/fhir/bulkfiles/",
                     `${i + 1}.${row.fhir_type}.ndjson`
-                ) + ">";
+                );
+
+                let link = "<" + linkHref + ">"
 
                 if (linksLen) {
                     link = "," + link;
@@ -291,6 +323,7 @@ function handleStatus(req, res) {
                     return res.status(413).send("Response headers too large");
                 }
 
+                linksArr.push({ type: row.fhir_type, url: linkHref })
                 links += link;
                 linksLen += 1;
             }
@@ -306,8 +339,14 @@ function handleStatus(req, res) {
             "Link": links
         });
 
+        // console.log(sim)
         res.status(200);
-        // res.json(rows);
+        res.json({
+            "transactionTime": requestStart,  //the server's time when the query is run (no resources that have a modified data after this instant should be in the response)
+            "request" : sim.request, //GET request that kicked-off the bulk data response
+            "secure" : false, //authentication is required to retrieve the files
+            "output" : linksArr
+        });
         res.end();
     });
 };
@@ -316,7 +355,7 @@ function handleFileDownload(req, res) {
 
     // early exit in case simulated errors
     if (req.sim.err == "file_expired") {
-        return ErrorOutcomes.fileExpired(res);
+        return outcomes.fileExpired(res);
     }
 
     // set the response headers
@@ -334,7 +373,7 @@ router.get("/Patient/\\$everything", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    requireNdjsonAcceptHeader,
+    // requireNdjsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
@@ -351,7 +390,7 @@ router.get("/group/:groupId/\\$everything", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    requireNdjsonAcceptHeader,
+    // requireNdjsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
