@@ -80,16 +80,36 @@ function downloadPatients(options) {
             .then(() => done(), done)
         });
 
-        it ("requires 'Accept: application/fhir+ndjson' header", done => {
-            request({ uri: meta.buildUrl() }, (error, res) => {
-                if (error) {
-                    return done(error);
+        it ("requires valid 'Accept' header", done => {
+            lib.requestPromise({
+                uri: meta.buildUrl(),
+                headers: {
+                    Prefer: "respond-async"
                 }
-                lib.expectErrorOutcome(res, {
-                    message: "The Accept header must be application/fhir+ndjson",
-                    code   : 400
-                }, done)
-            });
+            })
+            .then(() => lib.requestPromise({
+                uri: meta.buildUrl(),
+                headers: {
+                    Accept: "application/fhir+ndjson",
+                    Prefer: "respond-async"
+                }
+            }))
+            .then(() => lib.requestPromise({
+                uri: meta.buildUrl(),
+                headers: {
+                    Accept: "application/fhir+json",
+                    Prefer: "respond-async"
+                }
+            }))
+            .then(() => lib.requestPromise({
+                uri: meta.buildUrl(),
+                headers: {
+                    Accept: "bad-header",
+                    Prefer: "respond-async"
+                }
+            }).catch(err => 1))
+
+            .then(() => done(), done);
         });
 
         it ("requires 'Prefer: respond-async' header", done => {

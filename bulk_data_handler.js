@@ -149,7 +149,7 @@ function validateRequestStart(req, res, next) {
 function handleRequest(req, res, groupId = null) {
 
     // Validate the accept header
-    let accept = req.headers.accept || "application/fhir+ndjson";
+    let accept = req.headers.accept;
     if (!accept || accept == "*/*") {
         accept = "application/fhir+ndjson"
     }
@@ -202,7 +202,11 @@ function handleRequest(req, res, groupId = null) {
         let args = Object.assign(
             Lib.getRequestedParams(req),
             builder.exportOptions(),
-            { requestStart: Date.now() }
+            {
+                requestStart: Date.now(),
+                secure: !!req.headers.authorization,
+                request: req.originalUrl
+            }
         );
 
         // Simulate file_generation_failed error if requested
@@ -310,6 +314,10 @@ function handleStatus(req, res) {
                     delete params.request;
                 }
 
+                if ("secure" in params) {
+                    delete params.request;
+                }
+
                 // _params will be consumed by the file download endpoint
                 // sample: <http://localhost:8443/v/r3/sim/eyJ...H0/fhir/bulkfiles/2.Observation.ndjson>
                 let linkHref = Lib.buildUrlPath(
@@ -352,7 +360,7 @@ function handleStatus(req, res) {
         res.json({
             "transactionTime": requestStart,  //the server's time when the query is run (no resources that have a modified data after this instant should be in the response)
             "request" : sim.request, //GET request that kicked-off the bulk data response
-            "secure" : false, //authentication is required to retrieve the files
+            "secure" : !!sim.secure, //authentication is required to retrieve the files
             "output" : linksArr
         });
         res.end();
