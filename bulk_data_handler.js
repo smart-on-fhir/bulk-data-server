@@ -29,7 +29,8 @@ const outcomes = {
     ),
     invalidOutputFormat: (res, value) => Lib.operationOutcome(
         res,
-        `Invalid output-format parameter "${value}". Currently we only recognize "application/fhir+ndjson"`,
+        `Invalid output-format parameter "${value}". Currently we only ` +
+        `recognize "application/fhir+ndjson", "application/ndjson" and "ndjson"`,
         { httpCode: 400 }
     ),
     requireAcceptNdjson: res => Lib.operationOutcome(
@@ -159,7 +160,10 @@ function handleRequest(req, res, groupId = null) {
 
     // validate the output-format parameter
     let outputFormat = req.query['output-format']
-    if (outputFormat && outputFormat != "application/fhir+ndjson") {
+    if (outputFormat &&
+        outputFormat != "application/fhir+ndjson" &&
+        outputFormat != "application/ndjson" &&
+        outputFormat != "ndjson") {
         return outcomes.invalidOutputFormat(res, outputFormat);
     }
 

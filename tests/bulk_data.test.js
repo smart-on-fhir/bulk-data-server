@@ -109,6 +109,41 @@ function downloadPatients(options) {
             });
         });
 
+        it ("validates the 'output-format' parameter", done => {
+            lib.requestPromise({
+                uri: meta.buildUrl(),
+                headers: {
+                    Prefer: "respond-async"
+                }
+            })
+            .then(() => lib.requestPromise({
+                uri: meta.buildUrl() + "?output-format=application%2Ffhir%2Bndjson",
+                headers: {
+                    Prefer: "respond-async"
+                }
+            }))
+            .then(() => lib.requestPromise({
+                uri: meta.buildUrl() + "?output-format=application%2Fndjson",
+                headers: {
+                    Prefer: "respond-async"
+                }
+            }))
+            .then(() => lib.requestPromise({
+                uri: meta.buildUrl() + "?output-format=ndjson",
+                headers: {
+                    Prefer: "respond-async"
+                }
+            }))
+            .then(() => lib.requestPromise({
+                uri: meta.buildUrl() + "?output-format=test",
+                headers: {
+                    Prefer: "respond-async"
+                }
+            }).catch(err => 1))
+
+            .then(() => done(), done);
+        });
+
         it ("returns proper content-location header", done => {
             lib.requestPromise({
                 uri: meta.buildUrl(),
