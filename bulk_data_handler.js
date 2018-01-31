@@ -187,17 +187,6 @@ function handleRequest(req, res, groupId = null) {
         group: groupId
     });
 
-    // Create SQL query that counts resources matching the params above
-    let { sql, params } = builder.compileCount();
-
-    // Execute the count query
-    return DB.promise("all", sql, params).then(rows => {
-
-        // Early exit for queries that are valid but don't match anything
-        if (!rows.length) {
-            return res.status(204).end(); // No Content
-        }
-
         // Prepare the configuration segment of the status URL. Use the current
         let args = Object.assign(
             Lib.getRequestedParams(req),
@@ -214,8 +203,6 @@ function handleRequest(req, res, groupId = null) {
             return outcomes.fileGenerationFailed(res);
         }
 
-        args.request = req.originalUrl;
-
         // Prepare the status URL
         let params = base64url.encode(JSON.stringify(args));
         let url = config.baseUrl + req.originalUrl.split("?").shift().replace(
@@ -229,7 +216,6 @@ function handleRequest(req, res, groupId = null) {
         // HTTP/1.1 202 Accepted
         res.set("Content-Location", url).status(202).end();
         
-    }, error => res.send(error));
 };
 
 /**
@@ -281,13 +267,6 @@ function handleStatus(req, res) {
     // Count all the requested resources in the database.
     let { sql, params } = new QueryBuilder(sim).compileCount("cnt");
     DB.promise("all", sql, params).then(rows => {
-
-        let len = rows.length;
-
-        // Exit early if we have a valid query but it doesn't match anything
-        if (!len) {
-            return outcomes.noContent(res);
-        }
 
         // Finally generate those download links
         let links    = "";
