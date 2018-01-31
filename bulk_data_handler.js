@@ -33,9 +33,9 @@ const outcomes = {
         `recognize "application/fhir+ndjson", "application/ndjson" and "ndjson"`,
         { httpCode: 400 }
     ),
-    requireAcceptNdjson: res => Lib.operationOutcome(
+    requireAcceptFhirJson: res => Lib.operationOutcome(
         res,
-        "The Accept header must be application/fhir+ndjson",
+        "The Accept header must be application/fhir+json",
         { httpCode: 400 }
     ),
     requirePreferAsync: res => Lib.operationOutcome(
@@ -80,9 +80,9 @@ function extractSim(req, res, next) {
  * @param {Object} res
  * @param {Function} next
  */
-function requireNdjsonAcceptHeader(req, res, next) {
-    if (req.headers.accept != "application/fhir+ndjson") {
-        return outcomes.requireAcceptNdjson(res);
+function requireFhirJsonAcceptHeader(req, res, next) {
+    if (req.headers.accept != "application/fhir+json") {
+        return outcomes.requireAcceptFhirJson(res);
     }
     next();
 }
@@ -368,7 +368,7 @@ router.get("/Patient/\\$everything", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    // requireNdjsonAcceptHeader,
+    requireFhirJsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
@@ -385,7 +385,7 @@ router.get("/group/:groupId/\\$everything", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    // requireNdjsonAcceptHeader,
+    requireFhirJsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
