@@ -188,35 +188,35 @@ function handleRequest(req, res, groupId = null) {
         group: groupId
     });
 
-        // Prepare the configuration segment of the status URL. Use the current
-        let args = Object.assign(
-            Lib.getRequestedParams(req),
-            builder.exportOptions(),
-            {
-                requestStart: Date.now(),
-                secure: !!req.headers.authorization,
-                request: req.originalUrl
-            }
-        );
-
-        // Simulate file_generation_failed error if requested
-        if (args.err == "file_generation_failed") {
-            return outcomes.fileGenerationFailed(res);
+    // Prepare the configuration segment of the status URL. Use the current
+    let args = Object.assign(
+        Lib.getRequestedParams(req),
+        builder.exportOptions(),
+        {
+            requestStart: Date.now(),
+            secure: !!req.headers.authorization,
+            request: req.originalUrl
         }
+    );
 
-        // Prepare the status URL
-        let params = base64url.encode(JSON.stringify(args));
-        let url = config.baseUrl + req.originalUrl.split("?").shift().replace(
-            /(\/[^/]+)?\/fhir\/.*/,
-            `/${params}/fhir/bulkstatus`
-        );
+    // Simulate file_generation_failed error if requested
+    if (args.err == "file_generation_failed") {
+        return outcomes.fileGenerationFailed(res);
+    }
 
-        // Instead of generating the response, and then returning it, the server
-        // returns a 202 Accepted header, and a Content-Location at which the
-        // client can use to access the response.
-        // HTTP/1.1 202 Accepted
-        res.set("Content-Location", url).status(202).end();
-        
+    // Prepare the status URL
+    let params = base64url.encode(JSON.stringify(args));
+    let url = config.baseUrl + req.originalUrl.split("?").shift().replace(
+        /(\/[^/]+)?\/fhir\/.*/,
+        `/${params}/fhir/bulkstatus`
+    );
+
+    // Instead of generating the response, and then returning it, the server
+    // returns a 202 Accepted header, and a Content-Location at which the
+    // client can use to access the response.
+    // HTTP/1.1 202 Accepted
+    res.set("Content-Location", url).status(202).end();
+    
 };
 
 /**
@@ -268,8 +268,9 @@ function handleStatus(req, res) {
     // Count all the requested resources in the database.
     let { sql, params } = new QueryBuilder(sim).compileCount("cnt");
     DB.promise("all", sql, params).then(rows => {
-
+        
         // Finally generate those download links
+        let len = rows.length;
         let links    = "";
         let linksArr = []
         let linksLen = 0;
@@ -347,10 +348,55 @@ function handleStatus(req, res) {
     });
 };
 
+/**
+ * Given a query builder and a state object, counts the total number of rows
+ * and sets the following variables into the state:
+ *      total      - the total rows
+ *      page       - the page number we are currently in
+ *      totalPages - the total number of pages available
+ * @param {QueryBuilder} builder 
+ * @param {Object} state 
+ * @returns {Promise<Object>} Resolves with the state
+ */
+function countRecords(state) {
+    let { sql, params } = state.builder.compileCount("totalRows");
+    return DB.promise("get", sql, params)
+        .then(row => {
+            state.total = row.totalRows;
+            state.page = Math.floor(state.offset / state.limit) + 1;
+            state.totalPages = Math.ceil((state.total * state.multiplier) / state.limit);
+            return state;
+        });
+}
+
+/**
+ * Given a query builder and a state object, prepares the select statement and
+ * stores it into the state.
+ * @param {QueryBuilder} builder 
+ * @param {Object} state 
+ * @returns {Promise<Object>} Resolves with the state
+ */
+function prepare(state) {
+    let { sql, params } = state.builder.compile();
+    state.params = params;
+    return new Promise((resolve, reject) => {
+        let statement = DB.prepare(sql, params, prepareError => {
+            if (prepareError) {
+                return reject(prepareError);
+            }
+            state.statement = statement;
+            resolve(state);
+        });
+    });
+}
+
 function handleFileDownload(req, res) {
+    
+
+    const args = req.sim;
 
     // early exit in case simulated errors
-    if (req.sim.err == "file_expired") {
+    if (args.err == "file_expired") {
         return outcomes.fileExpired(res);
     }
 
@@ -360,9 +406,39 @@ function handleFileDownload(req, res) {
         "Content-Disposition": "attachment"
     });
 
-    // stream DB rows as if they are file lines
-    fhirStreamer(req, res);
-};
+    return Promise.resolve({
+        limit      : Lib.uInt(args.limit, config.defaultPageSize),
+        multiplier : Lib.uInt(args.m, 1),
+        offset     : Lib.uInt(args.offset, 0),
+        extended   : Lib.bool(args.extended),
+        total      : 0,
+        rowIndex   : 0,
+        req,
+        res,
+        args,
+        builder: new QueryBuilder({
+            limit  : 1,
+            offset : Lib.uInt(args.offset, 0),
+            group  : args.group,
+            start  : args.start,
+            columns: Lib.bool(args.extended) ? ["resource_json", "modified_date"] : ["resource_json"],
+            type   : [req.params.file.split(".")[1]]
+        })
+    })
+    .then(countRecords)
+    .then(prepare)
+    .then(state => new Promise((resolve, reject) => {
+        let input = DB.stream(state);
+        input.on("error", reject);
+        input.pipe(res);
+    }))
+    .then(state => {
+        res.end()
+    }, error => {
+        console.error(error);
+        return res.status(500).end();
+    });
+}
 
 // Returns all data on all patients
 router.get("/Patient/\\$everything", [
@@ -406,7 +482,7 @@ router.get("/bulkstatus", [
     handleStatus
 ]);
 
-// The actual file downloads
+// The actual file downloads 
 router.get("/bulkfiles/:file", [
     Lib.checkAuth,
     extractSim,
