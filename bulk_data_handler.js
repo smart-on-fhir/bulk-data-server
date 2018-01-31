@@ -24,7 +24,8 @@ const outcomes = {
     ),
     invalidAccept: (res, accept) => Lib.operationOutcome(
         res,
-        `Invalid Accept header "${accept}". Currently we only recognize "application/fhir+ndjson" and "application/fhir+json"`,
+        `Invalid Accept header "${accept}". Currently we only recognize ` +
+        `"application/fhir+ndjson" and "application/fhir+json"`,
         { httpCode: 400 }
     ),
     invalidOutputFormat: (res, value) => Lib.operationOutcome(
