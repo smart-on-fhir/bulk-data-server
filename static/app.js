@@ -183,6 +183,11 @@
             });
         });
 
+        // Activate the "base64 encode key" button
+        $("#encode-key").click(function() {
+            MODEL.set("public_key", btoa(MODEL.get("public_key")));
+        });
+
         // Make the download link work in IE
         $("#download").on("click", function(e) {
             if(window.navigator.msSaveOrOpenBlob) {
@@ -214,6 +219,15 @@
                 "href",
                 "/sample-app/index.html?server=" +
                 encodeURIComponent(e.data.newValue)
+            );
+        });
+
+        // Show/hide the "base64 encode this key" button as needed
+        MODEL.on("change:public_key", function() {
+            var new_key = MODEL.get("public_key");
+            $("#encode-key").toggleClass(
+                "hidden",
+                String(new_key || "").search(/^\s*--/) !== 0
             );
         });
 
