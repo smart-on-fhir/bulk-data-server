@@ -359,8 +359,8 @@
                     var dur = parseInt(xhr.getResponseHeader("retry-after"), 10);
 
                     if (xhr.status == 200) {
-                        var files = JSON.parse(body).output
-                        console.log(files)
+                        var files = body.output
+                        // console.log(files)
                         if (dur) {
                             setProgress(100, 0);
                             if (TIMER) clearTimeout(TIMER);
