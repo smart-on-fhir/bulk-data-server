@@ -458,14 +458,15 @@ describe("Progress Updates", () => {
             url: lib.buildProgressUrl({
                 requestStart: moment().subtract(5, "seconds").format("YYYY-MM-DD HH:mm:ss"),
                 dur         : 2
-            })
+            }),
+            json: true
         })
         .then(res => {
             if (res.statusCode != 200) {
                 throw `Did not reply properly`;
             }
-            if (!res.headers.link) {
-                throw `Did not reply with 'Link' header`;
+            if (!res.body || !Array.isArray(res.body.output)) {
+                throw `Did not reply with links array in body.output`;
             }
         })
         .then(() => done(), done);
@@ -478,10 +479,11 @@ describe("Progress Updates", () => {
                 type        : "Patient",
                 dur         : 0,
                 page        : 25
-            })
+            }),
+            json: true
         })
         .then(res => {
-            let n = res.headers.link.split(",").length;
+            let n = res.body.output.length;
             if (n != 4) {
                 throw `Expected 4 links but got ${n}`;
             }
@@ -493,10 +495,11 @@ describe("Progress Updates", () => {
                 dur         : 0,
                 page        : 25,
                 m           : 10
-            })
+            }),
+            json: true
         }))
         .then(res => {
-            let n = res.headers.link.split(",").length;
+            let n = res.body.output.length;
             if (n != 40) {
                 throw `Expected 4 links but got ${n}`;
             }
@@ -788,10 +791,10 @@ describe("All Together", () => {
         .then(res => res.headers["content-location"])
 
         // Query the progress endpoint
-        .then(statusUrl => lib.requestPromise({ uri: statusUrl }))
+        .then(statusUrl => lib.requestPromise({ uri: statusUrl, json: true }))
 
         // get the download links
-        .then(res => res.headers.link.split(","))
+        .then(res => res.body.output || [])
 
         // Check the links count
         .then(links => {
@@ -802,7 +805,7 @@ describe("All Together", () => {
         })
 
         // convert links to URLs
-        .then(links => links.map(l => l.replace(/^</, "").replace(/>$/, "")))
+        .then(links => links.map(l => l.url))
 
         // validate file names
         .then(links => {
@@ -908,24 +911,24 @@ describe("Groups", () => {
         .then(res => res.headers["content-location"])
 
         // Query the progress endpoint
-        .then(statusUrl => lib.requestPromise({ uri: statusUrl }))
+        .then(statusUrl => lib.requestPromise({ uri: statusUrl, json: true }))
 
         // get the download links
-        .then(res => res.headers.link.split(","))
+        .then(res => res.body.output || [])
 
         // Check the links count
         .then(links => {
             if (links.length != 1) {
                 throw "Wrong number of links returned";
             }
-            if (!links[0].endsWith("1.Patient.ndjson>")) {
+            if (!links[0].url.endsWith("1.Patient.ndjson")) {
                 throw "Wrong link returned";
             }
             return links;
         })
 
         // convert links to URL
-        .then(links => links[0].replace(/^</, "").replace(/>$/, ""))
+        .then(links => links[0].url)
 
         // Do download the files
         .then(link => lib.requestPromise({ url: link }))
