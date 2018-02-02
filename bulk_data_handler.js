@@ -7,7 +7,7 @@ const Lib          = require("./lib");
 const DB           = require("./db");
 const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
-const fhirStream   = require("./fhirStream");
+const fhirStream   = require("./FhirStream");
 
 const STATE_STARTED  = 2;
 const STATE_CANCELED = 4;
