@@ -219,7 +219,7 @@ function operationOutcome(
             "status": "generated",
             "div": `<div xmlns="http://www.w3.org/1999/xhtml">` +
             `<h1>Operation Outcome</h1><table border="0"><tr>` +
-            `<td style="font-weight:bold;">ERROR</td><td>[]</td>` +
+            `<td style="font-weight:bold;">${severity}</td><td>[]</td>` +
             `<td><pre>${htmlEncode(message)}</pre></td></tr></table></div>`
         },
         "issue": [
