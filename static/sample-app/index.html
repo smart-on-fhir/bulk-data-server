@@ -306,11 +306,21 @@
                 $("#error").empty().closest(".panel").hide();
             }
 
-            function setProgress(n) {
-                $(".progress-bar")
-                    .attr("aria-valuenow", n)
-                    .css("width", n + "%")
-                    .find(".sr-only").text(n + "% Complete");
+            function setProgress(n, dur) {
+                if (dur !== undefined) {
+                    $(".progress-bar").css("transitionDuration", (dur || 0) + "s");
+                    setTimeout(function() {
+                        $(".progress-bar")
+                            .attr("aria-valuenow", n)
+                            .css("width", n + "%")
+                            .find(".sr-only").text(n + "% Complete");
+                    }, 20);
+                } else {
+                    $(".progress-bar")
+                        .attr("aria-valuenow", n)
+                        .css("width", n + "%")
+                        .find(".sr-only").text(n + "% Complete");
+                }
             }
 
             function buildURL(path) {
@@ -330,7 +340,7 @@
                 }).then(function(body, resultCode, xhr) {
                     if (xhr.status == 202) { // Accepted
                         var statusUrl = xhr.getResponseHeader("content-location");
-                        setProgress(0);
+                        setProgress(0, 0);
                         $(".preparing-progress").removeClass("hidden");
                         waitForFiles(statusUrl);
                         $("#cancel-btn").data("url", statusUrl)
@@ -348,28 +358,29 @@
                 $.ajax({
                     url: url
                 }).then(function(body, resultCode, xhr) {
-                    var dur = (PARAMS.dur || 0) * 1000;
+                    var dur = parseInt(xhr.getResponseHeader("retry-after"), 10);
+
                     if (xhr.status == 200) {
                         var files = xhr.getResponseHeader("link").split(",")
                         if (dur) {
-                            setProgress(100);
+                            setProgress(100, 0);
                             if (TIMER) clearTimeout(TIMER);
                             TIMER = setTimeout(function() {
                                 listFiles(files);
-                            }, Math.ceil(dur/19));
+                            }, 100);
                         } else {
                             listFiles(files);
                         }
                     }
-                    else {
+                    else if (xhr.status == 202) {
                         var pct = parseInt(xhr.getResponseHeader("x-progress"), 10);
                         if (!isNaN(pct) && isFinite(pct)) {
-                            setProgress(pct);
+                            setProgress(100, dur);
                             if (pct < 100) {
                                 if (TIMER) clearTimeout(TIMER);
                                 TIMER = setTimeout(function() {
                                     waitForFiles(url);
-                                }, Math.ceil((dur || 10000)/20));
+                                }, dur * 1000);
                             }
                         }
                     }
@@ -379,6 +390,7 @@
             function listFiles(files) {
                 $(".preparing-progress").addClass("hidden");
                 $fileList = $(".file-list");
+                setProgress(0, 0);
                 
                 var len = files.length;
 
@@ -427,7 +439,11 @@
                     $("#cancel-btn").on("click", function() {
                         var url = $(this).data("url");
                         if (url) {
-                            $.ajax({ url: url, method: "DELETE" });
+                            if (TIMER) clearTimeout(TIMER);
+                            $.ajax({ url: url, method: "DELETE" }).then(function() {
+                                setProgress(0, 0);
+                                waitForFiles(url);
+                            });
                         }
                     });
 

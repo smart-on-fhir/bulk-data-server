@@ -303,7 +303,10 @@ function handleStatus(req, res) {
     if (endTime.isAfter(now, "second")) {
         let diff = (now - requestStart)/1000;
         let pct = Math.round((diff / generationTime) * 100);
-        return res.set({ "X-Progress": pct + "%" }).status(202).end();
+        return res.set({
+            "X-Progress": pct + "%",
+            "Retry-After": Math.ceil(generationTime - diff)
+        }).status(202).end();
     }
 
     if (JOBS.hasOwnProperty(sim.id)) {
