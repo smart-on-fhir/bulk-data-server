@@ -1,5 +1,6 @@
 const base64url    = require("base64-url");
 const moment       = require("moment");
+const crypto       = require("crypto");
 const router       = require("express").Router({ mergeParams: true });
 const config       = require("./config");
 const Lib          = require("./lib");
@@ -7,6 +8,9 @@ const DB           = require("./db");
 const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
 const fhirStream   = require("./fhirStream");
+
+const STATE_STARTED  = 2;
+const STATE_CANCELED = 4;
 
 // Errors as operationOutcome responses
 const outcomes = {
@@ -65,6 +69,26 @@ const outcomes = {
     fileGenerationFailed: res => Lib.operationOutcome(
         res,
         Lib.getErrorText("file_generation_failed")
+    ),
+    canceled: res => Lib.operationOutcome(
+        res,
+        "The procedure was canceled by the client and is no longer available",
+        { httpCode: 410 /* Gone */ }
+    ),
+    cancelAccepted: res => Lib.operationOutcome(
+        res,
+        "The procedure was canceled",
+        { severity: "information", httpCode: 202 /* Accepted */ }
+    ),
+    cancelGone: res => Lib.operationOutcome(
+        res,
+        "The procedure was already canceled by the client",
+        { httpCode: 410 /* Gone */ }
+    ),
+    cancelNotFound: res => Lib.operationOutcome(
+        res,
+        "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled",
+        { httpCode: 404 /* Not Found */ }
     )
 };
 
@@ -140,6 +164,8 @@ function validateRequestStart(req, res, next) {
 
 // End helper express middlewares ----------------------------------------------
 
+const JOBS = {};
+
 /**
  * Handles the first request of the flow (the one that from /Patient/$everything
  * or /group/:groupId/$everything)
@@ -193,6 +219,8 @@ function handleRequest(req, res, groupId = null) {
         Lib.getRequestedParams(req),
         builder.exportOptions(),
         {
+            // unique id of this request flow (used for canceling)
+            id: crypto.randomBytes(32).toString("hex"),
             requestStart: Date.now(),
             secure: !!req.headers.authorization,
             request: req.originalUrl
@@ -210,6 +238,8 @@ function handleRequest(req, res, groupId = null) {
         /(\/[^/]+)?\/fhir\/.*/,
         `/${params}/fhir/bulkstatus`
     );
+
+    JOBS[args.id] = STATE_STARTED;
 
     // Instead of generating the response, and then returning it, the server
     // returns a 202 Accepted header, and a Content-Location at which the
@@ -240,9 +270,26 @@ function handleGroup(req, res) {
     handleRequest(req, res, +req.params.groupId);
 }
 
-function handleStatus(req, res) {
+function cancelFlow(req, res) {
+    if (JOBS[req.sim.id] === STATE_STARTED) {
+        JOBS[req.sim.id] = STATE_CANCELED;
+        return outcomes.cancelAccepted(res);
+    }
+    
+    if (JOBS[req.sim.id] === STATE_CANCELED) {
+        return outcomes.cancelGone(res);
+    }
 
+    return outcomes.cancelNotFound(res);
+}
+
+function handleStatus(req, res) {
+    
     let sim = req.sim;
+    
+    if (JOBS[sim.id] === STATE_CANCELED) {
+        return outcomes.canceled(res);
+    }
 
     // ensure requestStart param is present
     let requestStart = req.sim.requestStart;
@@ -257,6 +304,10 @@ function handleStatus(req, res) {
         let diff = (now - requestStart)/1000;
         let pct = Math.round((diff / generationTime) * 100);
         return res.set({ "X-Progress": pct + "%" }).status(202).end();
+    }
+
+    if (JOBS.hasOwnProperty(sim.id)) {
+        delete JOBS[sim.id];
     }
 
     // Get the count multiplier
@@ -419,6 +470,12 @@ router.get("/bulkfiles/:file", [
     Lib.checkAuth,
     extractSim,
     handleFileDownload
+]);
+
+router.delete("/bulkstatus", [
+    Lib.checkAuth,
+    extractSim,
+    cancelFlow
 ]);
 
 // host dummy conformance statement

@@ -128,6 +128,11 @@
                             <span class="sr-only">0% Complete</span>
                         </div>
                     </div>
+                    <div class="text-center">
+                        <button class="btn btn-danger" type="button" id="cancel-btn">Cancel</button>
+                        <br/>
+                        <br/>
+                    </div>
                 </div>
                 <div class="panel panel-success hidden">
                     <div class="panel-heading"><b>Files to Download</b> <b class="badge"></b></div>
@@ -257,7 +262,7 @@
                     return !!cb.checked
                 }).map(function(cb) { return cb.value; });
 
-                var url = "/fhir/" + (group ? "Group/" + group : "Patient") + "/$everything";
+                var url = "/fhir/" + (group ? "Group/" + group : "Patient") + "/$export";
 
                 if (start) {
                     params.push("start=" + start);
@@ -319,7 +324,7 @@
                 $.ajax({
                     url: $("#url").val(),
                     headers: {
-                        Accept: "application/fhir+ndjson",
+                        Accept: "application/fhir+json",
                         Prefer: "respond-async"
                     }
                 }).then(function(body, resultCode, xhr) {
@@ -328,6 +333,7 @@
                         setProgress(0);
                         $(".preparing-progress").removeClass("hidden");
                         waitForFiles(statusUrl);
+                        $("#cancel-btn").data("url", statusUrl)
                     }
                     else if (xhr.status == 204) { // No Content
                         $(".badge").text("0");
@@ -410,11 +416,21 @@
                 })
                 .then(function() {
                     buildStartSelector();
+                    
                     $(document).on("change", "select, :checkbox", buildDownloadUrl);
+                    
                     $("form").on("submit", function(e) {
                         e.preventDefault();
                         prepareDownload();
                     });
+
+                    $("#cancel-btn").on("click", function() {
+                        var url = $(this).data("url");
+                        if (url) {
+                            $.ajax({ url: url, method: "DELETE" });
+                        }
+                    });
+
                     buildDownloadUrl();
                 });
             });
