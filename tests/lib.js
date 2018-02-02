@@ -54,11 +54,11 @@ function buildProgressUrl(params) {
 }
 
 function buildPatientUrl(params) {
-    return buildBulkUrl("Patient/$everything", params);
+    return buildBulkUrl("Patient/$export", params);
 }
 
 function buildGroupUrl(groupId, params) {
-    return buildBulkUrl(["Group", groupId, "$everything"], params);
+    return buildBulkUrl(["Group", groupId, "$export"], params);
 }
 
 function expectErrorOutcome(res, { message, code } = {}, done) {

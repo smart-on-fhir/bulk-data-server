@@ -373,7 +373,7 @@ function handleFileDownload(req, res) {
 }
 
 // Returns all data on all patients
-router.get("/Patient/\\$everything", [
+router.get("/Patient/\\$export", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
@@ -390,7 +390,7 @@ router.get("/Patient/\\$everything", [
 ]);
 
 // Provides access to all data on all patients in the nominated group
-router.get("/group/:groupId/\\$everything", [
+router.get("/group/:groupId/\\$export", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
