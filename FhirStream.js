@@ -23,7 +23,7 @@ class FhirStream extends Readable
         this.offset     = Lib.uInt(args.offset, 0);
         this.extended   = Lib.bool(args.extended);
         this.group      = args.group;
-        this.start      = args.start;
+        this.start      = args._since;
         this.types      = [req.params.file.split(".")[1]];
         this.params     = {};
         this.cache      = [];

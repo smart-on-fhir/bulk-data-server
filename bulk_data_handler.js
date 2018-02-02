@@ -182,7 +182,7 @@ function handleRequest(req, res, groupId = null) {
 
         // The start date/time means only records since the nominated time. In
         // the absence of the parameter, it means all data ever.
-        start: req.query.start,
+        start: req.query._since,
 
         // The chosen group ID (if any)
         group: groupId

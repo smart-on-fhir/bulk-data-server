@@ -191,7 +191,7 @@ function downloadPatients(options) {
                 uri: meta.buildUrl({ dur: 1 }),
                 qs : {
                     _type: TYPE,
-                    start: START
+                    _since: START
                 },
                 headers: {
                     Accept: "application/fhir+json",
@@ -233,7 +233,7 @@ function downloadPatients(options) {
                 uri: meta.buildUrl({ dur: 1 }),
                 qs : {
                     _type: TYPE,
-                    start: IN
+                    _since: IN
                 },
                 headers: {
                     Accept: "application/fhir+json",
@@ -268,7 +268,7 @@ function downloadPatients(options) {
                 uri: meta.buildUrl({ dur: 1 }),
                 qs : {
                     _type: TYPE,
-                    start: IN
+                    _since: IN
                 },
                 headers: {
                     Accept: "application/fhir+json",
@@ -614,11 +614,11 @@ describe("File Downloading", function() {
         .then(() => done(), done);
     });
 
-    it ("Handles the 'start' parameter", done => {
+    it ("Handles the '_since' parameter", done => {
         lib.requestPromise({
             url: lib.buildDownloadUrl("1.Patient.ndjson", {
                 limit: 1,
-                start: "2000-01-01",
+                _since: "2000-01-01",
                 extended: 1
             })
             // {"modified_date":"2000-01-01T00:00:00-05:00","type":"Patient","id":"dcae7046-ebb1-43d8-a615-bcc4628e834e"}
@@ -631,7 +631,7 @@ describe("File Downloading", function() {
         .then(() => lib.requestPromise({
             url: lib.buildDownloadUrl("1.Patient.ndjson", {
                 limit: 1,
-                start: "2008-07-25",
+                _since: "2008-07-25",
                 extended: 1
             })
             // {"modified_date":"2008-07-26T09:35:17-04:00","type":"Patient","id":"e56a36d8-1412-427c-b96d-ad0a78114037"}
