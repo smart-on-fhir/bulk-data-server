@@ -5,7 +5,7 @@ module.exports = {
 
     port: PORT,
 
-    throttle: 0,
+    throttle: 1,
     
     // Max. number of fhir resources (lines) in one ndjson file
     defaultPageSize: 10000,
@@ -21,6 +21,11 @@ module.exports = {
 
     // The max size in bytes of the Link response header (the file list)
     maxFilesBytes: 32 * 1024,
+
+    // How many rows to select (load into memory and then stream them one by one).
+    // The bigger the number the fewer sql queries will be executed but more
+    // memory will be needed to store those bigger chunks of data
+    rowsPerChunk: 500,
 
     jwtSecret: process.env.SECRET || "this-is-our-big-secret",
 

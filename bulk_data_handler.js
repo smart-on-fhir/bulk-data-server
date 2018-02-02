@@ -6,7 +6,7 @@ const Lib          = require("./lib");
 const DB           = require("./db");
 const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
-const fhirStreamer = require("./fhirStreamer");
+const fhirStream   = require("./fhirStream");
 
 // Errors as operationOutcome responses
 const outcomes = {
@@ -348,48 +348,6 @@ function handleStatus(req, res) {
     });
 };
 
-/**
- * Given a query builder and a state object, counts the total number of rows
- * and sets the following variables into the state:
- *      total      - the total rows
- *      page       - the page number we are currently in
- *      totalPages - the total number of pages available
- * @param {QueryBuilder} builder 
- * @param {Object} state 
- * @returns {Promise<Object>} Resolves with the state
- */
-function countRecords(state) {
-    let { sql, params } = state.builder.compileCount("totalRows");
-    return DB.promise("get", sql, params)
-        .then(row => {
-            state.total = row.totalRows;
-            state.page = Math.floor(state.offset / state.limit) + 1;
-            state.totalPages = Math.ceil((state.total * state.multiplier) / state.limit);
-            return state;
-        });
-}
-
-/**
- * Given a query builder and a state object, prepares the select statement and
- * stores it into the state.
- * @param {QueryBuilder} builder 
- * @param {Object} state 
- * @returns {Promise<Object>} Resolves with the state
- */
-function prepare(state) {
-    let { sql, params } = state.builder.compile();
-    state.params = params;
-    return new Promise((resolve, reject) => {
-        let statement = DB.prepare(sql, params, prepareError => {
-            if (prepareError) {
-                return reject(prepareError);
-            }
-            state.statement = statement;
-            resolve(state);
-        });
-    });
-}
-
 function handleFileDownload(req, res) {
     
 
@@ -406,38 +364,12 @@ function handleFileDownload(req, res) {
         "Content-Disposition": "attachment"
     });
 
-    return Promise.resolve({
-        limit      : Lib.uInt(args.limit, config.defaultPageSize),
-        multiplier : Lib.uInt(args.m, 1),
-        offset     : Lib.uInt(args.offset, 0),
-        extended   : Lib.bool(args.extended),
-        total      : 0,
-        rowIndex   : 0,
-        req,
-        res,
-        args,
-        builder: new QueryBuilder({
-            limit  : 1,
-            offset : Lib.uInt(args.offset, 0),
-            group  : args.group,
-            start  : args.start,
-            columns: Lib.bool(args.extended) ? ["resource_json", "modified_date"] : ["resource_json"],
-            type   : [req.params.file.split(".")[1]]
-        })
-    })
-    .then(countRecords)
-    .then(prepare)
-    .then(state => new Promise((resolve, reject) => {
-        let input = DB.stream(state);
-        input.on("error", reject);
-        input.pipe(res);
-    }))
-    .then(state => {
-        res.end()
-    }, error => {
+    let input = new fhirStream(req, res);
+    input.on("error", error => {
         console.error(error);
         return res.status(500).end();
     });
+    input.init().then(() => input.pipe(res));
 }
 
 // Returns all data on all patients

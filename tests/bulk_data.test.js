@@ -529,7 +529,7 @@ describe("File Downloading", function() {
         let errors = [];
 
         request({ url })
-        .on("error", e => e.push(String(e)))
+        .on("error", e => errors.push(String(e)))
         .on("end", () => {
             if (errors.length) {
                 return done(errors.join(",\n"))
@@ -540,7 +540,7 @@ describe("File Downloading", function() {
             try {
                 JSON.parse(chunk);
             } catch (e) {
-                e.push(String(e));
+                errors.push(String(e));
             }
         });
     });
@@ -549,9 +549,8 @@ describe("File Downloading", function() {
         const limit = 12;
         let url = lib.buildDownloadUrl("1.Patient.ndjson", { limit });
         let errors = [], lines = 0;
-
         request({ url })
-        .on("error", e => e.push(String(e)))
+        .on("error", e => errors.push(String(e)))
         .on("end", () => {
             if (errors.length) {
                 return done(errors.join(",\n"));
@@ -565,7 +564,7 @@ describe("File Downloading", function() {
     });
 
     it ("Handles the 'offset' parameter", done => {
-        
+
         // First download 2 patients with limit=2 and no offset
         lib.requestPromise({
             url: lib.buildDownloadUrl("1.Patient.ndjson", { limit: 2 })
@@ -581,7 +580,19 @@ describe("File Downloading", function() {
                     offset: 1
                 })
             }).then(res2 => {
-                if (res2.body.split("\n")[0] != secondPatient) {
+                let row1 = res2.body.split("\n")[0]
+                let row2 = secondPatient
+
+                const HEX  = "[a-fA-F0-9]"
+                const RE_UID = new RegExp(
+                    `\\br\\d-(${HEX}{8}-${HEX}{4}-${HEX}{4}-${HEX}{4}-${HEX}{12})\\b`,
+                    "g"
+                );
+
+                row1 = row1.replace(RE_UID, "$1")
+                row2 = row2.replace(RE_UID, "$1")
+
+                if (row1 != row2) {
                     throw `Did not shift forward`
                 }
             });
