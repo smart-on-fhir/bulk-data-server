@@ -355,13 +355,12 @@
             }
 
             function waitForFiles(url) {
-                $.ajax({
-                    url: url
-                }).then(function(body, resultCode, xhr) {
+                $.ajax({ url: url }).then(function(body, resultCode, xhr) {
                     var dur = parseInt(xhr.getResponseHeader("retry-after"), 10);
 
                     if (xhr.status == 200) {
-                        var files = xhr.getResponseHeader("link").split(",")
+                        var files = JSON.parse(body).output
+                        console.log(files)
                         if (dur) {
                             setProgress(100, 0);
                             if (TIMER) clearTimeout(TIMER);
@@ -403,7 +402,7 @@
 
                 $fileList.html(
                     files.map(function(f) {
-                        var url = f.replace(/^</, "").replace(/>$/, "");
+                        var url = f.url;
                         return '<a class="download-link text-success" rel="download" href="' + url + '">' +
                             '<i class="fa fa-file-text-o" aria-hidden="true"></i>' + url.split("/").pop() +
                             '</a>';

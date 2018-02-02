@@ -223,7 +223,8 @@ function handleRequest(req, res, groupId = null) {
             id: crypto.randomBytes(32).toString("hex"),
             requestStart: Date.now(),
             secure: !!req.headers.authorization,
-            request: req.originalUrl
+            request: (req.protocol == "https" ? "https://" : "http://") +
+                req.headers.host + req.originalUrl
         }
     );
 
@@ -325,7 +326,6 @@ function handleStatus(req, res) {
         
         // Finally generate those download links
         let len = rows.length;
-        let links    = "";
         let linksArr = []
         let linksLen = 0;
         let params   = Object.assign({}, sim);
@@ -353,52 +353,39 @@ function handleStatus(req, res) {
                     delete params.request;
                 }
 
-                // _params will be consumed by the file download endpoint
-                // sample: <http://localhost:8443/v/r3/sim/eyJ...H0/fhir/bulkfiles/2.Observation.ndjson>
-                let linkHref = Lib.buildUrlPath(
-                    baseUrl,
-                    base64url.encode(JSON.stringify(params)),
-                    "/fhir/bulkfiles/",
-                    `${i + 1}.${row.fhir_type}.ndjson`
-                );
-
-                let link = "<" + linkHref + ">"
-
-                if (linksLen) {
-                    link = "," + link;
-                }
-
-                bytes += Buffer.from(link).byteLength;
-
-                if (bytes > config.maxFilesBytes) {
-                    return res.status(413).send("Response headers too large");
-                }
-
-                linksArr.push({ type: row.fhir_type, url: linkHref })
-                links += link;
-                linksLen += 1;
+                linksLen = linksArr.push({
+                    type: row.fhir_type,
+                    url: Lib.buildUrlPath(
+                        baseUrl,
+                        base64url.encode(JSON.stringify(params)),
+                        "/fhir/bulkfiles/",
+                        `${i + 1}.${row.fhir_type}.ndjson`
+                    )
+                })
             }
         }
 
-        res.set({
-            "Content-Type": "application/fhir+ndjson",
-            "X-FHIR-Links-Require-Authorization": !!req.headers.authorization,
-
-            // TODO: Set this when we implement expiration?
-            // "Expires": "Wed, 21 Oct 2018 07:28:00 GMT"
-
-            "Link": links
-        });
-
-        // console.log(sim)
-        res.status(200);
         res.json({
-            "transactionTime": requestStart,  //the server's time when the query is run (no resources that have a modified data after this instant should be in the response)
-            "request" : sim.request, //GET request that kicked-off the bulk data response
-            "secure" : !!sim.secure, //authentication is required to retrieve the files
+
+            // a FHIR instant type that indicates the server's time when the
+            // query is run. No resources that have a modified data after this
+            // instant should be in the response.
+            "transactionTime": requestStart,
+
+            // the full url of the original bulk data kick-off request
+            "request" : sim.request,
+
+            // boolean value indicating whether downloading the generated files
+            // will require an authentication token. Note: This may be false in
+            // the case of signed S3 urls or an internal file server within an
+            // organization's firewall.
+            "secure" : !!sim.secure,
+
+            // array of bulk data file items with one entry for each generated
+            // file. Note: If no data is returned from the kick-off request,
+            // the server should return an empty array.
             "output" : linksArr
-        });
-        res.end();
+        }).end();
     });
 };
 
