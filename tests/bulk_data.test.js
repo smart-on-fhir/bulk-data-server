@@ -770,6 +770,82 @@ describe("File Downloading", function() {
 });
 
 describe("All Together", () => {
+
+    it ("Requires auth if kicked off with auth", function(done) {
+        
+        let accessToken, statusUrl, fileUrl;
+
+        lib.authorize()
+        
+        .then(tokenResponse => {
+            accessToken = tokenResponse.access_token;
+            return lib.requestPromise({
+                uri: lib.buildPatientUrl({ dur: 0 }),
+                qs : { _type: "Patient" },
+                headers: {
+                    Accept: "application/fhir+json",
+                    Prefer: "respond-async",
+                    Authorization: "Bearer " + accessToken,
+                }
+            })
+        })
+
+        .then(res => res.headers["content-location"])
+
+        .then(_statusUrl => {
+            statusUrl = _statusUrl;
+            return lib.requestPromise({ uri: statusUrl })
+        })
+        
+        .then(() => {
+            throw "Requesting status without auth should have failed"
+        }, res => res)
+
+        .then(() => lib.requestPromise({
+            uri: statusUrl,
+            json: true,
+            headers: {
+                // Accept: "application/fhir+json",
+                // Prefer: "respond-async",
+                Authorization: "Bearer " + accessToken
+            }
+        }))
+
+        .then(res => {
+            fileUrl = res.body.output[0].url
+        })
+
+        .then(() => lib.requestPromise({ uri: fileUrl }))
+
+        .then(() => {
+            throw "Requesting status without auth should have failed"
+        }, res => res)
+
+        .then(() => lib.requestPromise({
+            uri: fileUrl,
+            json: true,
+            headers: {
+                // Accept: "application/fhir+json",
+                // Prefer: "respond-async",
+                Authorization: "Bearer " + accessToken
+            }
+        }))
+
+
+        // .catch(() => 1)
+        // .then(() => {
+        //     throw new Error("Requesting status without auth should have failed")
+        // })
+
+        // .then(res => res.body.output || [])
+
+        // .then(links => links[0].url)
+
+        // .then(statusUrl => lib.requestPromise({ uri: statusUrl, json: true }))
+
+        .then(() => done(), done);
+    });
+
     it ("Should download 2 valid Observation ndjson files", function(done) {
 
         this.timeout(50000);

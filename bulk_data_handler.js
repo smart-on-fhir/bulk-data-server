@@ -449,22 +449,22 @@ router.get("/group/:groupId/\\$export", [
 
 // This is the endPoint that should provide progress information
 router.get("/bulkstatus", [
-    Lib.checkAuth,
     extractSim,
+    Lib.checkAuth,
     validateRequestStart,
     handleStatus
 ]);
 
 // The actual file downloads 
 router.get("/bulkfiles/:file", [
-    Lib.checkAuth,
     extractSim,
+    Lib.checkAuth,
     handleFileDownload
 ]);
 
 router.delete("/bulkstatus", [
-    Lib.checkAuth,
     extractSim,
+    Lib.checkAuth,
     cancelFlow
 ]);
 

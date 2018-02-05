@@ -252,6 +252,16 @@ function checkAuth(req, res, next)
             return res.status(401).send(error);
         }
     }
+    else {
+        if (req.sim && req.sim.secure) {
+            return operationOutcome(
+                res,
+                "Authentication is required",
+                { httpCode: 400 }
+            )
+        }
+    }
+
     next();
 }
 
