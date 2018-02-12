@@ -805,8 +805,6 @@ describe("All Together", () => {
             uri: statusUrl,
             json: true,
             headers: {
-                // Accept: "application/fhir+json",
-                // Prefer: "respond-async",
                 Authorization: "Bearer " + accessToken
             }
         }))
@@ -825,23 +823,9 @@ describe("All Together", () => {
             uri: fileUrl,
             json: true,
             headers: {
-                // Accept: "application/fhir+json",
-                // Prefer: "respond-async",
                 Authorization: "Bearer " + accessToken
             }
         }))
-
-
-        // .catch(() => 1)
-        // .then(() => {
-        //     throw new Error("Requesting status without auth should have failed")
-        // })
-
-        // .then(res => res.body.output || [])
-
-        // .then(links => links[0].url)
-
-        // .then(statusUrl => lib.requestPromise({ uri: statusUrl, json: true }))
 
         .then(() => done(), done);
     });
