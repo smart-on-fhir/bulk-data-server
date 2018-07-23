@@ -10,16 +10,19 @@ function resourceCreator(multiplier) {
     return function resource(group) {
         
         return {
-            resourceType: "Group",
-            id: group.id,
-            quantity: group.quantity * multiplier,
-            name: group.name,
-            text: {
-                status: "generated",
-                div: `<div xmlns="http://www.w3.org/1999/xhtml">${lib.htmlEncode(group.name)}</div>`
-            },
-            type: "person",
-            actual: true
+            fullUrl: `${config.baseUrl}/fhir/Group/${group.id}`,
+            resource: {
+                resourceType: "Group",
+                id: group.id,
+                quantity: group.quantity * multiplier,
+                name: group.name,
+                text: {
+                    status: "generated",
+                    div: `<div xmlns="http://www.w3.org/1999/xhtml">${lib.htmlEncode(group.name)}</div>`
+                },
+                type: "person",
+                actual: true
+            }
         };
     }
 }

@@ -93,7 +93,7 @@
                         <select class="form-control" id="group">
                             <option>No Group (include all the patients)</option>
                         </select>
-                        <p class="small text-muted help-block">Instead of exporting all patients, you can select a group and anly work with patients within that group.</p>
+                        <p class="small text-muted help-block">Instead of exporting all patients, you can select a group and only work with patients within that group.</p>
                         <br/>
                     </div>
                     <div class="col-sm-6">
@@ -216,8 +216,8 @@
                 );
                 $.each(groups.entry, function(i, g) {
                     var opt = $("<option/>");
-                    opt.attr("value", g.id);
-                    opt.text(g.name + " (" + formatNumber(g.quantity) + " patients)");
+                    opt.attr("value", g.resource.id);
+                    opt.text(g.resource.name + " (" + formatNumber(g.resource.quantity) + " patients)");
                     select.append(opt);
                 });
             }
