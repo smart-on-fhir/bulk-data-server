@@ -33,6 +33,65 @@ function downloadPatients(options) {
 }
 
 // Begin tests =================================================================
+describe("Conformance Statement", () => {
+    [
+        "application/fhir+json",
+        "application/json+fhir",
+        "application/json",
+        "text/json",
+        "json"
+    ].forEach(mime => {
+        it (`/fhir/metadata?_format=${mime}`, () => {
+            return lib.requestPromise({
+                url: lib.buildUrl([`/fhir/metadata?_format${mime}`])
+            });
+        });
+
+        it (`/fhir/metadata using accept:${mime}`, () => {
+            return lib.requestPromise({
+                url: lib.buildUrl(["/fhir/metadata"]),
+                headers: {
+                    accept: mime
+                }
+            });
+        });
+    });
+
+    [
+        "application/fhir+xml",
+        "application/xml+fhir",
+        "application/xml",
+        "text/xml",
+        "xml"
+    ].forEach(mime => {
+        it (`/fhir/metadata?_format=${mime}`, () => {
+            console.log(lib.buildUrl([`/fhir/metadata?_format=${encodeURIComponent(mime)}`]))
+            return lib.requestPromise({
+                url: lib.buildUrl([`/fhir/metadata?_format=${encodeURIComponent(mime)}`])
+            }).then(res => {
+                if (res.statusCode == 200) {
+                    throw new Error("This should have failed!")
+                }
+            }, () => 1);
+        });
+
+        it (`/fhir/metadata using accept:${mime}`, () => {
+            return lib.requestPromise({
+                url: lib.buildUrl(["/fhir/metadata"]),
+                headers: {
+                    accept: mime
+                }
+            }).then(res => {
+                if (res.statusCode == 200) {
+                    throw new Error("This should have failed!")
+                }
+            }, () => 1);
+        });
+    });
+});
+
+
+
 
 [
     {
