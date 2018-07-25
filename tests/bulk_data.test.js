@@ -444,6 +444,19 @@ describe("Progress Updates", () => {
         .then(() => done(), done)
     });
 
+    it ("requires an auth token if kicked off with auth", done => {
+        lib.requestPromise({
+            uri: lib.buildProgressUrl({
+                secure      : true,
+                requestStart: moment().subtract(5, "seconds").format("YYYY-MM-DD HH:mm:ss"),
+                dur         : 2
+            })
+        }).then(
+            () => done("This should have failed"),
+            () => done()
+        )
+    });
+
     // implementation-specific
     it ("Requires 'requestStart' param", done => {
         request({ url: lib.buildProgressUrl() }, (error, res) => {
@@ -582,6 +595,18 @@ describe("File Downloading", function() {
         .then(
             res   => done("This request should not have succeeded!"),
             error => done()
+        )
+    });
+
+    it ("requires an auth token if kicked off with auth", done => {
+        lib.requestPromise({
+            uri: lib.buildDownloadUrl("1.Patient.ndjson", {
+                secure: true
+            })
+        })
+        .then(
+            () => done("This should have failed"),
+            () => done()
         )
     });
 
