@@ -95,19 +95,20 @@ describe("Conformance Statement", () => {
 
 [
     {
-        description: "/fhir/Patient/$everything",
+    {
+        description: "/fhir/Patient/$export",
         buildUrl   : lib.buildPatientUrl
     },
     {
-        description: "/:sim/fhir/Patient/$everything",
+        description: "/:sim/fhir/Patient/$export",
         buildUrl   : params => lib.buildPatientUrl(Object.assign({}, params || {}))
     },
     {
-        description: "/fhir/Group/:groupId/$everything",
+        description: "/fhir/Group/:groupId/$export",
         buildUrl   : params => lib.buildGroupUrl(1, params)
     },
     {
-        description: "/:sim/fhir/Group/:groupId/$everything",
+        description: "/:sim/fhir/Group/:groupId/$export",
         buildUrl   : params => lib.buildGroupUrl(1, Object.assign({}, params || {}))
     }
 ].forEach(meta => {
