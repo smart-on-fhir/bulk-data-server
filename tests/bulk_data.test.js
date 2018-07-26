@@ -65,7 +65,6 @@ describe("Conformance Statement", () => {
         "xml"
     ].forEach(mime => {
         it (`/fhir/metadata?_format=${mime}`, () => {
-            console.log(lib.buildUrl([`/fhir/metadata?_format=${encodeURIComponent(mime)}`]))
             return lib.requestPromise({
                 url: lib.buildUrl([`/fhir/metadata?_format=${encodeURIComponent(mime)}`])
             }).then(res => {
@@ -90,7 +89,44 @@ describe("Conformance Statement", () => {
     });
 });
 
-
+describe("System-level Export", () => {
+    it ("works", done => {
+        
+        lib.requestPromise({
+            uri: lib.buildSystemUrl({
+                requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
+                dur         : 0
+            }),
+            qs : {
+                _type: "Group,Patient"
+            },
+            headers: {
+                Accept: "application/fhir+json",
+                Prefer: "respond-async"
+            }
+        })
+        .then(res => res.headers["content-location"])
+        .then(uri => lib.requestPromise({ uri }))
+        .then(res => JSON.parse(res.body))
+        .then(json => json.output)
+        .then(links => links.find(l => l.type == "Group"))
+        .then(link => {
+            if (!link) {
+                throw new Error("No Group files returned");
+            }
+            return lib.requestPromise({ url: link.url });
+        })
+        .then(res => res.body.split("\n"))
+        .then(lines => {
+            if (lines.length != 8) {
+                throw new Error(`Expected 8 lines but got ${lines.length}`)
+            }
+            return lines.map(l => JSON.parse(l))
+        })
+        .then(() => done())
+        .catch(done);
+    });
+});
 
 
 [
