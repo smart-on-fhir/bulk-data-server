@@ -248,7 +248,7 @@ describe("Conformance Statement", () => {
             )
         });
 
-        it (`handles the "_type" and "start" query parameter`, done => {
+        it (`handles the "_type" and "_since" query parameter`, done => {
             const TYPE = "Observation", START = "2010-01-01", EXPECTED = "2010-01-01 00:00:00";
             lib.requestPromise({
                 uri: meta.buildUrl({ dur: 1 }),
