@@ -167,13 +167,13 @@ function validateRequestStart(req, res, next) {
 const JOBS = {};
 
 /**
- * Handles the first request of the flow (the one that from /Patient/$everything
- * or /group/:groupId/$everything)
+ * Handles the first request of the flow (the one that comes from
+ * `/$export` or `/Patient/$export` or `/group/{groupId}/$export`)
  * @param {Object} req 
  * @param {Object} res 
  * @param {Number} groupId 
  */
-function handleRequest(req, res, groupId = null) {
+function handleRequest(req, res, groupId = null, system=false) {
 
     // Validate the accept header
     let accept = req.headers.accept;
@@ -211,7 +211,10 @@ function handleRequest(req, res, groupId = null) {
         start: req.query._since,
 
         // The chosen group ID (if any)
-        group: groupId
+        group: groupId,
+
+        // Pass this flag to indicate if system level resources should be matched
+        systemLevel: !!system
     });
 
     // Prepare the configuration segment of the status URL. Use the current
@@ -249,6 +252,10 @@ function handleRequest(req, res, groupId = null) {
     res.set("Content-Location", url).status(202).end();
     
 };
+
+function handleSystemLevelExport(req, res) {
+    handleRequest(req, res, null, true);
+}
 
 /**
  * Data Consumer requests a bulk data export.
@@ -413,7 +420,27 @@ function handleFileDownload(req, res) {
     input.init().then(() => input.pipe(res));
 }
 
-// Returns all data on all patients
+// System Level Export
+// Export data from a FHIR server whether or not it is associated with a patient.
+// This supports use cases like backing up a server or exporting terminology
+// data by restricting the resources returned using the _type parameter.
+router.get("/\\$export", [
+    // The "Accept" header must be "application/fhir+ndjson". Currently we
+    // don't know how to handle anything else.
+    requireFhirJsonAcceptHeader,
+
+    // The "Prefer" header must be "respond-async". Currently we don't know
+    // how to handle anything else
+    requireRespondAsyncHeader,
+
+    // Validate auth token if present
+    Lib.checkAuth,
+
+    handleSystemLevelExport
+]);
+
+// /Patient/$export - Returns all data on all patients
+// /$export - does the same on this server because we don't
 router.get("/Patient/\\$export", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
