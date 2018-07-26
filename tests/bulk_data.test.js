@@ -188,7 +188,7 @@ describe("Conformance Statement", () => {
             });
         });
 
-        it ("validates the 'output-format' parameter", done => {
+        it ("validates the '_outputFormat' parameter", done => {
             lib.requestPromise({
                 uri: meta.buildUrl(),
                 headers: {
@@ -197,28 +197,28 @@ describe("Conformance Statement", () => {
                 }
             })
             .then(() => lib.requestPromise({
-                uri: meta.buildUrl() + "?output-format=application%2Ffhir%2Bndjson",
+                uri: meta.buildUrl() + "?_outputFormat=application%2Ffhir%2Bndjson",
                 headers: {
                     Accept: "application/fhir+json",
                     Prefer: "respond-async"
                 }
             }))
             .then(() => lib.requestPromise({
-                uri: meta.buildUrl() + "?output-format=application%2Fndjson",
+                uri: meta.buildUrl() + "?_outputFormat=application%2Fndjson",
                 headers: {
                     Accept: "application/fhir+json",
                     Prefer: "respond-async"
                 }
             }))
             .then(() => lib.requestPromise({
-                uri: meta.buildUrl() + "?output-format=ndjson",
+                uri: meta.buildUrl() + "?_outputFormat=ndjson",
                 headers: {
                     Accept: "application/fhir+json",
                     Prefer: "respond-async"
                 }
             }))
             .then(() => lib.requestPromise({
-                uri: meta.buildUrl() + "?output-format=test",
+                uri: meta.buildUrl() + "?_outputFormat=test",
                 headers: {
                     Accept: "application/fhir+json",
                     Prefer: "respond-async"
