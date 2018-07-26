@@ -21,6 +21,130 @@ const TIME_MAP = {
     AllergyIntolerance: ["assertedDate"                              ]
 };
 
+const GROUPS = [
+    {
+        weight: 9,
+        resource: {
+            "resourceType":"Group",
+            "id":"3d7d2344-ca49-40ac-9e1f-88b40fff3bd9",
+            "type":"person",
+            "actual":true,
+            "quantity":3375,
+            "name":"Blue Cross Blue Shield",
+            "text":{
+                "status":"generated",
+                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Blue Cross Blue Shield</div>"
+            }
+        }
+    },
+    {
+        weight: 3,
+        resource: {
+            "resourceType":"Group",
+            "id":"a58071e4-ba37-48e3-d116-6cdf38107b57",
+            "type":"person",
+            "actual":true,
+            "quantity":1287,
+            "name":"BMC HealthNet",
+            "text":{
+                "status":"generated",
+                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">BMC HealthNet</div>"
+            }
+        }
+    },
+    {
+        weight: 1,
+        resource: {
+            "resourceType":"Group",
+            "id":"3aa93632-9afb-4d91-d3bb-48a1572b970f",
+            "type":"person",
+            "actual":true,
+            "quantity":404 ,
+            "name":"Fallon Health",
+            "text":{
+                "status":"generated",
+                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Fallon Health</div>"
+            }
+        }
+    },
+    {
+        weight: 1,
+        resource: {
+            "resourceType":"Group",
+            "id":"c56f9ba9-bf36-43a9-c30d-5963d7cd486b",
+            "type":"person",
+            "actual":true,
+            "quantity":800 ,
+            "name":"Harvard Pilgrim Health Care",
+            "text":{
+                "status":"generated",
+                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Harvard Pilgrim Health Care</div>"
+            }
+        }
+    },
+    {
+        weight: 8,
+        resource: {
+            "resourceType":"Group",
+            "id":"6f4f7ae7-9662-4f50-9756-02127875c0a4",
+            "type":"person",
+            "actual":true,
+            "quantity":2418,
+            "name":"Health New England"         ,
+            "text":{
+                "status":"generated",
+                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Health New England</div>"         
+            }
+        }
+    },
+    {
+        weight: 1,
+        resource: {
+            "resourceType":"Group",
+            "id":"b19809ab-8d29-4381-8778-f8162b32defb",
+            "type":"person",
+            "actual":true,
+            "quantity":828 ,
+            "name":"Minuteman Health"           ,
+            "text":{
+                "status":"generated",
+                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Minuteman Health</div>"           
+            }
+        }
+    },
+    {
+        weight: 2,
+        resource: {
+            "resourceType":"Group",
+            "id":"4adcfdca-c352-4a47-aed7-fb5635da20a5",
+            "type":"person",
+            "actual":true,
+            "quantity":632 ,
+            "name":"Neighborhood Health Plan"   ,
+            "text":{
+                "status":"generated",
+                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Neighborhood Health Plan</div>"   
+            }
+        }
+    },
+    {
+        weight: 7,
+        resource: {
+            "resourceType":"Group",
+            "id":"e47262b6-e02a-435a-fdf1-023003bdec1a",
+            "type":"person",
+            "actual":true,
+            "quantity":1789,
+            "name":"Tufts Health Plan"          ,
+            "text":{
+                "status":"generated",
+                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Tufts Health Plan</div>"         
+            
+            }
+        }
+    }
+];
+
 /**
  * Inserts one row into the data table
  * @param {String} resource_json 
@@ -76,15 +200,13 @@ async function insertResource(entry, patientId, group) {
     ));
 }
 
-function getGroups() {
-    return DB.promise("all", `SELECT * FROM "groups"`).then(groups => {
-        let totalWeight = groups.reduce((out, g) => out + g.weight, 0);
-        return groups.map(g => ({
-            id    : g.id,
-            weight: g.weight / totalWeight,
-            cur   : 0
-        }));
-    });
+async function getGroups() {
+    let totalWeight = GROUPS.reduce((out, g) => out + g.weight, 0);
+    return GROUPS.map(g => ({
+        id    : g.resource.id,
+        weight: g.weight / totalWeight,
+        cur   : 0
+    }));
 }
 
 /**
@@ -172,26 +294,12 @@ function createDatabase() {
             "group_id"      Integer
         );`
     ))
-    .then(() => DB.promise("run", `DROP TABLE IF EXISTS "groups"`))
     .then(() => DB.promise(
         "run",
-        `CREATE TABLE "groups"(
-            "id"     Integer NOT NULL PRIMARY KEY AUTOINCREMENT,
-            "name"   Text,
-            "weight" Integer
-        );`
-    ))
-    .then(() => DB.promise(
-        "run",
-        `INSERT INTO "groups"("name", "weight") VALUES
-        ("Blue Cross Blue Shield"     , 9),
-        ("BMC HealthNet"              , 3),
-        ("Fallon Health"              , 1),
-        ("Harvard Pilgrim Health Care", 1),
-        ("Health New England"         , 8),
-        ("Minuteman Health"           , 1),
-        ("Neighborhood Health Plan"   , 2),
-        ("Tufts Health Plan"          , 7)`
+        `INSERT INTO "data"("resource_json", "fhir_type", "modified_date") VALUES ` +
+        GROUPS.map(g => (
+            `('${JSON.stringify(g.resource)}', "Group", "${moment().format()}")`
+        )).join(",")
     ));
 }
 
@@ -221,6 +329,7 @@ if (App.input) {
         .then(() => console.log("\r\033[2K", _types))
         .then(() => DB.close())
     })
+    .then(result => console.log(result))
     .catch(Lib.die);    
 }
 else {
