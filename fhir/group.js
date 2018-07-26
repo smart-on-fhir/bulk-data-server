@@ -8,17 +8,17 @@ const SERVER_START_TIME = moment().format("YYYY-MM-DD HH:mm:ss");
 
 function resourceCreator(multiplier) {
     return function resource(group) {
-        
+        const json = JSON.parse(group.resource_json);
         return {
-            fullUrl: `${config.baseUrl}/fhir/Group/${group.id}`,
+            fullUrl: `${config.baseUrl}/fhir/Group/${json.id}`,
             resource: {
                 resourceType: "Group",
-                id: group.id,
+                id: json.id,
                 quantity: group.quantity * multiplier,
-                name: group.name,
+                name: json.name,
                 text: {
                     status: "generated",
-                    div: `<div xmlns="http://www.w3.org/1999/xhtml">${lib.htmlEncode(group.name)}</div>`
+                    div: `<div xmlns="http://www.w3.org/1999/xhtml">${lib.htmlEncode(json.name)}</div>`
                 },
                 type: "person",
                 actual: true
@@ -56,10 +56,10 @@ module.exports = (req, res) => {
     let multiplier = lib.getRequestedParams(req).m || 1;
 
     DB.all(
-        `SELECT g.id, g.name, COUNT(*) AS "quantity"
-        FROM "groups" AS "g"
+        `SELECT g.resource_json, COUNT(*) AS "quantity"
+        FROM "data" as "g"
         LEFT JOIN "data" AS "d" ON (d.group_id = g.id)
-        WHERE d.fhir_type = "Patient"
+        WHERE g.fhir_type = "Group"
         GROUP BY d.group_id`,
         (error, rows) => {
             if (error) {

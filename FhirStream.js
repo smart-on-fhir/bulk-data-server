@@ -37,12 +37,13 @@ class FhirStream extends Readable
         this.timer = null
 
         this.builder = new QueryBuilder({
-            limit     : this.limit,
-            offset    : this.offset,
-            group     : this.group,
-            start     : this.start,
-            type      : this.types,
-            columns   : this.extended ?
+            limit      : this.limit,
+            offset     : this.offset,
+            group      : this.group,
+            start      : this.start,
+            type       : this.types,
+            systemLevel: args.systemLevel,
+            columns    : this.extended ?
                 ["resource_json", "modified_date"] :
                 ["resource_json"]
         });
@@ -128,7 +129,7 @@ class FhirStream extends Readable
         // WHERE "fhir_type" IN("Patient") GROUP BY "fhir_type"
         let { sql, params } = this.builder.compileCount("totalRows");
         return DB.promise("get", sql, params).then(row => {
-            this.total = row.totalRows;
+            this.total = row && row.totalRows ? row.totalRows || 0 : 0;
             this.page = Math.floor(this.offset / this.limit) + 1;
             this.totalPages = Math.ceil((this.total * this.multiplier) / this.limit);
             return this;

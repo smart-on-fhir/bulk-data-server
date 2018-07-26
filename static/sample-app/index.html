@@ -67,6 +67,16 @@
                 line-height: inherit;
                 color: #999;
             }
+            .btn-group .btn-default {
+                font-weight: bold;
+                color: #666;
+            }
+            .btn-group .btn-default.active {
+                color: #333;
+                background-color: #d4d4d4;
+                border-color: #8c8c8c;
+                z-index: 2;
+            }
         </style>
     </head>
     <body>
@@ -76,6 +86,19 @@
                 <small>sample app</small>
             </h1>
             <form>
+                <div class="row">
+                    <div class="col-sm-6 col-sm-offset-3">
+                        <div class="btn-group" data-toggle="buttons" style="width:100%">
+                            <label class="btn btn-default active" style="width:50%">
+                                <input type="radio" name="export-type" autocomplete="off" value="patient" checked>Patient-level Export
+                            </label>
+                            <label class="btn btn-default" style="width:50%">
+                                <input type="radio" name="export-type" autocomplete="off" value="system">System-level Export
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <br/>
                 <div class="row">
                     <div class="col-xs-12">
                         <h5 class="text-success">
@@ -224,6 +247,7 @@
 
             function buildResourceCheckboxes(resources) {
                 var div = $(".resource-check-list").empty();
+                var exportType = $(':radio[name="export-type"]:checked').val();
 
                 $.each(resources, function(i, o) {
                     var cb = $('<input type="checkbox" />');
@@ -252,20 +276,32 @@
             }
 
             function buildDownloadUrl() {
-                var params    = [];
-                var group     = $("#group").val();
-                var start     = $("#start").val();
-                var dur       = (PARAMS.dur || 10);
-                var type      = $(":checkbox[name=type]").get();
-                var allLength = type.length;
+                var params     = [];
+                var group      = $("#group").val();
+                var start      = $("#start").val();
+                var dur        = (PARAMS.dur || 10);
+                var exportType = $(':radio[name="export-type"]:checked').val();
+
+                $(':checkbox[value="Group"]').attr("disabled", exportType == "patient");
+                
+                var type       = $(":checkbox[name=type]").not(":disabled").get();
+                var allLength  = type.length;
+
                 type = type.filter(function(cb) {//debugger;
                     return !!cb.checked
                 }).map(function(cb) { return cb.value; });
 
-                var url = "/fhir/" + (group ? "Group/" + group : "Patient") + "/$export";
+                $("#group").prop("disabled", exportType == "system");
+                $(':checkbox[value="Group"]').attr("disabled", exportType == "patient");
+
+                var url = "/fhir";
+                if (exportType != "system") {
+                    url += group ? "/Group/" + group : "/Patient"
+                }
+                url += "/$export";
 
                 if (start) {
-                    params.push("start=" + start);
+                    params.push("_since=" + start);
                 }
 
                 if (type.length && type.length != allLength) {
@@ -428,7 +464,7 @@
                 .then(function() {
                     buildStartSelector();
                     
-                    $(document).on("change", "select, :checkbox", buildDownloadUrl);
+                    $(document).on("change", "select, :checkbox, :radio", buildDownloadUrl);
                     
                     $("form").on("submit", function(e) {
                         e.preventDefault();

@@ -39,6 +39,9 @@ class QueryBuilder {
         // In case we want to filter by group
         this._groupId = null;
 
+        // If true the system level resources (like Group) are also considered
+        this._systemLevel = false;
+
         this.setOptions(options);
     }
 
@@ -61,6 +64,9 @@ class QueryBuilder {
         if (options.group) {
             this.setGroupId(options.group);
         }
+        if (options.systemLevel) {
+            this._systemLevel = true;
+        }
     }
 
     exportOptions() {
@@ -73,6 +79,9 @@ class QueryBuilder {
         }
         if (this._groupId) {
             out.group = this._groupId;
+        }
+        if (this._systemLevel) {
+            out.systemLevel = true;
         }
         return out;
     }
@@ -138,6 +147,10 @@ class QueryBuilder {
         if (this._groupId) {
             len = where.push(`group_id = $_groupId`);
             params.$_groupId = this._groupId;
+        }
+
+        if (!this._systemLevel) {
+            len = where.push(`patient_id IS NOT NULL`);
         }
 
         if (len) {
