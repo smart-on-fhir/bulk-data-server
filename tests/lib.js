@@ -53,6 +53,10 @@ function buildProgressUrl(params) {
     return buildBulkUrl("bulkstatus", params);
 }
 
+function buildSystemUrl(params) {
+    return buildBulkUrl("$export", params);
+}
+
 function buildPatientUrl(params) {
     return buildBulkUrl("Patient/$export", params);
 }
@@ -167,6 +171,7 @@ module.exports = {
     buildDownloadUrl,
     buildProgressUrl,
     buildPatientUrl,
+    buildSystemUrl,
     buildGroupUrl,
     expectErrorOutcome,
     authorize

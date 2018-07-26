@@ -95,6 +95,9 @@ describe("Conformance Statement", () => {
 
 [
     {
+        description: "/fhir/$export",
+        buildUrl   : lib.buildSystemUrl
+    },
     {
         description: "/fhir/Patient/$export",
         buildUrl   : lib.buildPatientUrl
@@ -702,6 +705,36 @@ describe("File Downloading", function() {
         .then(() => done(), done);
     });
 
+    it ("can do limit and offset on Groups", done => {
+        lib.requestPromise({
+            url: lib.buildDownloadUrl("1.Group.ndjson", {
+                systemLevel: true,
+                limit : 6,
+                offset: 1
+            })
+        }).then(res => {
+            let len = res.body.split("\n").length;
+            if (len != 6) {
+                throw `Expected 6 rows but got ${len}`
+            }
+        })
+        .then(() => done(), done);
+    });
+
+    it ("can download Group files", done => {
+        lib.requestPromise({
+            url: lib.buildDownloadUrl("1.Group.ndjson", {
+                systemLevel: true
+            })
+        }).then(res => {
+            let len = res.body.split("\n").length;
+            if (len != 8) {
+                throw `Expected 8 rows but got ${len}`
+            }
+        })
+        .then(() => done(), done);
+    });
+
     it ("Handles the '_since' parameter", done => {
         lib.requestPromise({
             url: lib.buildDownloadUrl("1.Patient.ndjson", {
@@ -1040,9 +1073,10 @@ describe("Groups", () => {
     it ("Blue Cross Blue Shield should have 27 patients in the test DB", function(done) {
         this.timeout(10000);
 
+        const BlueCCrossBlueShieldId = 11534;
         // console.log(lib.buildGroupUrl(1, { dur: 0 }))
         lib.requestPromise({
-            uri: lib.buildGroupUrl(1, { dur: 0 }),
+            uri: lib.buildGroupUrl(BlueCCrossBlueShieldId, { dur: 0 }),
             qs : {
                 _type: "Patient"
             },
