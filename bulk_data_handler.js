@@ -89,6 +89,11 @@ const outcomes = {
         res,
         "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled",
         { httpCode: 404 /* Not Found */ }
+    ),
+    exportAccepted: (res, location) => Lib.operationOutcome(
+        res,
+        `Your request have been accepted. You can check it's status at "${location}"`,
+        { httpCode: 202, severity: "information" }
     )
 };
 
@@ -249,7 +254,8 @@ function handleRequest(req, res, groupId = null, system=false) {
     // returns a 202 Accepted header, and a Content-Location at which the
     // client can use to access the response.
     // HTTP/1.1 202 Accepted
-    res.set("Content-Location", url).status(202).end();
+    res.set("Content-Location", url);
+    return outcomes.exportAccepted(res, url);
     
 };
 
