@@ -203,17 +203,19 @@ function die(error="Unknown error")
     process.exit(1);
 }
 
-function operationOutcome(
-    res,
-    message,
-    {
+function operationOutcome(res, message, options = {}) {
+    return res.status(options.httpCode || 500).json(
+        createOperationOutcome(message, options)
+    );
+}
+
+function createOperationOutcome(message, {
         httpCode  = 500,
         issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
         severity  = "error"       // fatal | error | warning | information
-    } = {}
-)
+    } = {})
 {
-    return res.status(httpCode).json({
+    return {
         "resourceType": "OperationOutcome",
         "text": {
             "status": "generated",
@@ -229,7 +231,7 @@ function operationOutcome(
                 "diagnostics": message
             }
         ]
-    });
+    };
 }
 
 // require a valid auth token if there is an auth token
@@ -391,5 +393,6 @@ module.exports = {
     uInt,
     decodeArgs,
     getRequestedParams,
-    fhirDateTime
+    fhirDateTime,
+    createOperationOutcome
 };

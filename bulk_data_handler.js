@@ -428,6 +428,12 @@ function handleFileDownload(req, res) {
         "Content-Disposition": "attachment"
     });
 
+    if (args.fileError) {
+        return res.status(400).end(JSON.stringify(
+            Lib.createOperationOutcome(args.fileError, { httpCode: 400 })
+        ));
+    }
+
     let input = new fhirStream(req, res);
     input.on("error", error => {
         console.error(error);
