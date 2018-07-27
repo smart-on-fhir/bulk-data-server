@@ -392,7 +392,7 @@ function handleStatus(req, res) {
             // will require an authentication token. Note: This may be false in
             // the case of signed S3 urls or an internal file server within an
             // organization's firewall.
-            "secure" : !!sim.secure,
+            "requiresAccessToken" : !!sim.secure,
 
             // array of bulk data file items with one entry for each generated
             // file. Note: If no data is returned from the kick-off request,
