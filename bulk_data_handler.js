@@ -306,7 +306,7 @@ function handleStatus(req, res) {
     }
 
     // ensure requestStart param is present
-    let requestStart = req.sim.requestStart;
+    let requestStart = moment(req.sim.requestStart);
 
     // check if the user should (continue to) wait
     let generationTime = sim.dur || sim.dur === 0 ? sim.dur : config.defaultWaitTime;
