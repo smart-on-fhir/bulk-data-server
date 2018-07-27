@@ -16,10 +16,40 @@ function requestPromise(options, delay = 0) {
         setTimeout(() => {
             request(Object.assign({ strictSSL: false }, options), (error, res) => {
                 if (error) {
-                    return reject(error);
+                    return reject({ error, response: res });
                 }
+
+                let message = "Request failed";
+
+                if (!res || !res.statusCode) {
+                    return reject({
+                        error: new Error(message),
+                        response: res
+                    });
+                }
+
+                if (res.statusCode == 404) {
+                    return reject({
+                        error: new Error("Not Found"),
+                        response: res
+                    });
+                }
+
                 if (res.statusCode >= 400) {
-                    return reject(res.body || res.statusMessage);
+                    let outcome;
+                    try {
+                        if (res.body.resourceType = "OperationOutcome") {
+                            outcome = res.body;
+                            message = res.statusMessage || "Unknown error!";
+                        }
+                    } catch(ex) {
+                        message = String(res.body || res.statusMessage || "Unknown error!")
+                    }
+                    return reject({
+                        error: new Error(message),
+                        response: res,
+                        outcome
+                    });
                 }
                 resolve(res);
             });

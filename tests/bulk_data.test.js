@@ -1,6 +1,7 @@
 const request   = require("request");
 const base64url = require("base64-url");
 const moment    = require("moment");
+const assert    = require("assert"); //.strict;
 const lib       = require("./lib");
 const app       = require("../index");
 const config    = require("../config");
@@ -18,11 +19,55 @@ after(next => {
     next();
 });
 
+// added in node v10
+async function rejects(block, error, message) {
+    let promise = block;
+    if (typeof block == "function") {
+        try {
+            promise = block();
+        } catch (ex) {
+            return Promise.reject(ex);
+        }
+    }
+    if (!promise || typeof promise.then != "function") {
+        return Promise.reject(new Error(
+            "The first argument must be a Promise or a function " +
+            "that returns a promise"
+        ));
+    }
+
+    let result;
+    try {
+        result = await promise;
+    } catch (ex) {
+        if (error) {
+            if (typeof error == "function") {
+                if (!(ex instanceof error)) {
+                    return Promise.reject(new Error(
+                        `Expected block to reject with an instance of ${error.name}`    
+                    ));
+                }
+            //     else if ()
+            }
+            else if (typeof error == "object") {
+                for (let key in error) {
+                    assert.ok(
+                        error[key] === ex[key],
+                        `Expected the rejection error to have a "${key}" ` +
+                        `property equal to '${error[key]}'`
+                    )
+                }
+            }
+        }
+        return Promise.resolve();
+    }
+    return Promise.reject(new Error(message || "The provided block did not reject"));
+}
+
 function downloadPatients(options) {
     let url = lib.buildDownloadUrl("1.Patient.ndjson", options);
     return lib.requestPromise({ url })
         .then(res => res.body.split("\n").filter(r => !!r).map(row => {
-            // console.log("row: '" + row + "'");
             try {
                 return JSON.parse(row)
             } catch (ex) {
@@ -34,57 +79,52 @@ function downloadPatients(options) {
 
 // Begin tests =================================================================
 describe("Conformance Statement", () => {
-    [
-        "application/fhir+json",
-        "application/json+fhir",
-        "application/json",
-        "text/json",
-        "json"
-    ].forEach(mime => {
-        it (`/fhir/metadata?_format=${mime}`, () => {
-            return lib.requestPromise({
-                url: lib.buildUrl([`/fhir/metadata?_format${mime}`])
+    describe("works with json types", () => {
+        [
+            "application/fhir+json",
+            "application/json+fhir",
+            "application/json",
+            "text/json",
+            "json"
+        ].forEach(mime => {
+            it (`/fhir/metadata?_format=${mime}`, () => {
+                return lib.requestPromise({
+                    url: lib.buildUrl([
+                        `/fhir/metadata?_format=${encodeURIComponent(mime)}`
+                    ])
+                });
             });
-        });
 
-        it (`/fhir/metadata using accept:${mime}`, () => {
-            return lib.requestPromise({
-                url: lib.buildUrl(["/fhir/metadata"]),
-                headers: {
-                    accept: mime
-                }
+            it (`/fhir/metadata using accept:${mime}`, () => {
+                return lib.requestPromise({
+                    url: lib.buildUrl(["/fhir/metadata"]),
+                    headers: { accept: mime }
+                });
             });
         });
     });
 
-    [
-        "application/fhir+xml",
-        "application/xml+fhir",
-        "application/xml",
-        "text/xml",
-        "xml"
-    ].forEach(mime => {
-        it (`/fhir/metadata?_format=${mime}`, () => {
-            return lib.requestPromise({
-                url: lib.buildUrl([`/fhir/metadata?_format=${encodeURIComponent(mime)}`])
-            }).then(res => {
-                if (res.statusCode == 200) {
-                    throw new Error("This should have failed!")
-                }
-            }, () => 1);
-        });
+    describe("fails with xml types", () => {
+        [
+            "application/fhir+xml",
+            "application/xml+fhir",
+            "application/xml",
+            "text/xml",
+            "xml"
+        ].forEach(mime => {
+            it (`/fhir/metadata?_format=${mime}`, () => {
+                let url = lib.buildUrl([`/fhir/metadata?_format=${encodeURIComponent(mime)}`]);
+                return rejects(lib.requestPromise({ url }));
+            });
 
-        it (`/fhir/metadata using accept:${mime}`, () => {
-            return lib.requestPromise({
-                url: lib.buildUrl(["/fhir/metadata"]),
-                headers: {
-                    accept: mime
-                }
-            }).then(res => {
-                if (res.statusCode == 200) {
-                    throw new Error("This should have failed!")
-                }
-            }, () => 1);
+            it (`/fhir/metadata using accept:${mime}`, () => {
+                return rejects(
+                    lib.requestPromise({
+                        url: lib.buildUrl(["/fhir/metadata"]),
+                        headers: { accept: mime }
+                    })
+                );
+            });
         });
     });
 });
@@ -128,278 +168,155 @@ describe("System-level Export", () => {
     });
 });
 
-
-[
-    {
-        description: "/fhir/$export",
-        buildUrl   : lib.buildSystemUrl
-    },
-    {
-        description: "/fhir/Patient/$export",
-        buildUrl   : lib.buildPatientUrl
-    },
-    {
-        description: "/:sim/fhir/Patient/$export",
-        buildUrl   : params => lib.buildPatientUrl(Object.assign({}, params || {}))
-    },
-    {
-        description: "/fhir/Group/:groupId/$export",
-        buildUrl   : params => lib.buildGroupUrl(1, params)
-    },
-    {
-        description: "/:sim/fhir/Group/:groupId/$export",
-        buildUrl   : params => lib.buildGroupUrl(1, Object.assign({}, params || {}))
-    }
-].forEach(meta => {
-    describe(meta.description, () => {
-        
-        it ("rejects invalid auth token", done => {
-            lib.requestPromise({
-                uri: meta.buildUrl(),
-                headers: {
-                    authorization: "Bearer badToken"
-                }
-            })
-            .then(
-                res   => done("This request should not have succeeded!"),
-                error => done()
-            )
-        });
-
-        it ("accepts valid auth token", done => {
-            lib.authorize()
-            .then(tokenResponse => lib.requestPromise({
-                uri: meta.buildUrl(),
-                headers: {
-                    authorization: "Bearer " + tokenResponse.access_token,
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            }))
-            .then(() => done(), done)
-        });
-
-        it ("requires valid 'Accept' header", done => {
-            lib.requestPromise({
-                uri: meta.buildUrl(),
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            })
+describe("Bulk Data Kick-off Request", () => {
+    [
+        {
+            description: "/fhir/$export",
+            buildUrl   : lib.buildSystemUrl
+        },
+        {
+            description: "/fhir/Patient/$export",
+            buildUrl   : lib.buildPatientUrl
+        },
+        {
+            description: "/:sim/fhir/Patient/$export",
+            buildUrl   : params => lib.buildPatientUrl(Object.assign({}, params || {}))
+        },
+        {
+            description: "/fhir/Group/:groupId/$export",
+            buildUrl   : params => lib.buildGroupUrl(1, params)
+        },
+        {
+            description: "/:sim/fhir/Group/:groupId/$export",
+            buildUrl   : params => lib.buildGroupUrl(1, Object.assign({}, params || {}))
+        }
+    ].forEach(meta => {
+        describe(meta.description, () => {
             
-            .then(() => lib.requestPromise({
-                uri: meta.buildUrl(),
-                headers: {
-                    Accept: "bad-header",
-                    Prefer: "respond-async"
-                }
-            }).catch(err => 1))
-            
-            .then(() => lib.requestPromise({
-                uri: meta.buildUrl(),
-                headers: {
-                    Accept: "bad-header",
-                    Prefer: "respond-async"
-                }
-            }).catch(err => 1))
-
-            .then(() => done(), done);
-        });
-
-        it ("requires 'Prefer: respond-async' header", done => {
-            request({
-                uri: meta.buildUrl(),
-                headers: {
-                    Accept: "application/fhir+json"
-                }
-            }, (error, res) => {
-                if (error) {
-                    return done(error);
-                }
-                lib.expectErrorOutcome(res, {
-                    message: "The Prefer header must be respond-async",
-                    code   : 400
-                }, done)
-            });
-        });
-
-        it ("validates the '_outputFormat' parameter", done => {
-            lib.requestPromise({
-                uri: meta.buildUrl(),
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            })
-            .then(() => lib.requestPromise({
-                uri: meta.buildUrl() + "?_outputFormat=application%2Ffhir%2Bndjson",
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            }))
-            .then(() => lib.requestPromise({
-                uri: meta.buildUrl() + "?_outputFormat=application%2Fndjson",
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            }))
-            .then(() => lib.requestPromise({
-                uri: meta.buildUrl() + "?_outputFormat=ndjson",
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            }))
-            .then(() => lib.requestPromise({
-                uri: meta.buildUrl() + "?_outputFormat=test",
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            }).catch(err => 1))
-
-            .then(() => done(), done);
-        });
-
-        it ("returns proper content-location header", done => {
-            lib.requestPromise({
-                uri: meta.buildUrl(),
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            })
-            .then(
-                res => {
-                    let location = res.headers["content-location"] || ""
-                    if (!location.match(/http.*?\/fhir\/bulkstatus$/)) {
-                        return done("Invalid content-location returned: " + location);
-                    }
-                    done();
-                },
-                done
-            )
-        });
-
-        it (`handles the "_type" and "_since" query parameter`, done => {
-            const TYPE = "Observation", START = "2010-01-01", EXPECTED = "2010-01-01 00:00:00";
-            lib.requestPromise({
-                uri: meta.buildUrl({ dur: 1 }),
-                qs : {
-                    _type: TYPE,
-                    _since: START
-                },
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            })
-            .then(
-                res => {
-                    let location = res.headers["content-location"] || "";
-                    let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus/);
-                    if (!args || !args[1]) {
-                        return done("Invalid content-location returned: " + JSON.stringify(res.headers, null, 4) + "\n\n" + res.body);
-                    }
-                    
-                    try {
-                        args = JSON.parse(base64url.decode(args[1]));
-                    } catch (ex) {
-                        
-                        return done(ex);
-                    }
-    
-                    if (args.type != TYPE) {
-                        return done(`Expected type param to equal "${TYPE}" but found "${args.type}"`);
-                    }
-                    if (args.start != EXPECTED) {
-                        return done(`Expected "start" param to equal "${EXPECTED}" but found "${args.start}"`);
-                    }
-                    done();
-                },
-                done
-            )
-        });
-
-        it (`handles partial start dates like 2010`, done => {
-            const TYPE = "Observation",
-                  IN = "2010",
-                  EXPECTED = "2010-01-01 00:00:00";
-            lib.requestPromise({
-                uri: meta.buildUrl({ dur: 1 }),
-                qs : {
-                    _type: TYPE,
-                    _since: IN
-                },
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            })
-            .then(
-                res => {
-                    let location = res.headers["content-location"] || "";
-                    let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus/);
-                    try {
-                        args = JSON.parse(base64url.decode(args[1]));
-                    } catch (ex) {
-                        return done(ex);
-                    }
-
-                    if (args.start != EXPECTED) {
-                        return done(`Expected "start" param to equal "${EXPECTED}" but found "${args.start}"`);
-                    }
-
-                    done();
-                },
-                done
-            )
-        });
-
-        it (`handles partial start dates like 2010-01`, done => {
-            const TYPE = "Observation",
-                  IN = "2010-01",
-                  EXPECTED = "2010-01-01 00:00:00";
-            lib.requestPromise({
-                uri: meta.buildUrl({ dur: 1 }),
-                qs : {
-                    _type: TYPE,
-                    _since: IN
-                },
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            })
-            .then(
-                res => {
-                    let location = res.headers["content-location"] || "";
-                    let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus/);
-                    try {
-                        args = JSON.parse(base64url.decode(args[1]));
-                    } catch (ex) {
-                        return done(ex);
-                    }
-
-                    if (args.start != EXPECTED) {
-                        return done(`Expected "start" param to equal "${EXPECTED}" but found "${args.start}"`);
-                    }
-
-                    done();
-                },
-                done
-            )
-        });
-    
-        ["dur", "page", "err", "m"].forEach(param => {
-            it (`passes the "${param}" sim parameter thru`, done => {
+            it ("rejects invalid auth token", () => rejects(
                 lib.requestPromise({
-                    uri: meta.buildUrl({
-                        [param]: `${param}-value`
-                    }),
+                    uri: meta.buildUrl(),
+                    headers: {
+                        authorization: "Bearer badToken"
+                    }
+                })
+            ));
+
+            it ("accepts valid auth token", done => {
+                lib.authorize()
+                .then(tokenResponse => lib.requestPromise({
+                    uri: meta.buildUrl(),
+                    headers: {
+                        authorization: "Bearer " + tokenResponse.access_token,
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                }))
+                .then(() => done(), ({ error }) => done(error))
+            });
+
+            it ("requires valid 'Accept' header", () => rejects(
+                lib.requestPromise({
+                    uri: meta.buildUrl(),
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                })
+                .then(() => lib.requestPromise({
+                    uri: meta.buildUrl(),
+                    headers: {
+                        Accept: "bad-header",
+                        Prefer: "respond-async"
+                    }
+                }))
+            ));
+
+            it ("requires 'Prefer: respond-async' header", done => {
+                request({
+                    uri: meta.buildUrl(),
+                    headers: {
+                        Accept: "application/fhir+json"
+                    }
+                }, (error, res) => {
+                    if (error) {
+                        return done(error);
+                    }
+                    lib.expectErrorOutcome(res, {
+                        message: "The Prefer header must be respond-async",
+                        code   : 400
+                    }, done)
+                });
+            });
+
+            it ("validates the '_outputFormat' parameter", done => {
+                lib.requestPromise({
+                    uri: meta.buildUrl(),
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                })
+                .then(() => lib.requestPromise({
+                    uri: meta.buildUrl() + "?_outputFormat=application%2Ffhir%2Bndjson",
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                }))
+                .then(() => lib.requestPromise({
+                    uri: meta.buildUrl() + "?_outputFormat=application%2Fndjson",
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                }))
+                .then(() => lib.requestPromise({
+                    uri: meta.buildUrl() + "?_outputFormat=ndjson",
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                }))
+                .then(() => lib.requestPromise({
+                    uri: meta.buildUrl() + "?_outputFormat=test",
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                }).catch(err => 1))
+
+                .then(() => done(), ({ error }) => done(error));
+            });
+
+            it ("returns proper content-location header", done => {
+                lib.requestPromise({
+                    uri: meta.buildUrl(),
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                })
+                .then(
+                    res => {
+                        let location = res.headers["content-location"] || ""
+                        if (!location.match(/http.*?\/fhir\/bulkstatus$/)) {
+                            return done("Invalid content-location returned: " + location);
+                        }
+                        done();
+                    },
+                    ({ error }) => done(error)
+                )
+            });
+
+            it (`handles the "_type" and "_since" query parameter`, done => {
+                const TYPE = "Observation", START = "2010-01-01", EXPECTED = "2010-01-01 00:00:00";
+                lib.requestPromise({
+                    uri: meta.buildUrl({ dur: 1 }),
+                    qs : {
+                        _type: TYPE,
+                        _since: START
+                    },
                     headers: {
                         Accept: "application/fhir+json",
                         Prefer: "respond-async"
@@ -410,68 +327,232 @@ describe("System-level Export", () => {
                         let location = res.headers["content-location"] || "";
                         let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus/);
                         if (!args || !args[1]) {
-                            return done("Invalid content-location returned: " + location);
+                            return done("Invalid content-location returned: " + JSON.stringify(res.headers, null, 4) + "\n\n" + res.body);
                         }
                         
                         try {
                             args = JSON.parse(base64url.decode(args[1]));
                         } catch (ex) {
+                            
                             return done(ex);
                         }
-    
-                        if (args[param] != `${param}-value`) {
-                            return done(`Expected "${param}" param to equal "${param}-value" but found "${args[param]}"`);
+        
+                        if (args.type != TYPE) {
+                            return done(`Expected type param to equal "${TYPE}" but found "${args.type}"`);
+                        }
+                        if (args.start != EXPECTED) {
+                            return done(`Expected "start" param to equal "${EXPECTED}" but found "${args.start}"`);
                         }
                         done();
                     },
-                    done
+                    ({ error }) => done(error)
                 )
             });
-        });
-    
-        it (`handles the the "file_generation_failed" simulated error`, done => {
-            lib.requestPromise({
-                uri: meta.buildUrl({
-                    "err": "file_generation_failed"
-                }),
-                json: true,
-                headers: {
-                    Accept: "application/fhir+json",
-                    Prefer: "respond-async"
-                }
-            })
-            .then(
-                () => done("This request should not have succeeded!"),
-                error => {
-                    if (error.issue[0].diagnostics != "File generation failed") {
-                        return done("Did not return the proper error");
-                    }
-                    done();
-                }
-            );
-        });
 
+            it (`handles partial start dates like 2010`, done => {
+                const TYPE = "Observation",
+                    IN = "2010",
+                    EXPECTED = "2010-01-01 00:00:00";
+                lib.requestPromise({
+                    uri: meta.buildUrl({ dur: 1 }),
+                    qs : {
+                        _type: TYPE,
+                        _since: IN
+                    },
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                })
+                .then(
+                    res => {
+                        let location = res.headers["content-location"] || "";
+                        let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus/);
+                        try {
+                            args = JSON.parse(base64url.decode(args[1]));
+                        } catch (ex) {
+                            return done(ex);
+                        }
+
+                        if (args.start != EXPECTED) {
+                            return done(`Expected "start" param to equal "${EXPECTED}" but found "${args.start}"`);
+                        }
+
+                        done();
+                    },
+                    ({ error }) => done(error)
+                )
+            });
+
+            it (`handles partial start dates like 2010-01`, done => {
+                const TYPE = "Observation",
+                    IN = "2010-01",
+                    EXPECTED = "2010-01-01 00:00:00";
+                lib.requestPromise({
+                    uri: meta.buildUrl({ dur: 1 }),
+                    qs : {
+                        _type: TYPE,
+                        _since: IN
+                    },
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                })
+                .then(
+                    res => {
+                        let location = res.headers["content-location"] || "";
+                        let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus/);
+                        try {
+                            args = JSON.parse(base64url.decode(args[1]));
+                        } catch (ex) {
+                            return done(ex);
+                        }
+
+                        if (args.start != EXPECTED) {
+                            return done(`Expected "start" param to equal "${EXPECTED}" but found "${args.start}"`);
+                        }
+
+                        done();
+                    },
+                    ({ error }) => done(error)
+                )
+            });
+        
+            ["dur", "page", "err", "m"].forEach(param => {
+                it (`passes the "${param}" sim parameter thru`, done => {
+                    lib.requestPromise({
+                        uri: meta.buildUrl({
+                            [param]: `${param}-value`
+                        }),
+                        headers: {
+                            Accept: "application/fhir+json",
+                            Prefer: "respond-async"
+                        }
+                    })
+                    .then(
+                        res => {
+                            let location = res.headers["content-location"] || "";
+                            let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus/);
+                            if (!args || !args[1]) {
+                                return done("Invalid content-location returned: " + location);
+                            }
+                            
+                            try {
+                                args = JSON.parse(base64url.decode(args[1]));
+                            } catch (ex) {
+                                return done(ex);
+                            }
+        
+                            if (args[param] != `${param}-value`) {
+                                return done(`Expected "${param}" param to equal "${param}-value" but found "${args[param]}"`);
+                            }
+                            done();
+                        },
+                        ({ error }) => done(error)
+                    )
+                });
+            });
+        
+            it (`handles the the "file_generation_failed" simulated error`, done => {
+                lib.requestPromise({
+                    uri: meta.buildUrl({
+                        "err": "file_generation_failed"
+                    }),
+                    json: true,
+                    headers: {
+                        Accept: "application/fhir+json",
+                        Prefer: "respond-async"
+                    }
+                })
+                .then(
+                    () => done("This request should not have succeeded!"),
+                    ({ outcome }) => {
+                        if (outcome.issue[0].diagnostics != "File generation failed") {
+                            return done("Did not return the proper error");
+                        }
+                        done();
+                    }
+                );
+            });
+
+        });
+    });
+});
+
+describe("Canceling", () => {
+    it ("works", done => {
+        let kickOffUrl = lib.buildPatientUrl({dur: 1});
+        let statusUrl;
+        
+        lib.requestPromise({
+            url: kickOffUrl,
+            headers: {
+                Accept: "application/fhir+json",
+                Prefer: "respond-async"
+            }
+        })
+        .then(res => {
+            statusUrl = res.headers["content-location"];
+            return statusUrl;
+        })
+        .then(() => lib.requestPromise({ url: statusUrl, method: "DELETE" }))
+        .then(res => {
+            expect.ok(res.body.issue[0].diagnostics == "The procedure was canceled")
+            expect.ok(res.statusCode == 202)
+        })
+        .then(() => done())
+        .catch(({ error }) => done(error))
+    });
+
+    it ("returns an error if trying to cancel twice", done => {
+        let kickOffUrl = lib.buildPatientUrl({dur: 1});
+        let statusUrl;
+        
+        lib.requestPromise({
+            url: kickOffUrl,
+            headers: {
+                Accept: "application/fhir+json",
+                Prefer: "respond-async"
+            }
+        })
+        .then(res => {
+            statusUrl = res.headers["content-location"];
+            return statusUrl;
+        })
+        .then(() => lib.requestPromise({ url: statusUrl, method: "DELETE" }))
+        .then(() => lib.requestPromise({ url: statusUrl, method: "DELETE" }))
+        .then(res => {
+            expect.ok(res.body.issue[0].diagnostics == "The procedure was already canceled by the client")
+            expect.ok(res.statusCode == 410)
+        })
+        .catch(() => done())
+    });
+
+    it ("returns an error if trying to cancel unknown request", done => {
+        lib.requestPromise({ url: lib.buildProgressUrl(), method: "DELETE" })
+        .then(res => {
+            expect.ok(res.body.issue[0].diagnostics == "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled")
+            expect.ok(res.statusCode == 410)
+        })
+        .catch(() => done())
     });
 });
 
 describe("Progress Updates", () => {
 
-    it ("rejects invalid auth token", done => {
+    it ("rejects invalid auth token", () => rejects(
         lib.requestPromise({
             uri: lib.buildProgressUrl(),
             headers: {
                 authorization: "Bearer badToken"
             }
         })
-        .then(
-            res   => done("This request should not have succeeded!"),
-            error => done()
-        )
-    });
+    ));
 
     it ("accepts valid auth token", done => {
         lib.authorize()
-        .then(tokenResponse => request({
+        .then(tokenResponse => lib.requestPromise({
             uri: lib.buildProgressUrl({
                 requestStart: moment().subtract(5, "seconds").format("YYYY-MM-DD HH:mm:ss"),
                 dur         : 2
@@ -480,21 +561,18 @@ describe("Progress Updates", () => {
                 authorization: "Bearer " + tokenResponse.access_token
             }
         }))
-        .then(() => done(), done)
+        .then(() => done(), ({ error }) => done(error))
     });
 
-    it ("requires an auth token if kicked off with auth", done => {
+    it ("requires an auth token if kicked off with auth", () => rejects(
         lib.requestPromise({
             uri: lib.buildProgressUrl({
                 secure      : true,
                 requestStart: moment().subtract(5, "seconds").format("YYYY-MM-DD HH:mm:ss"),
                 dur         : 2
             })
-        }).then(
-            () => done("This should have failed"),
-            () => done()
-        )
-    });
+        })
+    ));
 
     // implementation-specific
     it ("Requires 'requestStart' param", done => {
@@ -562,7 +640,23 @@ describe("Progress Updates", () => {
                 }
             })
         })
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
+    });
+
+    it ("Replies with 202", done => {
+        lib.requestPromise({
+            url: lib.buildProgressUrl({
+                requestStart: moment().subtract(5, "seconds").format("YYYY-MM-DD HH:mm:ss"),
+                dur         : 10
+            }),
+            json: true
+        })
+        .then(res => {
+            if (res.statusCode != 202) {
+                throw `Expected 202 status code but got ${res.statusCode}`;
+            }
+        })
+        .then(() => done(), ({ error }) => done(error));
     });
 
     it ("Replies with links after the wait time", done => {
@@ -581,7 +675,7 @@ describe("Progress Updates", () => {
                 throw `Did not reply with links array in body.output`;
             }
         })
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
 
     it ("Generates correct number of links", done => {
@@ -605,52 +699,106 @@ describe("Progress Updates", () => {
                 requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
                 type        : "Patient",
                 dur         : 0,
-                page        : 25,
+                page        : 22,
                 m           : 10
             }),
             json: true
         }))
         .then(res => {
             let n = res.body.output.length;
-            if (n != 40) {
-                throw `Expected 4 links but got ${n}`;
+            if (n != 46) {
+                throw `Expected 40 links but got ${n}`;
+            }
+        })
+        .then(() => done(), ({ error }) => done(error));
+    });
+
+    it ('Generates correct "count" property for each link', done => {
+        lib.requestPromise({
+            url: lib.buildProgressUrl({
+                requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
+                type        : "Patient",
+                dur         : 0,
+                page        : 22,
+                m           : 10
+            }),
+            json: true
+        })
+        .then(res => {
+            let n = res.body.output.length;
+            if (n != 46) {
+                throw `Expected 46 links but got ${n}`;
+            }
+            
+            for (let i = 0; i < n; i++) {
+                if (i < 45 && res.body.output[i].count != 22) {
+                    throw `Expected count to equal 22 but got ${res.body.output[i].count}`;
+                }
+                else if (i == 45 && res.body.output[i].count != 10) {
+                    throw `Expected count to equal 10 for the last page but got ${res.body.output[i].count}`;
+                }
             }
         })
         .then(() => done(), done);
-    });
+    })
+
+    it ('Includes "errors" property in the result', done => {
+        lib.requestPromise({
+            url: lib.buildProgressUrl({
+                requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
+                type        : "Patient",
+                dur         : 0
+            }),
+            json: true
+        })
+        .then(res => assert.deepEqual(res.body.errors, []))
+        .then(() => done(), done);
+    })
+
+    it ('Includes "errors" entries for unknown resources', done => {
+        lib.requestPromise({
+            url: lib.buildProgressUrl({
+                requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
+                type        : "Patient,Xz,Yz",
+                dur         : 0
+            }),
+            json: true
+        })
+        .then(res => {
+            // console.log(res.body.errors)
+            assert.ok(res.body.errors.length === 2);
+            assert.ok(res.body.errors[0].type === "OperationOutcome");
+            assert.ok(res.body.errors[0].url.split("/").pop() === "Xz.error.ndjson");
+            assert.ok(res.body.errors[1].type === "OperationOutcome");
+            assert.ok(res.body.errors[1].url.split("/").pop() === "Yz.error.ndjson");
+        })
+        .then(() => done(), done);
+    })
 });
 
 describe("File Downloading", function() {
 
     this.timeout(5000);
 
-    it ("rejects invalid auth token", done => {
+    it ("rejects invalid auth token", () => rejects(
         lib.requestPromise({
             uri: lib.buildDownloadUrl("1.Patient.ndjson"),
             headers: {
                 authorization: "Bearer badToken"
             }
         })
-        .then(
-            res   => done("This request should not have succeeded!"),
-            error => done()
-        )
-    });
+    ));
 
-    it ("requires an auth token if kicked off with auth", done => {
+    it ("requires an auth token if kicked off with auth", () => rejects(
         lib.requestPromise({
             uri: lib.buildDownloadUrl("1.Patient.ndjson", {
                 secure: true
             })
         })
-        .then(
-            () => done("This should have failed"),
-            () => done()
-        )
-    });
+    ));
 
     // Make sure that every single line contains valid JSON
-    it ("Returns valid ndjson files", function(done) {
+    it ("Returns valid ndjson files", done => {
         // this.timeout(5000);
         let url = lib.buildDownloadUrl("1.Patient.ndjson");
         let errors = [];
@@ -724,7 +872,7 @@ describe("File Downloading", function() {
                 }
             });
         })
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
 
     it ("The files have the correct number of lines", done => {
@@ -738,7 +886,7 @@ describe("File Downloading", function() {
                 throw `Did not return 6 rows`
             }
         })
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
 
     it ("can do limit and offset on Groups", done => {
@@ -754,7 +902,7 @@ describe("File Downloading", function() {
                 throw `Expected 6 rows but got ${len}`
             }
         })
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
 
     it ("can download Group files", done => {
@@ -768,7 +916,7 @@ describe("File Downloading", function() {
                 throw `Expected 8 rows but got ${len}`
             }
         })
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
 
     it ("Handles the '_since' parameter", done => {
@@ -798,7 +946,7 @@ describe("File Downloading", function() {
                 throw `Did not properly filter by modified_date #2: ${res.body}`
             }
         })
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
     
     it ("Can simulate the 'file_missing_or_expired' error", done => {
@@ -828,7 +976,7 @@ describe("File Downloading", function() {
                 throw `0. Expected 100 patients but found ${patients.length}`
             }
         })
-        .then(() => done(), done)
+        .then(() => done(), ({ error }) => done(error))
     });
 
     it ("Does not prefix IDs on the first page", done => {
@@ -842,7 +990,7 @@ describe("File Downloading", function() {
                 throw `Patient IDs are prefixed on the first page but they shouldn't`
             }
         })
-        .then(() => done(), done)
+        .then(() => done(), ({ error }) => done(error))
     });
 
     it ("Can go to virtual second page if multiplier allows it", done => {
@@ -859,7 +1007,7 @@ describe("File Downloading", function() {
                 throw `Patient IDs are not prefixed with "p2-" on the second page but they should`
             }
         })
-        .then(() => done(), done)
+        .then(() => done(), ({ error }) => done(error))
     });
 
     it ("Can go to virtual third page if multiplier allows it", done => {
@@ -876,7 +1024,7 @@ describe("File Downloading", function() {
                 throw `Patient IDs are not prefixed with "p3-" on the third page but they should`
             }
         })
-        .then(() => done(), done)
+        .then(() => done(), ({ error }) => done(error))
     });
 
     it ("Does not fetch data beyond the limits", done => {
@@ -890,7 +1038,7 @@ describe("File Downloading", function() {
                 throw `Expected 0 patients but found ${patients.length}`
             }
         })
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
 
     it ("Handles the 'm' parameter for multiplication", done => {
@@ -916,9 +1064,9 @@ describe("File Downloading", function() {
                 throw `Expected ID prefixes to equal ${target} but found ${src}`
             }
         })
-        .then(() => done(), err => {
-            console.error(err);
-            done(err)
+        .then(() => done(), ({ error }) => {
+            console.error(error);
+            done(error)
         });
     });
 });
@@ -977,11 +1125,12 @@ describe("All Together", () => {
             uri: fileUrl,
             json: true,
             headers: {
+                Accept: "application/fhir+ndjson",
                 Authorization: "Bearer " + accessToken
             }
         }))
 
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
 
     it ("Should download 2 valid Observation ndjson files", function(done) {
@@ -1083,25 +1232,22 @@ describe("All Together", () => {
         })
 
         // look for repeated IDs
-        // .then(files => {
-        //     let ids = {};
-        //     files.forEach(file => {
-        //         file.forEach(row => {
-        //             let r = JSON.parse(row)
-        //             console.log(row)
-        //             if (ids[r.id]) {
-        //                 throw `Duplicate id ${r.id} for ${r.resourceType}`
-        //                 // console.error(`Duplicate id ${r.id} for ${r.type}`.red);
-        //                 // return;
-        //             }
-        //             ids[r.id] = 1
-        //         })
-        //     });
-        //     return files;
-        // })
+        .then(files => {
+            let ids = {};
+            files.forEach(file => {
+                file.forEach(row => {
+                    let r = JSON.parse(row)
+                    if (ids[r.id]) {
+                        throw `Duplicate id ${r.id} for ${r.resourceType}`
+                    }
+                    ids[r.id] = 1
+                })
+            });
+            return files;
+        })
 
         // exit
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
 });
 
@@ -1110,7 +1256,6 @@ describe("Groups", () => {
         this.timeout(10000);
 
         const BlueCCrossBlueShieldId = 11534;
-        // console.log(lib.buildGroupUrl(1, { dur: 0 }))
         lib.requestPromise({
             uri: lib.buildGroupUrl(BlueCCrossBlueShieldId, { dur: 0 }),
             qs : {
@@ -1174,7 +1319,7 @@ describe("Groups", () => {
         })
 
         // exit
-        .then(() => done(), done);
+        .then(() => done(), ({ error }) => done(error));
     });
 });
 
