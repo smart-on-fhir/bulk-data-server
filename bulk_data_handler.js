@@ -90,6 +90,11 @@ const outcomes = {
         "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled",
         { httpCode: 404 /* Not Found */ }
     ),
+    onlyNDJsonAccept: res => Lib.operationOutcome(
+        res,
+        "Only application/fhir+ndjson is currently supported for accept headers",
+        { httpCode: 400 }
+    ),
     exportAccepted: (res, location) => Lib.operationOutcome(
         res,
         `Your request have been accepted. You can check it's status at "${location}"`,
@@ -403,9 +408,13 @@ function handleStatus(req, res) {
 };
 
 function handleFileDownload(req, res) {
-    
-
     const args = req.sim;
+    const accept = String(req.headers.accept || "");
+
+    // Only "application/fhir+ndjson" is supported for accept headers
+    if (accept && accept.indexOf("application/fhir+ndjson") !== 0) {
+        return outcomes.onlyNDJsonAccept(res);
+    }
 
     // early exit in case simulated errors
     if (args.err == "file_expired") {
