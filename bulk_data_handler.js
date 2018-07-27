@@ -373,6 +373,7 @@ function handleStatus(req, res) {
 
                 linksLen = linksArr.push({
                     type: row.fhir_type,
+                    count: Math.min(page, row.cnt * multiplier - params.offset),
                     url: Lib.buildUrlPath(
                         baseUrl,
                         base64url.encode(JSON.stringify(params)),
