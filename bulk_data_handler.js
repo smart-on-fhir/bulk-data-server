@@ -339,12 +339,14 @@ function handleStatus(req, res) {
     }
 
     // Count all the requested resources in the database.
-    let { sql, params } = new QueryBuilder(sim).compileCount("cnt");
+    let builder = new QueryBuilder(sim);
+    let { sql, params } = builder.compileCount("cnt");
     DB.promise("all", sql, params).then(rows => {
         
         // Finally generate those download links
         let len = rows.length;
         let linksArr = []
+        let errorArr = []
         let linksLen = 0;
         let params   = Object.assign({}, sim);
         let baseUrl  = config.baseUrl + req.originalUrl.split("?").shift().replace(/\/[^/]+\/fhir\/.*/, "");
@@ -384,6 +386,24 @@ function handleStatus(req, res) {
             }
         }
 
+        // Now check for resource types that have been requested but not found
+        // in our DB
+        builder._fhirTypes.forEach(type => {
+            if (!linksArr.find(l => l.type === type)) {
+                errorArr.push({
+                    type : "OperationOutcome",
+                    url: Lib.buildUrlPath(
+                        baseUrl,
+                        base64url.encode(JSON.stringify({
+                            ...params,
+                            fileError: `No resources found for type "${type}"`
+                        })),
+                        `/fhir/bulkfiles/${type}.error.ndjson`
+                    )
+                })
+            }
+        });
+
         res.json({
 
             // a FHIR instant type that indicates the server's time when the
@@ -403,7 +423,10 @@ function handleStatus(req, res) {
             // array of bulk data file items with one entry for each generated
             // file. Note: If no data is returned from the kick-off request,
             // the server should return an empty array.
-            "output" : linksArr
+            "output" : linksArr,
+
+            // If no errors occurred, the server should return an empty array
+            "errors": errorArr
         }).end();
     });
 };
