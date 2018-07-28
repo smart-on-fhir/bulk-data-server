@@ -30,6 +30,7 @@
   "homepage": "https://github.com/smart-on-fhir/bulk-data-server#readme",
   "dependencies": {
     "base64-url": "^2.0.1",
+    "body-parser": "^1.18.3",
     "commander": "^2.12.2",
     "express": "^4.16.2",
     "jsonwebtoken": "^8.1.0",
