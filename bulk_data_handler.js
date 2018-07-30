@@ -436,9 +436,9 @@ function handleFileDownload(req, res) {
     const accept = String(req.headers.accept || "");
 
     // Only "application/fhir+ndjson" is supported for accept headers
-    if (accept && accept.indexOf("application/fhir+ndjson") !== 0) {
-        return outcomes.onlyNDJsonAccept(res);
-    }
+    // if (accept && accept.indexOf("application/fhir+ndjson") !== 0) {
+    //     return outcomes.onlyNDJsonAccept(res);
+    // }
 
     // early exit in case simulated errors
     if (args.err == "file_expired") {
