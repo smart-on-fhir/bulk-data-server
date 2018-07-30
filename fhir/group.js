@@ -60,6 +60,7 @@ module.exports = (req, res) => {
         FROM "data" as "g"
         LEFT JOIN "data" AS "d" ON (d.group_id = g.id)
         WHERE g.fhir_type = "Group"
+        AND d.fhir_type = "Patient"
         GROUP BY d.group_id`,
         (error, rows) => {
             if (error) {
