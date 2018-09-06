@@ -78,22 +78,25 @@
 
     /**
      * Generates new client_id and saves it into the model. Note that this
-     * function should only be called if we have the "iss" and "public_key" set
+     * function should only be called if we have the "iss" and "jwks" set
      * already. Additionally, the access token lifetime ("tlt") and the
      * simulated error ("err") will also be included to the client_id if
      * available.
      */
     function generateClientId() {
-        var iss = MODEL.get("iss"),
-            key = MODEL.get("public_key");
+        var iss       = MODEL.get("iss"),
+            auth_type = MODEL.get("auth_type"),
+            key       = auth_type == "jwks" ?
+                JSON.stringify(MODEL.get("jwks")) :
+                MODEL.get("jwks_url");
         
         if (iss && key) {
             var tokenLifetime = +MODEL.get("tlt");
             var authError     =  MODEL.get("err");
-            var params = {
-                iss    : iss,
-                pub_key: key
-            };
+            var params        = { iss: iss };
+
+            params[auth_type] = key;
+
             if (tokenLifetime) {
                 params.dur = tokenLifetime;
             }
