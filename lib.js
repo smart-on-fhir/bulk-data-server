@@ -309,10 +309,49 @@ function parseToken(token)
     token = token.split(".");
 
     if (token.length != 3) {
-        throw new Error("Invalid token structure");
+        throw new Error("Invalid token structure. Must contain 3 parts.");
     }
 
-    return JSON.parse(new Buffer(token[1], "base64").toString("utf8"));
+    // Token header ------------------------------------------------------------
+    let header;
+    try {
+        header = JSON.parse(new Buffer(token[0], "base64"));
+    } catch (ex) {
+        throw new Error("Invalid token structure. Cannot parse the token header.");
+    }
+
+    // alg (required) ----------------------------------------------------------
+    // algorithm used for signing the authentication JWT (e.g., `RS384`, `EC384`).
+    if (!header.alg) {
+        throw new Error("Invalid JWT token header. Missing 'alg' property.");
+    }
+
+    // kid (required) ----------------------------------------------------------
+    // The identifier of the key-pair used to sign this JWT. This identifier
+    // MUST be unique within the backend services's JWK Set.
+    if (!header.kid) {
+        throw new Error("Invalid JWT token header. Missing 'kid' property.");
+    }
+
+    // typ (required) ----------------------------------------------------------
+    // Fixed value: JWT.
+    if (!header.typ) {
+        throw new Error("Invalid JWT token header. Missing 'typ' property.");
+    }
+    
+    if (header.typ != "JWT") {
+        throw new Error("Invalid JWT token header.The 'typ' property must equal 'JWT'.");
+    }
+
+    // Token body --------------------------------------------------------------
+    let body;
+    try {
+        body = JSON.parse(new Buffer(token[1], "base64"));
+    } catch (ex) {
+        throw new Error("Invalid token structure. Cannot parse the token body.");
+    }
+
+    return body;
 }
 
 function wait(ms = 0) {

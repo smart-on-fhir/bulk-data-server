@@ -44,5 +44,7 @@ module.exports = (req, res) => {
     }
 
     // Reply with signed token as text
-    res.type("text").send(jwt.sign(jwtToken, config.jwtSecret));
+    res.type("text").send(jwt.sign(jwtToken, config.jwtSecret, {
+        keyid: "registration-token"
+    }));
 };
