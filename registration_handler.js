@@ -16,21 +16,20 @@ module.exports = (req, res) => {
         return Lib.replyWithError(res, "missing_parameter", 400, "iss");
     }
 
-    // parse and validate the "pub_key" parameter
-    let publicKey = String(req.body.pub_key || "").trim();
-    if (!publicKey) {
-        return Lib.replyWithError(res, "missing_parameter", 400, "pub_key");
-    }
-
     // parse and validate the "dur" parameter
     let dur = parseInt(req.body.dur || config.defaultTokenLifeTime + "", 10);
     if (isNaN(dur) || !isFinite(dur) || dur < 0) {
         return Lib.replyWithError(res, "invalid_parameter", 400, "dur");
     }
 
+    // Clients can register either by JWKS or by JWKS URL
+    let jwks     = String(req.body.jwks     || "").trim();
+    let jwks_url = String(req.body.jwks_url || "").trim();
+
     // Build the result token
     let jwtToken = {
-        pub_key: publicKey,
+        jwks    : jwks ? JSON.parse(jwks) : undefined,
+        jwks_url: jwks_url || undefined,
         iss
     };
 
