@@ -107,9 +107,14 @@
                 url   : "/auth/register",
                 method: "POST",
                 data  : params
-            }).then(function(client_id) {
-                MODEL.set("client_id", client_id);
-            });
+            }).then(
+                function(client_id) {
+                    MODEL.set("client_id", client_id);
+                },
+                function(error) {
+                    MODEL.set("client_id", "");
+                }
+            );
         }
         else {
             MODEL.set("client_id", "");
