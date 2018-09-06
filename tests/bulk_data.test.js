@@ -202,8 +202,8 @@ describe("Bulk Data Kick-off Request", () => {
                 })
             ));
 
-            it ("accepts valid auth token", done => {
-                lib.authorize()
+            it ("accepts valid auth token", () => {
+                return lib.authorize()
                 .then(tokenResponse => lib.requestPromise({
                     uri: meta.buildUrl(),
                     headers: {
@@ -212,7 +212,7 @@ describe("Bulk Data Kick-off Request", () => {
                         Prefer: "respond-async"
                     }
                 }))
-                .then(() => done(), ({ error }) => done(error))
+                .catch(result => Promise.reject(result.outcome || result.error || result));
             });
 
             it ("requires valid 'Accept' header", () => rejects(
@@ -550,8 +550,8 @@ describe("Progress Updates", () => {
         })
     ));
 
-    it ("accepts valid auth token", done => {
-        lib.authorize()
+    it ("accepts valid auth token", () => {
+        return lib.authorize()
         .then(tokenResponse => lib.requestPromise({
             uri: lib.buildProgressUrl({
                 requestStart: moment().subtract(5, "seconds").format("YYYY-MM-DD HH:mm:ss"),
@@ -561,7 +561,7 @@ describe("Progress Updates", () => {
                 authorization: "Bearer " + tokenResponse.access_token
             }
         }))
-        .then(() => done(), ({ error }) => done(error))
+        .catch(result => Promise.reject(result.outcome || result.error || result));
     });
 
     it ("requires an auth token if kicked off with auth", () => rejects(
@@ -1073,11 +1073,11 @@ describe("File Downloading", function() {
 
 describe("All Together", () => {
 
-    it ("Requires auth if kicked off with auth", function(done) {
+    it ("Requires auth if kicked off with auth", () => {
         
         let accessToken, statusUrl, fileUrl;
 
-        lib.authorize()
+        return lib.authorize()
         
         .then(tokenResponse => {
             accessToken = tokenResponse.access_token;
@@ -1130,7 +1130,7 @@ describe("All Together", () => {
             }
         }))
 
-        .then(() => done(), ({ error }) => done(error));
+        .catch(result => Promise.reject(result.outcome || result.error || result));
     });
 
     it ("Should download 2 valid Observation ndjson files", function(done) {

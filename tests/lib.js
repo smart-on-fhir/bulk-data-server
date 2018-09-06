@@ -2,6 +2,7 @@ const request   = require("request");
 const base64url = require("base64-url");
 const crypto    = require("crypto");
 const jwt       = require("jsonwebtoken");
+const jwkToPem  = require("jwk-to-pem");
 const config    = require("../config");
 
 /**
@@ -120,6 +121,37 @@ function expectErrorOutcome(res, { message, code } = {}, done) {
 }
 
 /**
+ * JWKS is just an array of keys. We need to find the last private key that
+ * also has a corresponding public key. The pair is recognized by having the
+ * same "kid" property.
+ * @param {Array} keys JWKS.keys 
+ */
+function findKeyPair(keys) {
+    let out = null;
+
+    keys.forEach(key => {
+        if (!key.kid) return;
+        if (!Array.isArray(key.key_ops)) return;
+        if (key.key_ops.indexOf("sign") == -1) return;
+
+        publicKey = keys.find(k => {
+            return (
+                k.kid === key.kid &&
+                k.alg === key.alg &&
+                Array.isArray(k.key_ops) &&
+                k.key_ops.indexOf("verify") > -1
+            );
+        })
+
+        if (publicKey) {
+            out = { privateKey: key, publicKey };
+        }
+    });
+
+    return out;
+}
+
+/**
  * Dynamically registers a backend service with the given options. Then it
  * immediately authorizes with that client and returns a promise that gets
  * resolved with the access token response.
@@ -131,29 +163,29 @@ function expectErrorOutcome(res, { message, code } = {}, done) {
 function authorize(options = {}) {
     let state = {};
 
-    const iss = "tester"
+    const iss      = "tester"
     const tokenUrl = buildUrl(["auth", "token"]);
+    const alg      = options.alg || "RS384"
 
     return requestPromise({
-        url: buildUrl(["generator", "rsa"]),
-        qs: {
-            enc: "base64"
-        },
+        url : buildUrl(["generator", "jwks"]),
+        qs  : { alg },
         json: true
     })
 
-    .then(res => { state.keys = res.body })
-    
+    // Save the JWKS to the state object
+    .then(res => state.jwks = res.body)
+
+    // Save the keys to the state object
+    .then(() => state.keys = findKeyPair(state.jwks.keys))
+
     .then(() => {
-        let form = {
-            iss,
-            pub_key: state.keys.publicKey
-        };
+        let form = { iss, jwks: JSON.stringify(state.jwks) };
 
         if (options.err) form.err = options.err;
         if (options.dur) form.dur = options.dur;
 
-        // pub_key: state.keys.publicKey
+        // console.log(form)
         return requestPromise({
             method: "POST",
             url   : buildUrl(["auth", "register"]),
@@ -162,7 +194,7 @@ function authorize(options = {}) {
         });
     })
 
-    .then(res => { state.clientId = res.body })
+    .then(res => state.clientId = res.body)
 
     .then(() => {
         
@@ -174,6 +206,15 @@ function authorize(options = {}) {
             jti: crypto.randomBytes(32).toString("hex")
         };
 
+        // Convert the private JWK to PEM private key ti sign with
+        let privateKey = jwkToPem(state.keys.privateKey, { private: true });
+
+        // Sign the jwt with our private key
+        let signed = jwt.sign(jwtToken, privateKey, {
+            algorithm: alg,
+            keyid: state.keys.privateKey.kid
+        });
+
         return requestPromise({
             method: "POST",
             url   : tokenUrl,
@@ -182,16 +223,12 @@ function authorize(options = {}) {
                 scope: "system/*.*",
                 grant_type: "client_credentials",
                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                client_assertion: jwt.sign(
-                    jwtToken,
-                    base64url.decode(state.keys.privateKey),
-                    { algorithm: 'RS256'}
-                )
+                client_assertion: signed
             }
-        })
+        });
     })
-    
-    .then(res => res.body);
+    .then(res => {return res.body})
+    .catch(result => Promise.reject(result.outcome || result.error || result));
 }
 
 module.exports = {
