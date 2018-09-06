@@ -5,6 +5,7 @@ const jwt       = require("jsonwebtoken");
 const moment    = require("moment");
 const config    = require("./config");
 const base64url = require("base64-url");
+const request   = require("request");
 
 const RE_GT    = />/g;
 const RE_LT    = /</g;
@@ -412,6 +413,30 @@ function fhirDateTime(dateTime) {
     return t.format("YYYY-MM-DD HH:mm:ss");
 }
 
+function fetchJwks(url) {
+    return new Promise((resolve, reject) => {
+        request({ url, json: true }, (error, resp, body) => {
+            if (error) {
+                return reject(error);
+            }
+
+            if (resp.statusCode >= 400) {
+                return reject(new Error(
+                    `Requesting "${url}" returned ${resp.statusCode} status code`
+                ));
+            }
+
+            if (resp.headers["content-type"].indexOf("json") == -1) {
+                return reject(new Error(
+                    `Requesting "${url}" did not return a JSON`
+                ));
+            }
+
+            resolve(body);
+        });
+    });
+}
+
 module.exports = {
     htmlEncode,
     readFile,
@@ -433,5 +458,6 @@ module.exports = {
     decodeArgs,
     getRequestedParams,
     fhirDateTime,
-    createOperationOutcome
+    createOperationOutcome,
+    fetchJwks
 };
