@@ -24,25 +24,6 @@
         <script src="/app.js"></script>
     </head>
     <body>
-        <!-- Private Key Dialog ============================================ -->
-        <div class="modal" tabindex="-1" role="dialog" id="rsa-dialog">
-            <div class="modal-dialog open" role="document">
-                <div class="modal-content">
-                    <div class="modal-header navbar-default">
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                        <h5 class="modal-title">Private Key</h5>
-                    </div>
-                    <div class="modal-body navbar-default">
-                        <label class="text-right" style="display: block">    
-                            <b class="small normal-weight btn btn-info btn-xs" data-dismiss="modal" onClick="Lib.copyElement('#gen-private-key')">Copy</b>
-                            <p class="pull-left text-left">Copy this private key and use it in
-                            your app to sign the token claims<br/>(authentication JWT).</p>
-                        </label>
-                        <textarea rows="16" id="gen-private-key" class="form-control input-sm" readonly data-prop="private_key"></textarea>
-                    </div>
-                </div>
-            </div>
-        </div>
         
         <!-- Navbar ======================================================== -->
         <div class="navbar navbar-custom navbar-static-top">
