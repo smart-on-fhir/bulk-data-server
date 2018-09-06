@@ -179,8 +179,8 @@
                 "?op=edit" +
                 "&output=po‌​pup" +
                 "&bkmk=" + encodeURIComponent(location.href) +
-                "&title=SMART%20Launcher" +
-                "&labels=SMART%20Launcher" +
+                "&title=Bulk%20Data%20Server" +
+                "&labels=Bulk%20Data%20Server" +
                 "&annotation=" + encodeURIComponent(
                     "Bulk Files Service Launch on Bulk Data Demo Server"
                 ),
