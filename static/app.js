@@ -4,7 +4,7 @@
         err       : { type: "string", defaultValue: "" },
         iss       : { type: "string", defaultValue: "" },
         page      : { type: "number", defaultValue: CFG.defaultPageSize || 10000 },
-        public_key: { type: "string", defaultValue: "" },
+        jwks      : { type: "object", defaultValue: null },
         tlt       : { type: "number", defaultValue: CFG.defaultTokenLifeTime || 15 },
         dur       : { type: "number", defaultValue: CFG.defaultWaitTime || 10 },
         m         : { type: "number", defaultValue: 1 }
@@ -25,6 +25,9 @@
                 if (map[key].type == "number") {
                     value *= 1;
                 }
+                if (map[key].type == "object") {
+                    value = value ? JSON.parse(Lib.base64UrlDecode(value)) : null;
+                }
             }
             MODEL.set(key, value);
         }
@@ -41,6 +44,9 @@
             var value = MODEL.get(key);
             if (map[key].type == "number") {
                 value *= 1;
+            }
+            if (map[key].type == "object") {
+                value = value ? Lib.base64UrlEncode(JSON.stringify(value)) : null;
             }
             if (value !== undefined && value !== map[key].defaultValue) {
                 qs[key] = value;
