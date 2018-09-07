@@ -33,7 +33,7 @@ app.post("/auth/token", bodyParser.urlencoded({ extended: false }), tokenHandler
 // backend services registration
 app.post("/auth/register", bodyParser.urlencoded({ extended: false }), register);
 
-// Used as RSA keys generator
+// Used as JWKS generator
 app.use("/generator", generator);
 
 // host env vars for the client-side

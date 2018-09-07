@@ -7,28 +7,28 @@ const ScopeSet  = require("./ScopeSet");
 
 module.exports = (req, res) => {
         
-    // Require "application/x-www-form-urlencoded" POSTs
+    // Require "application/x-www-form-urlencoded" POSTs -----------------------
     let ct = req.headers["content-type"] || "";
     if (ct.indexOf("application/x-www-form-urlencoded") !== 0) {
         return Lib.replyWithError(res, "form_content_type_required", 401);
     }
 
-    // grant_type must be "client_credentials"
+    // grant_type must be "client_credentials" ---------------------------------
     if (req.body.grant_type != "client_credentials") {
         return Lib.replyWithError(res, "bad_grant_type", 400);
     }
 
-    // client_assertion_type is required
+    // client_assertion_type is required ---------------------------------------
     if (!req.body.client_assertion_type) {
         return Lib.replyWithError(res, "missing_client_assertion_type", 401);
     }
 
-    // client_assertion_type must have a fixed value
+    // client_assertion_type must have a fixed value ---------------------------
     if (req.body.client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer") {
         return Lib.replyWithError(res, "invalid_client_assertion_type", 401);
     }
 
-    // client_assertion must be a token
+    // client_assertion must be a token ----------------------------------------
     let authenticationToken;
     try {
         authenticationToken = Lib.parseToken(req.body.client_assertion);
@@ -36,7 +36,7 @@ module.exports = (req, res) => {
         return Lib.replyWithError(res, "invalid_registration_token", 401, ex.message);
     }
 
-    // The client_id must be a token
+    // The client_id must be a token -------------------------------------------
     let clientDetailsToken;
     try {
         clientDetailsToken = Lib.parseToken(authenticationToken.sub);
@@ -44,12 +44,12 @@ module.exports = (req, res) => {
         return Lib.replyWithError(res, "invalid_client_details_token", 401, ex.message);
     }
 
-    // simulate expired_registration_token error
+    // simulate expired_registration_token error -------------------------------
     if (clientDetailsToken.err == "token_expired_registration_token") {
         return Lib.replyWithError(res, "token_expired_registration_token", 401);
     }
 
-    // Validate authenticationToken.aud (must equal this url)
+    // Validate authenticationToken.aud (must equal this url) ------------------
     let tokenUrl = config.baseUrl + req.originalUrl;
     if (tokenUrl.replace(/^https?/, "") !== authenticationToken.aud.replace(/^https?/, "")) {
         return Lib.replyWithError(res, "invalid_aud", 401, tokenUrl);
@@ -61,18 +61,18 @@ module.exports = (req, res) => {
         return Lib.replyWithError(res, "invalid_token_iss", 401, authenticationToken.iss, clientDetailsToken.iss);
     }
 
-    // simulated invalid_jti error
+    // simulated invalid_jti error ---------------------------------------------
     if (clientDetailsToken.err == "invalid_jti") {
         return Lib.replyWithError(res, "invalid_jti", 401);
     }
 
-    // Validate scope
+    // Validate scope ----------------------------------------------------------
     let tokenError = ScopeSet.getInvalidSystemScopes(req.body.scope);
     if (tokenError) {
         return Lib.replyWithError(res, "invalid_scope", 401, tokenError);
     }
 
-    // simulated token_invalid_scope
+    // simulated token_invalid_scope -------------------------------------------
     if (clientDetailsToken.err == "token_invalid_scope") {
         return Lib.replyWithError(res, "token_invalid_scope", 401);
     }
