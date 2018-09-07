@@ -4,7 +4,9 @@
         err       : { type: "string", defaultValue: "" },
         iss       : { type: "string", defaultValue: "" },
         page      : { type: "number", defaultValue: CFG.defaultPageSize || 10000 },
+        auth_type : { type: "string", defaultValue: "jwks_url" },
         jwks      : { type: "object", defaultValue: null },
+        jwks_url  : { type: "string", defaultValue: "" },
         tlt       : { type: "number", defaultValue: CFG.defaultTokenLifeTime || 15 },
         dur       : { type: "number", defaultValue: CFG.defaultWaitTime || 10 },
         m         : { type: "number", defaultValue: 1 }
@@ -188,18 +190,18 @@
             );
         });
 
-        // Activate the "Generate Keys" button
-        $("#generate-keys").click(function() {
-            $.ajax("/generator/rsa?enc=base64").then(function(json) {
-                MODEL.set("public_key"     , json.publicKey);
-                MODEL.set("last_public_key", json.publicKey);
-                MODEL.set("private_key"    , json.privateKey);
-            });
+        // Set the auth type
+        $(":radio[name='auth_type']").on("change", function() {
+            MODEL.set("auth_type", $(":radio[name='auth_type']:checked").val());
         });
 
-        // Activate the "base64 encode key" button
-        $("#encode-key").click(function() {
-            MODEL.set("public_key", btoa(MODEL.get("public_key")));
+        // Activate the "Generate Keys" button
+        $("#generate-keys a[data-alg]").click(function(e) {
+            e.preventDefault();
+            var alg = $(e.target).attr("data-alg");
+            $.ajax("/generator/jwks?alg=" + alg).then(function(json) {
+                MODEL.set("jwks", json);
+            });
         });
 
         // Make the download link work in IE
@@ -227,6 +229,16 @@
         
         // 2. Data listeners ---------------------------------------------------
 
+        MODEL.on("change:auth_type", function(e) {
+            $(":radio[name='auth_type']").each(function(i, o) {
+                $(o).prop("checked", o.value === e.data.newValue)
+                    .parent().toggleClass("active", o.value === e.data.newValue);
+            });
+
+            $("#generate-keys, #jwks-json").toggle(e.data.newValue == "jwks");
+            $("#jwks_url").toggle(e.data.newValue == "jwks_url", true);
+        });
+
         // When fhir_server_url changes update the "Try Sample App" link
         MODEL.on("change:fhir_server_url", function(e) {
             $("#try-app-link").attr(
@@ -236,24 +248,9 @@
             );
         });
 
-        // Show/hide the "base64 encode this key" button as needed
-        MODEL.on("change:public_key", function() {
-            var new_key = MODEL.get("public_key");
-            $("#encode-key").toggleClass(
-                "hidden",
-                String(new_key || "").search(/^\s*--/) !== 0
-            );
-        });
 
-        // Show/hide the "Show Private Key" button as needed
-        MODEL.on("change:public_key change:last_public_key", function() {
-            var new_key = MODEL.get("public_key");
-            var old_key = MODEL.get("last_public_key");
-            $("#show-private-key").toggleClass("hidden", !new_key || new_key != old_key);
-        });
-
-        // If iss, public_key, err or tlt changes, (re)generate the client_id
-        MODEL.on("change:iss change:public_key change:err change:tlt", generateClientId);
+        // If iss, jwks, err or tlt changes, (re)generate the client_id
+        MODEL.on("change:iss change:jwks change:jwks_url change:err change:tlt", generateClientId);
 
         // Whenever the advanced options change (re)generate the launchData
         MODEL.on("change:page change:dur change:err change:tlt change:m", updateLaunchData);
@@ -268,23 +265,27 @@
 
         // Update the download link href when some of the relevant data changes
         MODEL.on([
-            "change:private_key",
+            "change:jwks",
+            "change:jwks_url",
+            "change:auth_type",
             "change:client_id",
             "change:fhir_server_url",
             "change:auth_url",
             "change:iss",
         ], function() {
+            var client_id = MODEL.get("client_id");
             $("#download").attr(
                 "href",
                 'data:text/plain;base64,' +
                 btoa(JSON.stringify({
-                    private_key: MODEL.get("private_key"),
-                    client_id  : MODEL.get("client_id"),
+                    jwks       : MODEL.get("auth_type") == "jwks"     ? MODEL.get("jwks")     : undefined,
+                    jwks_url   : MODEL.get("auth_type") == "jwks_url" ? MODEL.get("jwks_url") : undefined,
+                    client_id  : client_id,
                     fhir_url   : MODEL.get("fhir_server_url"),
                     token_url  : MODEL.get("auth_url"),
                     service_url: MODEL.get("iss")
                 }, null, 4))
-            );
+            ).attr("disabled", !client_id);
         });
 
         // On any change - if there is a corresponding field - update it and
@@ -292,7 +293,12 @@
         MODEL.on("change", function(e) {
             var $el = $('[data-prop="' + e.data.name + '"]');
             if ($el.length) {
-                $el.val(e.data.newValue).highlight();
+                if (map[e.data.name] && map[e.data.name].type == "object") {
+                    $el.val(e.data.newValue ? JSON.stringify(e.data.newValue, null, 4) : "");
+                } else {
+                    $el.val(e.data.newValue);
+                }
+                $el.highlight();
             }
         });
     }
@@ -302,6 +308,7 @@
         $("#content").show();
         bindEventHandlers();
         MODEL.set("auth_url", BASE_URL + "/auth/token");
+        MODEL.set("auth_type", "jwks_url");
         MODEL.on("change", function(e) {
             // console.log("Changed " + e.data.name + ": ", MODEL.dump());
             save();

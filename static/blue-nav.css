@@ -139,3 +139,28 @@ body.loaded fieldset[disabled] .form-control.un-highlighted {
   transition: all 1s ease-in-out 0.2s;
   background: #EEE;
 }
+
+.btn-group .btn-default {
+  color: #777;
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+}
+
+.btn-group .btn-default.active {
+  color: #333;
+  background-color: #d4d4d4;
+  border-color: #8c8c8c;
+  z-index: 2;
+}
+
+#jwks-json {
+  white-space: nowrap;
+  word-wrap: normal;
+  height: 112px;
+  min-height: 112px;
+}
+
+.auth-header > label,
+.auth-header > div {
+  margin: 0 0 4px;
+}

@@ -93,28 +93,56 @@
                     </div>
                     <div class="panel-body navbar-default">
 
-
-                        <!-- Public Key ======================================== -->
+                        <!-- Authentication ================================ -->
                         <br clear="all"/>
                         <div class="form-group col-sm-6">
-                            <label for="public-key" style="display: block">
-                                <button type="button" class="btn btn-success btn-xs pull-right hidden" id="encode-key" style="margin-left: 3px">base64 encode this key</button>
-                                <button type="button" class="btn btn-warning btn-xs pull-right hidden" data-toggle="modal" data-target="#rsa-dialog" id="show-private-key" style="margin-left: 3px">View Private Key</button>
-                                <button type="button" class="btn btn-info    btn-xs pull-right" id="generate-keys">Generate Keys</button>
-                                Public Key
-                            </label>
+                            <div class="auth-header">
+                                <label>Authentication: </label>
+                                <div class="btn-group btn-group-xs" role="group" aria-label="Auth Type" data-toggle="buttons">
+                                    <label class="btn btn-default">
+                                        <input type="radio" name="auth_type" value="jwks_url" autocomplete="off">
+                                        <b>JWKS URL</b><span class="hidden-xs"> (recommended)</span>
+                                    </label>
+                                    <label class="btn btn-default">
+                                        <input type="radio" name="auth_type" value="jwks" autocomplete="off">
+                                        <b>JWKS</b>
+                                    </label>
+                                </div>
+                                <div class="btn-group pull-right" id="generate-keys">
+                                    <button type="button" class="btn btn-info btn-xs dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        Generate <span class="caret"></span>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a href="#" data-alg="ES384">Generate ES384</a></li>
+                                        <li><a href="#" data-alg="RS384">Generate RS384</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div id="jwks_url">
+                                <input
+                                    type="text"
+                                    data-prop="jwks_url"
+                                    class="form-control"
+                                    placeholder="JWKS URL"
+                                    name="jwks_url"
+                                    autocomplete="on"
+                                />
+                                <p class="small text-muted" style="margin-top: 4px">
+                                    Your backend service should expose an
+                                    endpoint that returns the JWKS as JSON. Also,
+                                    make sure it only hosts your public keys.
+                                </p>
+                            </div>
                             <textarea
-                                id="public-key"
-                                data-prop="public_key"
+                                id="jwks-json"
+                                data-prop="jwks"
                                 rows="5"
                                 class="form-control input-sm"
-                                placeholder="base64-encoded RSA-256 public key"
+                                placeholder="RS384 or ES384 JWKS as JSON"
                             ></textarea>
-                            <p class="help-block small">Paste your RSA-256 public key or use the button above to generate a new one</p>
-                            <input type="hidden" name="last-public-key">
                         </div>
 
-                        <!-- ISS =============================================== -->
+                        <!-- ISS =========================================== -->
                         <div class="form-group col-sm-6">
                             <label for="iss">Service URL</label>
                             <input
