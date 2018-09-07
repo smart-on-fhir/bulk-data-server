@@ -46,6 +46,8 @@ module.exports = {
         "bad_grant_type"                  : "Unknown or missing grant_type parameter",
         "file_expired"                    : 'The requested file "%s" is missing or expired',
         "file_generation_failed"          : "File generation failed",
-        "only_json_supported"             : "Only the JSON format is supported"
+        "only_json_supported"             : "Only the JSON format is supported",
+        "jku_not_whitelisted"             : "The provided jku '%s' is different than the one used at registration time (%s)",
+        "__custom__"                      : "%s"
     }
 };
