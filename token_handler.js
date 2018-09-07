@@ -1,6 +1,7 @@
 const crypto    = require("crypto");
 const jwt       = require("jsonwebtoken");
 const base64url = require("base64-url");
+const jwkToPem  = require("jwk-to-pem");
 const config    = require("./config");
 const Lib       = require("./lib");
 const ScopeSet  = require("./ScopeSet");
@@ -77,39 +78,136 @@ module.exports = (req, res) => {
         return Lib.replyWithError(res, "token_invalid_scope", 401);
     }
 
-    try {
-        jwt.verify(req.body.client_assertion, base64url.decode(clientDetailsToken.pub_key), { algorithm: "RS256" });
-    } catch (e) {
-        return Lib.replyWithError(res, "invalid_token", 401, e.message);
+    // Get the authentication token header
+    let header = jwt.decode(
+        req.body.client_assertion,
+        { complete: true }
+    ).header;
+
+    // Get the "kid" from the authentication token header
+    let kid = header.kid;
+    if (!kid) {
+        return Lib.replyWithError(res, "invalid_token", 401, `No "kid" found in the authentication token header`);
     }
 
-    // const scope = new ScopeSet(decodeURIComponent(clientDetailsToken.scope));
 
-    if (clientDetailsToken.err == "token_invalid_token") {
-        return Lib.replyWithError(res, "sim_invalid_token", 401);
-    }
+    // Start a task to fetch the JWKS ------------------------------------------
+    Promise.resolve()
 
-    const expiresIn = clientDetailsToken.accessTokensExpireIn ?
-        clientDetailsToken.accessTokensExpireIn * 60 :
-        config.defaultTokenLifeTime * 60;
+    // If the jku header is present, verify that the jku is whitelisted
+    // (i.e., that it matches the value supplied at registration time for
+    // the specified `client_id`).
+    // If the jku header is not whitelisted, the signature verification fails.
+    .then(() => {
+        if (header.jku) {
+            if (header.jku !== clientDetailsToken.jwks_url) {
+                throw new Error(
+                    Lib.getErrorText(
+                        "jku_not_whitelisted",
+                        header.jku,
+                        clientDetailsToken.jwks_url
+                    )
+                );
+            }
 
-    var token = Object.assign({}, clientDetailsToken.context, {
-        token_type: "bearer",
-        scope     : clientDetailsToken.scope,
-        client_id : req.body.client_id,
-        expires_in: expiresIn
-    });
+            // If the jku header is whitelisted, create a set of potential
+            // keys by dereferencing the jku URL.
+            return Lib.fetchJwks(header.jku);
+        }
 
-    // sim_error
-    if (clientDetailsToken.err == "request_invalid_token") {
-        token.err = "Invalid token";
-    } else if (clientDetailsToken.err == "request_expired_token") {
-        token.err = "Token expired";
-    }
+        // If jku is absent, create a set of potential key sources consisting
+        // of: all keys found by dereferencing the registration-time JWKS URI
+        // (if any) + any keys supplied in the registration-time JWKS (if any).
+        return clientDetailsToken.jwks;
+    })
 
-   
-    // access_token
-    token.access_token = jwt.sign(token, config.jwtSecret, { expiresIn });
+    // .then(jwks => {
+    //     console.log(`Result from ${header.jku ? "JWKS URL" : "JWKS"}: `, jwks);
+    //     return jwks;
+    // })
 
-    res.json(token);
+    // Filter the potential keys to retain only those where the alg and
+    // kid match the values supplied in the client's JWK header.
+    .then(jwks => {
+
+        let publicKeys = jwks.keys.filter(key => {
+            return (
+                key.kid === kid &&
+                key.alg === header.alg &&
+                Array.isArray(key.key_ops) &&
+                key.key_ops.indexOf("verify") > -1
+            );
+        });
+
+        if (!publicKeys.length) {
+            throw new Error(
+                `No public keys found in the JWKS with "kid" equal to "${kid
+                }" and alg equal to "${header.alg}"`
+            );
+        }
+
+        return publicKeys;
+    })
+
+    // .then(publicKeys => {
+    //     console.log(`Keys from ${header.jku ? "JWKS URL" : "JWKS"}: `, publicKeys)
+    //     return publicKeys;
+    // })
+
+    // Attempt to verify the JWK using each key in the potential keys list.
+    // - If any attempt succeeds, the signature verification succeeds.
+    // - If all attempts fail, the signature verification fails.
+    .then(publicKeys => {
+
+        let success = publicKeys.some(key => {
+            try {
+                jwt.verify(
+                    req.body.client_assertion,
+                    jwkToPem(key),
+                    { algorithm: key.alg }
+                );
+                return true;
+            } catch(ex) {
+                console.error(ex);
+                return false;
+            }
+        });
+
+        if (!success) {
+            throw new Error(
+                `Unable to verify the token with any of the public keys found in the JWKS`
+            );
+        }
+    })
+
+    .then(() => {
+        if (clientDetailsToken.err == "token_invalid_token") {
+            return Lib.replyWithError(res, "sim_invalid_token", 401);
+        }
+
+        const expiresIn = clientDetailsToken.accessTokensExpireIn ?
+            clientDetailsToken.accessTokensExpireIn * 60 :
+            config.defaultTokenLifeTime * 60;
+
+        var token = Object.assign({}, clientDetailsToken.context, {
+            token_type: "bearer",
+            scope     : clientDetailsToken.scope,
+            client_id : req.body.client_id,
+            expires_in: expiresIn
+        });
+
+        // sim_error
+        if (clientDetailsToken.err == "request_invalid_token") {
+            token.err = "Invalid token";
+        } else if (clientDetailsToken.err == "request_expired_token") {
+            token.err = "Token expired";
+        }
+
+    
+        // access_token
+        token.access_token = jwt.sign(token, config.jwtSecret, { expiresIn });
+
+        res.json(token);
+    })
+    .catch(error  => Lib.replyWithError(res, "__custom__", 401, String(error)));
 };
