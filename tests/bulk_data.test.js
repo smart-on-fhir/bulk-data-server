@@ -1,7 +1,11 @@
 const request   = require("request");
 const base64url = require("base64-url");
 const moment    = require("moment");
-const assert    = require("assert"); //.strict;
+const assert    = require("assert");
+const crypto    = require("crypto");
+const jwkToPem  = require("jwk-to-pem");
+const jwt       = require("jsonwebtoken");
+const express   = require("express");
 const lib       = require("./lib");
 const app       = require("../index");
 const config    = require("../config");
@@ -126,6 +130,200 @@ describe("Conformance Statement", () => {
                 );
             });
         });
+    });
+});
+
+describe("JWKS Auth", () => {
+
+    const iss          = "tester";
+    const tokenUrl     = lib.buildUrl(["auth"     , "token"]);
+    const generatorUrl = lib.buildUrl(["generator", "jwks"]);
+    const registerUrl  = lib.buildUrl(["auth"     , "register"]);
+
+    function authenticate(signedToken) {
+        return lib.requestPromise({
+            method: "POST",
+            url   : tokenUrl,
+            json  : true,
+            form  : {
+                scope: "system/*.*",
+                grant_type: "client_credentials",
+                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                client_assertion: signedToken
+            }
+        }).catch(ex => Promise.reject(ex.outcome || ex.error || ex));;
+    }
+
+    function register(jwks) {
+        return lib.requestPromise({
+            method: "POST",
+            url   : registerUrl,
+            json  : true,
+            form  : {
+                iss,
+                jwks    : jwks && typeof jwks == "object" ? JSON.stringify(jwks) : undefined,
+                jwks_url: jwks && typeof jwks == "string" ? jwks                 : undefined
+            }
+        }).catch(ex => Promise.reject(ex.outcome || ex.error || ex));
+    }
+
+    function generateKeyPair(alg) {
+        return lib.requestPromise({
+            url : generatorUrl,
+            qs  : { alg },
+            json: true
+        }).then(resp => resp.body);
+    }
+
+    function generateAuthToken(clientId) {
+        return {
+            iss,
+            sub: clientId,
+            aud: tokenUrl,
+            exp: Date.now()/1000 + 300, // 5 min
+            jti: crypto.randomBytes(32).toString("hex")
+        };
+    }
+
+    function findKey(jwks, access, alg, kid) {
+        return jwks.keys.find(k => {
+            if (k.alg !== alg) return false;
+            if (kid && k.kid !== kid) return false;
+            if (!Array.isArray(k.key_ops)) return false;
+            if (access == "public" && k.key_ops.indexOf("verify") == -1) return false;
+            if (access == "private" && k.key_ops.indexOf("sign") == -1) return false;
+            return true;
+        });
+    }
+
+    function sign(jwks, alg, token, jku) {
+        let privateKey = findKey(jwks, "private", alg);
+        return jwt.sign(
+            token,
+            jwkToPem(privateKey, { private: true }),
+            {
+                algorithm: alg,
+                keyid: privateKey.kid,
+                header: {
+                    jku
+                }
+            }
+        );
+    }
+
+    function hostJWKS(jwks) {
+        return new Promise(resolve => {
+            const app = express();
+            app.get("/jwks", (req, res) => {
+                res.json({ keys: jwks.keys.filter(k => k.key_ops.indexOf("sign") == -1) });
+            });
+            const server = app.listen(0, () => resolve(server));
+        });
+    }
+
+    it ("Local JWKS", () => {
+        
+        const state = {};
+
+        return Promise.resolve()
+        
+        // Generate ES384 JWKS key pair
+        .then(() => generateKeyPair("ES384"))
+
+        // add the ES384 keys to our local JWKS
+        .then(jwks => state.jwks = jwks)
+
+        // Generate RS384 JWKS key pair
+        .then(() => generateKeyPair("RS384"))
+
+        // add the RS384 keys to our local JWKS
+        .then(jwks => state.jwks.keys = state.jwks.keys.concat(jwks.keys))
+        
+        // Now register a client with that augmented JWKS
+        .then(() => register(state.jwks))
+
+        // Save the newly generated client id to the state
+        .then(res => state.clientId = res.body)
+
+        // Generate the authentication token
+        .then(() => state.jwtToken = generateAuthToken(state.clientId))
+
+        // Find the RS384 private key, sign with it and authenticate
+        .then(() => authenticate(sign(state.jwks, "RS384", state.jwtToken)))
+
+        // Save the RS384 access token to the state
+        .then(resp => state.RS384AccessToken = resp.body)
+
+        // Now find the ES384 private key, sign with it and authenticate
+        .then(() => authenticate(sign(state.jwks, "ES384", state.jwtToken)))
+
+        // Save the ES384 access token to the state
+        .then(resp => state.ES384AccessToken = resp.body)
+        
+        // Make some checks
+        .then(resp => {
+            assert.ok(state.RS384AccessToken, "RS384AccessToken should exist");
+            assert.ok(state.ES384AccessToken, "ES384AccessToken should exist");
+        });
+
+    });
+
+    it ("Hosted JWKS", () => {
+
+        const state = {};
+
+        return Promise.resolve()
+        
+        // Generate ES384 JWKS key pair
+        .then(() => generateKeyPair("ES384"))
+
+        // add the ES384 keys to our local JWKS
+        .then(jwks => state.jwks = jwks)
+
+        // Generate RS384 JWKS key pair
+        .then(() => generateKeyPair("RS384"))
+
+        // add the RS384 keys to our local JWKS
+        .then(jwks => state.jwks.keys = state.jwks.keys.concat(jwks.keys))
+        
+        // Start a server to host the public keys
+        .then(() => hostJWKS(state.jwks))
+
+        // save the server to the state
+        .then(server => state.server = server)
+        
+        // save the jwks_url to the state
+        .then(() => state.jwks_url = `http://127.0.0.1:${state.server.address().port}/jwks`)
+
+        // Now register a client with that augmented JWKS
+        .then(() => register(state.jwks_url))
+
+        // Save the newly generated client id to the state
+        .then(res => state.clientId = res.body)
+
+        // Generate the authentication token
+        .then(() => state.jwtToken = generateAuthToken(state.clientId))
+
+        // Find the RS384 private key, sign with it and authenticate
+        .then(() => authenticate(sign(state.jwks, "RS384", state.jwtToken, state.jwks_url)))
+
+        // Save the RS384 access token to the state
+        .then(resp => state.RS384AccessToken = resp.body)
+
+        // Now find the ES384 private key, sign with it and authenticate
+        .then(() => authenticate(sign(state.jwks, "ES384", state.jwtToken, state.jwks_url)))
+
+        // Save the ES384 access token to the state
+        .then(resp => state.ES384AccessToken = resp.body)
+        
+        // Make some checks
+        .then(resp => {
+            assert.ok(state.RS384AccessToken, "RS384AccessToken should exist");
+            assert.ok(state.ES384AccessToken, "ES384AccessToken should exist");
+        })
+
+        // Make sure we stop the temporary server
+        .then(() => state.server.close());
     });
 });
 
