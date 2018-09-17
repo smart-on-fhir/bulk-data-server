@@ -2,7 +2,6 @@
 
     var map = {
         err       : { type: "string", defaultValue: "" },
-        iss       : { type: "string", defaultValue: "" },
         page      : { type: "number", defaultValue: CFG.defaultPageSize || 10000 },
         auth_type : { type: "string", defaultValue: "jwks_url" },
         jwks      : { type: "object", defaultValue: null },
@@ -80,22 +79,21 @@
 
     /**
      * Generates new client_id and saves it into the model. Note that this
-     * function should only be called if we have the "iss" and "jwks" set
+     * function should only be called if we have the "jwks_url" OR "jwks" set
      * already. Additionally, the access token lifetime ("tlt") and the
      * simulated error ("err") will also be included to the client_id if
      * available.
      */
     function generateClientId() {
-        var iss       = MODEL.get("iss"),
-            auth_type = MODEL.get("auth_type"),
+        var auth_type = MODEL.get("auth_type"),
             key       = auth_type == "jwks" ?
                 JSON.stringify(MODEL.get("jwks")) :
                 MODEL.get("jwks_url");
         
-        if (iss && key) {
+        if (key) {
             var tokenLifetime = +MODEL.get("tlt");
             var authError     =  MODEL.get("err");
-            var params        = { iss: iss };
+            var params        = {};
 
             params[auth_type] = key;
 
@@ -261,8 +259,8 @@
         });
 
 
-        // If iss, jwks, err or tlt changes, (re)generate the client_id
-        MODEL.on("change:iss change:jwks change:jwks_url change:err change:tlt", generateClientId);
+        // If jwks, err or tlt changes, (re)generate the client_id
+        MODEL.on("change:jwks change:jwks_url change:err change:tlt", generateClientId);
 
         // Whenever the advanced options change (re)generate the launchData
         MODEL.on("change:page change:dur change:err change:tlt change:m", updateLaunchData);
@@ -282,8 +280,7 @@
             "change:auth_type",
             "change:client_id",
             "change:fhir_server_url",
-            "change:auth_url",
-            "change:iss",
+            "change:auth_url"
         ], function() {
             var client_id = MODEL.get("client_id");
             $("#download").attr(
@@ -294,8 +291,7 @@
                     jwks_url   : MODEL.get("auth_type") == "jwks_url" ? MODEL.get("jwks_url") : undefined,
                     client_id  : client_id,
                     fhir_url   : MODEL.get("fhir_server_url"),
-                    token_url  : MODEL.get("auth_url"),
-                    service_url: MODEL.get("iss")
+                    token_url  : MODEL.get("auth_url")
                 }, null, 4))
             ).attr("disabled", !client_id);
         });
