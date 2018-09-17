@@ -157,8 +157,20 @@
     /**
      * Event handler attached on form elements
      */
-    function onChange() {
-        MODEL.set(this.getAttribute("data-prop"), $(this).val());
+    function onChange(e) {
+        var prop = this.getAttribute("data-prop");
+        var val = $(this).val();
+        if (prop == "jwks") {
+            if (e.type == "input") {
+                return true;
+            }
+            try {
+                val = $.parseJSON(val);
+            } catch (ex) {
+                return;
+            }
+        }
+        MODEL.set(prop, val);
     }
 
     function bindEventHandlers() {
