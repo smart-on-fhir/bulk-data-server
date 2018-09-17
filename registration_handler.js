@@ -10,12 +10,6 @@ module.exports = (req, res) => {
         return Lib.replyWithError(res, "form_content_type_required", 401);
     }
 
-    // parse and validate the "iss" parameter
-    let iss = String(req.body.iss || "").trim();
-    if (!iss) {
-        return Lib.replyWithError(res, "missing_parameter", 400, "iss");
-    }
-
     // parse and validate the "dur" parameter
     let dur = parseInt(req.body.dur || config.defaultTokenLifeTime + "", 10);
     if (isNaN(dur) || !isFinite(dur) || dur < 0) {
@@ -29,8 +23,7 @@ module.exports = (req, res) => {
     // Build the result token
     let jwtToken = {
         jwks    : jwks ? JSON.parse(jwks) : undefined,
-        jwks_url: jwks_url || undefined,
-        iss
+        jwks_url: jwks_url || undefined
     };
 
     // Note that if dur is 0 accessTokensExpireIn will not be included

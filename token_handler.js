@@ -58,8 +58,8 @@ module.exports = (req, res) => {
 
     // Validate authenticationToken.iss (must equal whatever the user entered at
     // registration time, i.e. clientDetailsToken.iss)
-    if (authenticationToken.iss !== clientDetailsToken.iss) {
-        return Lib.replyWithError(res, "invalid_token_iss", 401, authenticationToken.iss, clientDetailsToken.iss);
+    if (authenticationToken.iss && authenticationToken.iss !== authenticationToken.sub) {
+        return Lib.replyWithError(res, "invalid_token_iss", 401, authenticationToken.iss, authenticationToken.sub);
     }
 
     // simulated invalid_jti error ---------------------------------------------
