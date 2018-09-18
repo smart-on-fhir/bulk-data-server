@@ -163,7 +163,6 @@ function findKeyPair(keys) {
 function authorize(options = {}) {
     let state = {};
 
-    const iss      = "tester"
     const tokenUrl = buildUrl(["auth", "token"]);
     const alg      = options.alg || "RS384"
 
@@ -180,7 +179,7 @@ function authorize(options = {}) {
     .then(() => state.keys = findKeyPair(state.jwks.keys))
 
     .then(() => {
-        let form = { iss, jwks: JSON.stringify(state.jwks) };
+        let form = { jwks: JSON.stringify(state.jwks) };
 
         if (options.err) form.err = options.err;
         if (options.dur) form.dur = options.dur;
@@ -197,9 +196,8 @@ function authorize(options = {}) {
     .then(res => state.clientId = res.body)
 
     .then(() => {
-        
         let jwtToken = {
-            iss,
+            iss: state.clientId,
             sub: state.clientId,
             aud: tokenUrl,
             exp: Date.now()/1000 + 300, // 5 min
@@ -217,7 +215,7 @@ function authorize(options = {}) {
 
         return requestPromise({
             method: "POST",
-            url   : tokenUrl,
+            uri   : tokenUrl,
             json  : true,
             form  : {
                 scope: "system/*.*",

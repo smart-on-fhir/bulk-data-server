@@ -135,7 +135,6 @@ describe("Conformance Statement", () => {
 
 describe("JWKS Auth", () => {
 
-    const iss          = "tester";
     const tokenUrl     = lib.buildUrl(["auth"     , "token"]);
     const generatorUrl = lib.buildUrl(["generator", "jwks"]);
     const registerUrl  = lib.buildUrl(["auth"     , "register"]);
@@ -160,7 +159,6 @@ describe("JWKS Auth", () => {
             url   : registerUrl,
             json  : true,
             form  : {
-                iss,
                 jwks    : jwks && typeof jwks == "object" ? JSON.stringify(jwks) : undefined,
                 jwks_url: jwks && typeof jwks == "string" ? jwks                 : undefined
             }
@@ -177,7 +175,7 @@ describe("JWKS Auth", () => {
 
     function generateAuthToken(clientId) {
         return {
-            iss,
+            iss: clientId,
             sub: clientId,
             aud: tokenUrl,
             exp: Date.now()/1000 + 300, // 5 min
