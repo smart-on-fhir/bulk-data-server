@@ -128,15 +128,13 @@ module.exports = (req, res) => {
 
     // Filter the potential keys to retain only those where the alg and
     // kid match the values supplied in the client's JWK header.
-    .then(jwks => {
+    .then(keys => {
 
-        let publicKeys = jwks.keys.filter(key => {
-            return (
-                key.kid === kid &&
-                key.alg === header.alg &&
-                Array.isArray(key.key_ops) &&
-                key.key_ops.indexOf("verify") > -1
-            );
+        let publicKeys = keys.filter(key => {
+            if (Array.isArray(key.key_ops) && key.key_ops.indexOf("verify") == -1) {
+                return false;
+            }
+            return (key.kid === kid && key.alg === header.alg);
         });
 
         if (!publicKeys.length) {
