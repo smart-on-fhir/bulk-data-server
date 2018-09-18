@@ -90,41 +90,67 @@ module.exports = (req, res) => {
         return Lib.replyWithError(res, "invalid_token", 401, `No "kid" found in the authentication token header`);
     }
 
-
-    // Start a task to fetch the JWKS ------------------------------------------
-    Promise.resolve()
-
     // If the jku header is present, verify that the jku is whitelisted
     // (i.e., that it matches the value supplied at registration time for
     // the specified `client_id`).
     // If the jku header is not whitelisted, the signature verification fails.
-    .then(() => {
-        if (header.jku) {
-            if (header.jku !== clientDetailsToken.jwks_url) {
-                throw new Error(
-                    Lib.getErrorText(
-                        "jku_not_whitelisted",
-                        header.jku,
-                        clientDetailsToken.jwks_url
-                    )
-                );
-            }
+    if (header.jku && header.jku !== clientDetailsToken.jwks_url) {
+        throw new Error(Lib.getErrorText("jku_not_whitelisted", header.jku, clientDetailsToken.jwks_url));
+    }
 
-            // If the jku header is whitelisted, create a set of potential
-            // keys by dereferencing the jku URL.
-            return Lib.fetchJwks(header.jku);
+
+    // Start a task to fetch the JWKS
+    Promise.resolve()
+
+    .then(() => {
+
+        // Case 1: Remote JWKS -------------------------------------------------
+        // If the jku header is whitelisted, create a set of potential keys
+        // by dereferencing the jku URL
+        if (header.jku && clientDetailsToken.jwks_url) {
+            return Lib.fetchJwks(clientDetailsToken.jwks_url)
+            .then(json => {
+                if (!Array.isArray(json.keys)) {
+                    throw new Error(
+                        "The remote jwks object has no keys array."
+                    );
+                }
+                return json.keys
+            });
         }
 
-        // If jku is absent, create a set of potential key sources consisting
-        // of: all keys found by dereferencing the registration-time JWKS URI
-        // (if any) + any keys supplied in the registration-time JWKS (if any).
-        return clientDetailsToken.jwks;
-    })
+        // Case 2: Remote + local JWKS -----------------------------------------
+        // If jku is absent, create a set of potential key sources consisting of:
+        // all keys found by dereferencing the registration-time JWKS URI (if any)
+        // + any keys supplied in the registration-time JWKS (if any)
+        if (clientDetailsToken.jwks_url) {
+            return Lib.fetchJwks(clientDetailsToken.jwks_url)
+                .then(json => json.keys)
+                .then(keys => {
+                    // keys supplied in the registration-time JWKS (if any)
+                    if (clientDetailsToken.jwks) {
+                        keys = keys.concat(clientDetailsToken.jwks.keys);
+                    }
+                    return keys;
+                });
+        }
 
-    // .then(jwks => {
-    //     console.log(`Result from ${header.jku ? "JWKS URL" : "JWKS"}: `, jwks);
-    //     return jwks;
-    // })
+        // Case 3: Local JWKS --------------------------------------------------
+        if (clientDetailsToken.jwks && typeof clientDetailsToken.jwks == "object") {
+            if (!Array.isArray(clientDetailsToken.jwks.keys)) {
+                throw new Error(
+                    "The registration-time jwks object has no keys array."
+                );
+            }
+            return clientDetailsToken.jwks.keys;
+        }
+
+        // Case 4: No JWKS -----------------------------------------------------
+        throw new Error(
+            "No JWKS found. No 'jku' token header is set, no registration-time " +
+            "jwks_url is available and no registration-time jwks is available."
+        );
+    })
 
     // Filter the potential keys to retain only those where the alg and
     // kid match the values supplied in the client's JWK header.
@@ -146,11 +172,6 @@ module.exports = (req, res) => {
 
         return publicKeys;
     })
-
-    // .then(publicKeys => {
-    //     console.log(`Keys from ${header.jku ? "JWKS URL" : "JWKS"}: `, publicKeys)
-    //     return publicKeys;
-    // })
 
     // Attempt to verify the JWK using each key in the potential keys list.
     // - If any attempt succeeds, the signature verification succeeds.
