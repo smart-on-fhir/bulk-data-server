@@ -39,7 +39,7 @@ function requestPromise(options, delay = 0) {
                 if (res.statusCode >= 400) {
                     let outcome;
                     try {
-                        if (res.body.resourceType = "OperationOutcome") {
+                        if (res.body.resourceType == "OperationOutcome") {
                             outcome = res.body;
                             message = res.statusMessage || "Unknown error!";
                         }

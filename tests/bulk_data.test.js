@@ -1519,3 +1519,795 @@ describe("Groups", () => {
     });
 });
 
+describe("Error responses", () => {
+
+    const jwks = {
+        "keys": [
+            {
+                "kty": "EC",
+                "crv": "P-384",
+                "x": "DTKkSmcxDeFkIuMLeRALzT20BfgDQ4w1nmkJu8HL6ffyYBrlmB_FC-LdRBkxx6HO",
+                "y": "0LlUWTP6WWzwaPFB5fxbANDwehR6qUEY5n-V6hKtfZpVcW143UYIaMc3kEGmkXvI",
+                "key_ops": [
+                    "verify"
+                ],
+                "ext": true,
+                "kid": "61a57bcf052664411ad6cab60524a840",
+                "alg": "ES384"
+            },
+            {
+                "kty": "EC",
+                "crv": "P-384",
+                "d": "W8nYa46Wj6_q9r8BdbQfoLufgFoeeImNWV9lhqugY15x6xI7GNPQVx2m-w31D62Y",
+                "x": "DTKkSmcxDeFkIuMLeRALzT20BfgDQ4w1nmkJu8HL6ffyYBrlmB_FC-LdRBkxx6HO",
+                "y": "0LlUWTP6WWzwaPFB5fxbANDwehR6qUEY5n-V6hKtfZpVcW143UYIaMc3kEGmkXvI",
+                "key_ops": [
+                    "sign"
+                ],
+                "ext": true,
+                "kid": "61a57bcf052664411ad6cab60524a840",
+                "alg": "ES384"
+            }
+        ]
+    };
+
+    const privateKey  = jwkToPem(jwks.keys[1], { private: true });
+    const tokenUrl    = lib.buildUrl(["auth", "token"]);
+    const registerUrl = lib.buildUrl(["auth", "register"]);
+    // const alg      = options.alg || "RS384"
+
+    // return requestPromise({
+    //     url : buildUrl(["generator", "jwks"]),
+    //     qs  : { alg },
+    //     json: true
+    // })
+
+    function assertError(requestOptions, expected, code, message="") {
+        return lib.requestPromise(requestOptions).then(
+            () => { throw new Error("This request should have failed"); },
+            result => {
+                if (code && result.response.statusCode !== code) {
+                    return Promise.reject(new Error(`The status code should be ${code}`));
+                }
+
+                if (expected) {
+                    try {
+                        assert.deepEqual(result.response.body, expected)
+                    } catch (ex) {
+                        return Promise.reject(new Error(
+                            // ex.message
+                            " The error response should equal:\n" +
+                            JSON.stringify(expected, null, 2) +
+                            "\n but was:\n" +
+                            JSON.stringify(result.response.body, null, 2)
+                        ));
+                    }
+                    // if (result.response.body !== expected) {
+                    //     message += " The error response should equal\n" +
+                    //         JSON.stringify(expected, null, 2) +
+                    //         "\n but was:\n" +
+                    //         JSON.stringify(result.response.body, null, 2);
+                    //     return Promise.reject(new Error(message));
+                    // }
+                    return true
+                }
+
+                return Promise.reject(result)
+            }
+        )
+    }
+
+    describe("token endpoint", () => {
+
+        it("returns 400 invalid_request with missing 'Content-type: application/x-www-form-urlencoded' header", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : tokenUrl
+            }, {
+                error            : "invalid_request",
+                error_description: "Invalid request content-type header (must be 'application/x-www-form-urlencoded')"
+            }, 400);
+        });
+
+        it("returns 400 invalid_grant with missing grant_type parameter", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : tokenUrl,
+                form  : {}
+            }, {
+                error            : "invalid_grant",
+                error_description: "Missing grant_type parameter"
+            }, 400);
+        });
+
+        it("returns 400 unsupported_grant_type with invalid grant_type parameter", () => {
+            it("returns invalid_grant with missing grant_type parameter", () => {
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        grant_type: "whatever"
+                    }
+                }, {
+                    error: "unsupported_grant_type",
+                    error_description: "The grant_type parameter should equal 'client_credentials'"
+                }, 400);
+            });
+        });
+
+        it("returns 400 invalid_request with missing client_assertion_type param", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : tokenUrl,
+                form  : {
+                    grant_type: "client_credentials"
+                }
+            }, {
+                error: "invalid_request",
+                error_description: "Missing client_assertion_type parameter"
+            }, 400);
+        });
+
+        it("returns 400 invalid_request with invalid client_assertion_type param", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : tokenUrl,
+                form  : {
+                    grant_type           : "client_credentials",
+                    client_assertion_type: "whatever"
+                }
+            }, {
+                error: "invalid_request",
+                error_description: "Invalid client_assertion_type parameter. Must be 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'."
+            }, 400);
+        });
+
+        it("returns 400 invalid_request with missing invalid_client_details_token param", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : tokenUrl,
+                form  : {
+                    grant_type           : "client_credentials",
+                    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+                }
+            }, null, 400).catch(result => {
+                assert.equal(result.response.body.error, "invalid_request");
+                assert.ok(
+                    result.response.body.error_description.indexOf("Invalid registration token: ") === 0
+                );
+            });   
+        });
+
+        it("returns 400 invalid_request with invalid invalid_client_details_token param", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : tokenUrl,
+                form  : {
+                    grant_type           : "client_credentials",
+                    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                    client_assertion     : "whatever"
+                }
+            }, null, 400).catch(result => {
+                assert.equal(result.response.body.error, "invalid_request");
+                assert.ok(
+                    result.response.body.error_description.indexOf("Invalid registration token: ") === 0
+                );
+            });
+        });
+
+        it("returns 400 invalid_request if the token does not contain valid client_id (sub) token", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : tokenUrl,
+                form  : {
+                    grant_type           : "client_credentials",
+                    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                    client_assertion     : jwt.sign({ a: 1 }, privateKey, {
+                        algorithm: jwks.keys[1].alg,
+                        keyid    : jwks.keys[1].kid
+                    })
+                }
+            }, null, 400).catch(result => {
+                assert.equal(result.response.body.error, "invalid_request");
+                // console.log(result.response.body.error_description)
+                assert.ok(
+                    result.response.body.error_description.indexOf("Invalid client details token: ") === 0,
+                    "The error description must begin with 'Invalid client details token: '"
+                );
+            });
+        });
+
+        it("returns 400 invalid_grant if the id token contains {err:'token_expired_registration_token'}", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: JSON.stringify(jwks),
+                    err: "token_expired_registration_token"
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_grant",
+                    error_description: "Registration token expired"
+                }, 400);
+            })
+        });
+
+        it("returns 400 invalid_grant if the auth token 'aud' is wrong", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: JSON.stringify(jwks)
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl + "x",
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, null, 400).catch(result => {
+                    assert.equal(result.response.body.error, "invalid_grant");
+                    // console.log(result.response.body.error_description)
+                    assert.ok(
+                        result.response.body.error_description.indexOf("Invalid token 'aud' value. Must be ") === 0,
+                        `The error description must begin with 'Invalid token 'aud' value. Must be `
+                    );
+                })
+            })
+        });
+
+        it("returns 400 invalid_grant if the auth token 'iss' does not match the aud", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: JSON.stringify(jwks)
+                }
+            }).then(res => {
+                return {
+                    iss: "whatever",
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_grant",
+                    error_description: `The given iss '${token.iss}' does not match the registered client_id '${token.sub}'`
+                }, 400);
+            })
+        });
+
+        it("returns 400 invalid_grant if the id token contains {err:'invalid_jti'}", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: JSON.stringify(jwks),
+                    err: "invalid_jti"
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_grant",
+                    error_description: "Invalid 'jti' value"
+                }, 400);
+            })
+        });
+
+        it("returns 400 invalid_scope if the scope is invalid", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: JSON.stringify(jwks)
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "whatever",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_scope",
+                    error_description: 'Invalid scope: "whatever"'
+                }, 400);
+            })
+        });
+
+        it("returns 400 invalid_scope if the id token contains {err:'token_invalid_scope'}", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: JSON.stringify(jwks),
+                    err: "token_invalid_scope"
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_scope",
+                    error_description: "Simulated invalid scope error"
+                }, 400);
+            })
+        });
+
+        it("returns 400 invalid_grant if the auth token jku is not whitelisted", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks_url: "my jwks_url"
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid,
+                    header: {
+                        jku: "whatever"
+                    }
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_grant",
+                    error_description: "The provided jku 'whatever' is different than the one used at registration time (my jwks_url)"
+                }, 400);
+            })
+        });
+
+        it("returns 400 invalid_grant if the jwks_url returns no keys", () => {
+            function hostJWKS(jwks) {
+                return new Promise(resolve => {
+                    const app = express();
+                    app.get("/jwks", (req, res) => res.json({}));
+                    const server = app.listen(0, () => resolve(server));
+                })
+                .then(server => {
+                    return lib.requestPromise({
+                        method: "POST",
+                        url   : registerUrl,
+                        json  : true,
+                        form  : {
+                            jwks_url: `http://127.0.0.1:${server.address().port}/jwks`
+                        }
+                    }).then(res => {
+                        return {
+                            iss: res.body,
+                            sub: res.body,
+                            aud: tokenUrl,
+                            exp: Date.now()/1000 + 300, // 5 min
+                            jti: crypto.randomBytes(32).toString("hex")
+                        };
+                    }).then(token => {
+                        let signed = jwt.sign(token, privateKey, {
+                            algorithm: jwks.keys[1].alg,
+                            keyid    : jwks.keys[1].kid
+                        });
+        
+                        return assertError({
+                            method: "POST",
+                            json  : true,
+                            url   : tokenUrl,
+                            form  : {
+                                scope                : "system/*.*",
+                                grant_type           : "client_credentials",
+                                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                                client_assertion     : signed
+                            }
+                        }, {
+                            error: "invalid_grant",
+                            error_description: "The remote jwks object has no keys array."
+                        }, 400);
+                    }).then(
+                        () => server.close(),
+                        () => server.close()
+                    );
+                });
+            }
+        });
+        
+        it("returns 400 invalid_grant if local jwks has no keys", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: "{}",
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_grant",
+                    error_description: "The registration-time jwks object has no keys array."
+                }, 400);
+            })
+        });
+
+        it("returns 400 invalid_grant if no jwks or jwks_url can be found", () => {
+            const clientID = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InJlZ2lzdHJhdGlvbi10b2tlbiJ9.eyJhY2Nlc3NUb2tlbnNFeHBpcmVJbiI6MTUsImlhdCI6MTUzNzM2NTkwOH0.D6Hrvs50DThgB3MbprCitfg8NsDqTdr2ii68-xFs3pQ";
+            return Promise.resolve({
+                iss: clientID,
+                sub: clientID,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_grant",
+                    error_description: "No JWKS found. No 'jku' token header is set, no " +
+                        "registration-time jwks_url is available and no " +
+                        "registration-time jwks is available."
+                }, 400);
+            })
+        });
+
+        it("returns 400 invalid_grant if no public keys can be found", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: '{"keys":[]}',
+                    err: "token_invalid_token"
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_grant",
+                    error_description: `No public keys found in the JWKS with "kid" equal to "${
+                        jwks.keys[1].kid
+                    }" and alg equal to "${jwks.keys[1].alg}"`
+                }, 400);
+            })
+        });
+
+        it("returns 400 invalid_grant if none of the public keys can decrypt the token", () => {
+            let _jwks = {
+                keys: [
+                    {
+                        "kty": "EC",
+                        "crv": "P-384",
+                        "x": "ky9AV_hLt8bjt0nO8F-uyOvkdQvvw5nwWmBqv_8uUHEz65HcfeSc1xb3d47SDNUn",
+                        "y": "K0qLBg0XqC1_fp9pT7wnlUptMxRzHBCN7HJAZvxNzPabsicCo13G3ZKYLJZ2PkqJ",
+                        "key_ops": [
+                            "verify"
+                        ],
+                        "ext": true,
+                        "kid": "61a57bcf052664411ad6cab60524a840",
+                        "alg": "ES384"
+                    }
+                ]
+            }
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: JSON.stringify(_jwks)
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_grant",
+                    error_description: `Unable to verify the token with any of the public keys found in the JWKS`
+                }, 400);
+            })
+        });
+
+        it("returns 401 invalid_client if the id token contains {err:'token_invalid_token'}", () => {
+            return lib.requestPromise({
+                method: "POST",
+                url   : registerUrl,
+                json  : true,
+                form  : {
+                    jwks: JSON.stringify(jwks),
+                    err: "token_invalid_token"
+                }
+            }).then(res => {
+                return {
+                    iss: res.body,
+                    sub: res.body,
+                    aud: tokenUrl,
+                    exp: Date.now()/1000 + 300, // 5 min
+                    jti: crypto.randomBytes(32).toString("hex")
+                };
+            }).then(token => {
+                let signed = jwt.sign(token, privateKey, {
+                    algorithm: jwks.keys[1].alg,
+                    keyid    : jwks.keys[1].kid
+                });
+
+                return assertError({
+                    method: "POST",
+                    json  : true,
+                    url   : tokenUrl,
+                    form  : {
+                        scope                : "system/*.*",
+                        grant_type           : "client_credentials",
+                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                        client_assertion     : signed
+                    }
+                }, {
+                    error: "invalid_client",
+                    error_description: "Simulated invalid token error"
+                }, 401);
+            })
+        });
+    });
+
+    describe("registration endpoint", () => {
+        it ("returns 400 invalid_request if no 'Content-type: application/x-www-form-urlencoded' header is sent", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : registerUrl
+            }, {
+                error: "invalid_request",
+                error_description: "Invalid request content-type header (must be 'application/x-www-form-urlencoded')"
+            }, 400);
+        });
+
+        it ("returns 400 invalid_request with invalid 'dur' parameter", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : registerUrl,
+                form  : {
+                    dur: "test"
+                }
+            }, {
+                error: "invalid_request",
+                error_description: "Invalid dur parameter"
+            }, 400);
+        });
+
+        it ("returns 400 invalid_request if both 'jwks' and 'jwks_url' are missing", () => {
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : registerUrl,
+                form  : {
+                    dur: 5
+                }
+            }, {
+                error: "invalid_request",
+                error_description: "Either 'jwks' or 'jwks_url' is required"
+            }, 400);
+        })
+    });
+});
+

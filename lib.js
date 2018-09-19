@@ -278,6 +278,33 @@ function replyWithError(res, name, code = 500, ...params)
     return res.status(code).send(getErrorText(name, ...params));
 }
 
+function replyWithOAuthError(res, name, options = {})
+{
+    const code   = options.code   || 400;
+    const params = options.params || [];
+    
+    const defaultDescription = config.oauthErrors[name];
+
+    if (!defaultDescription) {
+        return res.status(500).send(`"${name}" is not a valid oAuth error name.`);
+    }
+
+    let message = defaultDescription;
+    if (options.message) {
+        if (config.errors[options.message]) {
+            message = getErrorText(options.message, ...params);
+        }
+        else {
+            message = options.message;
+        }
+    }
+    
+    return res.status(code).json({
+        error: name,
+        error_description: message
+    });
+}
+
 /**
  * Simplified version of printf. Just replaces all the occurrences of "%s" with
  * whatever is supplied in the rest of the arguments. If no argument is supplied
@@ -451,6 +478,7 @@ module.exports = {
     printf,
     buildUrlPath,
     replyWithError,
+    replyWithOAuthError,
     parseToken,
     bool,
     wait,

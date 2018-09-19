@@ -7,26 +7,39 @@ const Lib       = require("./lib");
 const ScopeSet  = require("./ScopeSet");
 
 module.exports = (req, res) => {
-        
+
     // Require "application/x-www-form-urlencoded" POSTs -----------------------
     let ct = req.headers["content-type"] || "";
     if (ct.indexOf("application/x-www-form-urlencoded") !== 0) {
-        return Lib.replyWithError(res, "form_content_type_required", 401);
+        return Lib.replyWithOAuthError(res, "invalid_request", {
+            message: "form_content_type_required"
+        });
     }
 
-    // grant_type must be "client_credentials" ---------------------------------
+    // grant_type --------------------------------------------------------------
+    if (!req.body.grant_type) {
+        return Lib.replyWithOAuthError(res, "invalid_grant", {
+            message: "Missing grant_type parameter"
+        });
+    }
+
     if (req.body.grant_type != "client_credentials") {
-        return Lib.replyWithError(res, "bad_grant_type", 400);
+        return Lib.replyWithOAuthError(res, "unsupported_grant_type", {
+            message: "The grant_type parameter should equal 'client_credentials'"
+        });
     }
 
-    // client_assertion_type is required ---------------------------------------
+    // client_assertion_type ---------------------------------------------------
     if (!req.body.client_assertion_type) {
-        return Lib.replyWithError(res, "missing_client_assertion_type", 401);
+        return Lib.replyWithOAuthError(res, "invalid_request", {
+            message: "missing_client_assertion_type"
+        });
     }
 
-    // client_assertion_type must have a fixed value ---------------------------
     if (req.body.client_assertion_type != "urn:ietf:params:oauth:client-assertion-type:jwt-bearer") {
-        return Lib.replyWithError(res, "invalid_client_assertion_type", 401);
+        return Lib.replyWithOAuthError(res, "invalid_request", {
+            message: "invalid_client_assertion_type"
+        });
     }
 
     // client_assertion must be a token ----------------------------------------
@@ -34,7 +47,10 @@ module.exports = (req, res) => {
     try {
         authenticationToken = Lib.parseToken(req.body.client_assertion);
     } catch (ex) {
-        return Lib.replyWithError(res, "invalid_registration_token", 401, ex.message);
+        return Lib.replyWithOAuthError(res, "invalid_request", {
+            message: "invalid_registration_token",
+            params : [ ex.message ]
+        });
     }
 
     // The client_id must be a token -------------------------------------------
@@ -42,60 +58,75 @@ module.exports = (req, res) => {
     try {
         clientDetailsToken = Lib.parseToken(authenticationToken.sub);
     } catch (ex) {
-        return Lib.replyWithError(res, "invalid_client_details_token", 401, ex.message);
+        return Lib.replyWithOAuthError(res, "invalid_request", {
+            message: "invalid_client_details_token",
+            params : [ ex.message ]
+        });
     }
 
     // simulate expired_registration_token error -------------------------------
     if (clientDetailsToken.err == "token_expired_registration_token") {
-        return Lib.replyWithError(res, "token_expired_registration_token", 401);
+        return Lib.replyWithOAuthError(res, "invalid_grant", {
+            message: "token_expired_registration_token"
+        });
     }
 
     // Validate authenticationToken.aud (must equal this url) ------------------
     let tokenUrl = config.baseUrl + req.originalUrl;
     if (tokenUrl.replace(/^https?/, "") !== authenticationToken.aud.replace(/^https?/, "")) {
-        return Lib.replyWithError(res, "invalid_aud", 401, tokenUrl);
+        return Lib.replyWithOAuthError(res, "invalid_grant", {
+            message: "invalid_aud",
+            params: [ tokenUrl ]
+        });
     }
 
     // Validate authenticationToken.iss (must equal whatever the user entered at
     // registration time, i.e. clientDetailsToken.iss)
     if (authenticationToken.iss && authenticationToken.iss !== authenticationToken.sub) {
-        return Lib.replyWithError(res, "invalid_token_iss", 401, authenticationToken.iss, authenticationToken.sub);
+        return Lib.replyWithOAuthError(res, "invalid_grant", {
+            message: "invalid_token_iss",
+            params: [ authenticationToken.iss, authenticationToken.sub ]
+        });
     }
 
     // simulated invalid_jti error ---------------------------------------------
     if (clientDetailsToken.err == "invalid_jti") {
-        return Lib.replyWithError(res, "invalid_jti", 401);
+        return Lib.replyWithOAuthError(res, "invalid_grant", {
+            message: "invalid_jti"
+        });
     }
 
     // Validate scope ----------------------------------------------------------
     let tokenError = ScopeSet.getInvalidSystemScopes(req.body.scope);
     if (tokenError) {
-        return Lib.replyWithError(res, "invalid_scope", 401, tokenError);
+        return Lib.replyWithOAuthError(res, "invalid_scope", {
+            message: "invalid_scope",
+            params: [ req.body.scope ]
+        });
     }
 
     // simulated token_invalid_scope -------------------------------------------
     if (clientDetailsToken.err == "token_invalid_scope") {
-        return Lib.replyWithError(res, "token_invalid_scope", 401);
+        return Lib.replyWithOAuthError(res, "invalid_scope", {
+            message: "token_invalid_scope"
+        });
     }
 
     // Get the authentication token header
-    let header = jwt.decode(
-        req.body.client_assertion,
-        { complete: true }
-    ).header;
+    let header = jwt.decode(req.body.client_assertion, { complete: true }).header;
 
     // Get the "kid" from the authentication token header
     let kid = header.kid;
-    if (!kid) {
-        return Lib.replyWithError(res, "invalid_token", 401, `No "kid" found in the authentication token header`);
-    }
 
     // If the jku header is present, verify that the jku is whitelisted
     // (i.e., that it matches the value supplied at registration time for
     // the specified `client_id`).
     // If the jku header is not whitelisted, the signature verification fails.
     if (header.jku && header.jku !== clientDetailsToken.jwks_url) {
-        throw new Error(Lib.getErrorText("jku_not_whitelisted", header.jku, clientDetailsToken.jwks_url));
+        return Lib.replyWithOAuthError(res, "invalid_grant", {
+            message: "jku_not_whitelisted",
+            params: [ header.jku, clientDetailsToken.jwks_url ]
+        });
     }
 
 
@@ -111,9 +142,10 @@ module.exports = (req, res) => {
             return Lib.fetchJwks(clientDetailsToken.jwks_url)
             .then(json => {
                 if (!Array.isArray(json.keys)) {
-                    throw new Error(
-                        "The remote jwks object has no keys array."
-                    );
+                    Lib.replyWithOAuthError(res, "invalid_grant", {
+                        message: "The remote jwks object has no keys array."
+                    });
+                    return Promise.reject();
                 }
                 return json.keys
             });
@@ -138,18 +170,21 @@ module.exports = (req, res) => {
         // Case 3: Local JWKS --------------------------------------------------
         if (clientDetailsToken.jwks && typeof clientDetailsToken.jwks == "object") {
             if (!Array.isArray(clientDetailsToken.jwks.keys)) {
-                throw new Error(
-                    "The registration-time jwks object has no keys array."
-                );
+                Lib.replyWithOAuthError(res, "invalid_grant", {
+                    message: "The registration-time jwks object has no keys array."
+                });
+                return Promise.reject();
             }
             return clientDetailsToken.jwks.keys;
         }
 
         // Case 4: No JWKS -----------------------------------------------------
-        throw new Error(
-            "No JWKS found. No 'jku' token header is set, no registration-time " +
-            "jwks_url is available and no registration-time jwks is available."
-        );
+        Lib.replyWithOAuthError(res, "invalid_grant", {
+            message: "No JWKS found. No 'jku' token header is set, no " +
+                "registration-time jwks_url is available and no " +
+                "registration-time jwks is available."
+        });
+        return Promise.reject();
     })
 
     // Filter the potential keys to retain only those where the alg and
@@ -164,10 +199,11 @@ module.exports = (req, res) => {
         });
 
         if (!publicKeys.length) {
-            throw new Error(
-                `No public keys found in the JWKS with "kid" equal to "${kid
+            Lib.replyWithOAuthError(res, "invalid_grant", {
+                message: `No public keys found in the JWKS with "kid" equal to "${kid
                 }" and alg equal to "${header.alg}"`
-            );
+            });
+            return Promise.reject();
         }
 
         return publicKeys;
@@ -187,21 +223,27 @@ module.exports = (req, res) => {
                 );
                 return true;
             } catch(ex) {
-                console.error(ex);
+                // console.error(ex);
                 return false;
             }
         });
 
         if (!success) {
-            throw new Error(
-                `Unable to verify the token with any of the public keys found in the JWKS`
-            );
+
+            Lib.replyWithOAuthError(res, "invalid_grant", {
+                message: "Unable to verify the token with any of the public keys found in the JWKS"
+            });
+            return Promise.reject();
         }
     })
 
     .then(() => {
         if (clientDetailsToken.err == "token_invalid_token") {
-            return Lib.replyWithError(res, "sim_invalid_token", 401);
+            Lib.replyWithOAuthError(res, "invalid_client", {
+                message: "sim_invalid_token",
+                code   : 401
+            });
+            return Promise.reject();
         }
 
         const expiresIn = clientDetailsToken.accessTokensExpireIn ?
@@ -228,5 +270,5 @@ module.exports = (req, res) => {
 
         res.json(token);
     })
-    .catch(error  => Lib.replyWithError(res, "__custom__", 401, String(error)));
+    .catch(() => {});
 };
