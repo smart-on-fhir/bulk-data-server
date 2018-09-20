@@ -145,6 +145,20 @@ const GROUPS = [
     }
 ];
 
+const URN_MAP = {};
+
+let _types = {};
+
+let secondLoop = []
+
+function updateUrnMap(json) {
+    json.entry.forEach(entry => {
+        if (entry.fullUrl && entry.fullUrl.indexOf("urn:uuid:") === 0) {
+            URN_MAP[entry.fullUrl] = `${entry.resource.resourceType}/${entry.resource.id}`;
+        }
+    });
+}
+
 /**
  * Inserts one row into the data table
  * @param {String} resource_json 
@@ -173,8 +187,40 @@ function insertRow(resource_json, resourceType, time, patientId, groupId) {
     );
 }
 
-let _types = {};
+function fixReferences(obj) {
+    
+    // if array just dive into it (it cannot have references anyway)
+    if (Array.isArray(obj)) {
+        return obj.every(fixReferences);
+    }
+
+    else if (obj && typeof obj == "object") {
+        let result = true
+        for (let key in obj) {
+            if (key == "reference") {
+                let ref = obj[key];
+                if (ref.indexOf("urn:uuid:") === 0) {
+                    let newRef = URN_MAP[ref];
+                    if (!newRef) {
+                        return false;
+                    }
+                    obj[key] = newRef;
+                }
+            }
+            else {
+                if (result) {
+                    result = result && fixReferences(obj[key]);
+                }
+            }
+        }
+        return result;
+    }
+
+    return true;
+}
+
 async function insertResource(entry, patientId, group) {
+
     let type = entry.resource.resourceType;
     if (!_types[type]) {
         _types[type] = 1;
@@ -189,8 +235,7 @@ async function insertResource(entry, patientId, group) {
             id: entry.resource.id
         } :
         entry.resource;
-        
-
+     
     return Lib.stringifyJSON(json).then(json => insertRow(
         json,
         type,
@@ -214,21 +259,32 @@ async function getGroups() {
  * @param {Object} json
  * @returns {Promise<*>}
  */
-function insertPatient(json, groups) {
-    assignTimes(json);
+function insertBundle(json, groups) {
+    assignTimes(json);  
     let pt = json.entry.find(o => o.resource.resourceType == "Patient");
 
-    // Skip global things like organizations
+    // Skip bundles without a patient (if any)
     if (!pt) {
         return Promise.resolve();
     }
 
     let group = groups.sort((a, b) => a.cur - b.cur)[0];
-    group.cur += 1/group.weight
-    // console.log(p/t.resource.id);
-    return Promise.all(
-        json.entry.map(entry => insertResource(entry, pt.resource.id, group.id))
-    );
+    group.cur += 1 / group.weight;
+    
+    
+    let job = Promise.resolve();
+    json.entry.forEach(entry => {
+        // Scan the resource to see if it contains references to URNs. If so,
+        // Insert that resource first, get it's ID and modify the reference.
+        if (fixReferences(entry)) {
+            job = job.then(() => insertResource(entry, pt.resource.id, group.id))
+        }
+        else {
+            secondLoop.push([entry, pt.resource.id, group.id])
+        }
+    });
+
+    return job;
 }
 
 /**
@@ -303,6 +359,64 @@ function createDatabase() {
     ));
 }
 
+function loopFiles(callback) {
+    return Lib.forEachFile({
+        dir   : App.input,
+        filter: path => path.endsWith(".json"),
+        limit : App.limit || 100
+    }, callback);
+}
+
+function main() {
+    // Create the database and insert the groups into it
+    createDatabase()
+
+    // Loop over the files to build the URN_MAP
+    .then(() => loopFiles((path, fileStats, next) => {
+        Lib.readJSON(path).then(updateUrnMap).then(next);
+    }))
+
+    // Create a structure with group id, weight and count
+    .then(getGroups)
+
+    // Loop over the files again and try to insert all resources
+    .then(groups => {
+        return loopFiles((path, fileStats, next) => {
+            Lib.readJSON(path).then(json => {
+                process.stdout.write("\033[2KInserting " + path + "...\r");
+                return insertBundle(json, groups);
+            }).then(() => next());
+        })
+    })
+
+    // If anything could not be inserted the first time (because of missing
+    // URN_MAP entry) it should be inserted now
+    .then(() => {
+        let job = Promise.resolve();
+        while (secondLoop.length) {
+            job = job.then(() => {
+                let args = secondLoop.shift();
+                if (!fixReferences(args[0])) {
+                    return secondLoop.push(args);
+                } else {
+                    return insertResource(...args);
+                }
+            });
+        }
+        return job;
+    })
+
+    // Log the resource counts
+    .then(() => console.log("\r\033[2K", _types))
+
+    // Close the DB connection
+    .then(() => DB.close())
+    
+    // Report the error and exit
+    .catch(Lib.die); 
+}
+
+// Run =========================================================================
 App
     .version('0.1.0')
     .option('-d, --input <path>', 'Input folder containing JSON FHIR patient bundles', String)
@@ -310,27 +424,7 @@ App
     .parse(process.argv);
 
 if (App.input) {
-    createDatabase()
-    .then(getGroups)
-    .then(groups => {
-        Lib.forEachFile({
-            dir   : App.input,
-            filter: path => path.endsWith(".json"),
-            limit : App.limit || 100
-        }, (path, fileStats, next) => {
-            Lib.readJSON(path)
-                .then(json => {
-                    process.stdout.write("\033[2K" + path + " -> " + json.type + "\r");
-                    return json;
-                })
-                .then(json => insertPatient(json, groups))
-                .then(() => next());
-        })
-        .then(() => console.log("\r\033[2K", _types))
-        .then(() => DB.close())
-    })
-    .then(result => console.log(result))
-    .catch(Lib.die);    
+    main();
 }
 else {
     App.outputHelp();
