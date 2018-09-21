@@ -6,7 +6,7 @@ const DB           = require("./db");
 
 const HEX    = "[a-fA-F0-9]"
 const RE_UID = new RegExp(
-    `\\b(${HEX}{8}-${HEX}{4}-${HEX}{4}-${HEX}{4}-${HEX}{12})\\b`,
+    `"id":"(${HEX}{8}-${HEX}{4}-${HEX}{4}-${HEX}{4}-${HEX}{12})"`,
     "g"
 );
 
@@ -196,7 +196,7 @@ class FhirStream extends Readable
         }
         if (l) {
             prefix = prefix.join("-");
-            json = json.replace(RE_UID, `${prefix}-` + '$1');
+            json = json.replace(RE_UID, `"id":"${prefix}-` + '$1' + '"');
         }
 
         // For tests also include the modified_date
