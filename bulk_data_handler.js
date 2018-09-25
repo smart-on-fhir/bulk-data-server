@@ -8,8 +8,8 @@ const DB           = require("./db");
 const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
 const fhirStream   = require("./FhirStream");
-const zlib         = require('zlib');
-// const compression  = require('zlib');
+const zlib         = require("zlib");
+
 
 const STATE_STARTED  = 2;
 const STATE_CANCELED = 4;
