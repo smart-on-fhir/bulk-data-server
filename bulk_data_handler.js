@@ -8,6 +8,8 @@ const DB           = require("./db");
 const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
 const fhirStream   = require("./FhirStream");
+const zlib         = require('zlib');
+// const compression  = require('zlib');
 
 const STATE_STARTED  = 2;
 const STATE_CANCELED = 4;
@@ -445,6 +447,10 @@ function handleFileDownload(req, res) {
         return outcomes.fileExpired(res);
     }
 
+    const acceptEncoding = req.headers["accept-encoding"] || "";
+    const shouldDeflate  = (/\bdeflate\b/.test(acceptEncoding));
+    const shouldGzip     = (/\bgzip\b/.test(acceptEncoding));
+
     // set the response headers
     res.set({
         "Content-Type": "application/fhir+ndjson",
@@ -457,12 +463,28 @@ function handleFileDownload(req, res) {
         ));
     }
 
+    if (shouldDeflate) {
+        res.set({ "Content-Encoding": "deflate" });
+    } else if (shouldGzip) {
+        res.set({ "Content-Encoding": "gzip" });
+    }
+
     let input = new fhirStream(req, res);
+    
     input.on("error", error => {
         console.error(error);
         return res.status(500).end();
     });
-    input.init().then(() => input.pipe(res));
+
+    input.init().then(() => {
+        if (shouldDeflate) {
+            input = input.pipe(zlib.createDeflate())
+        }
+        else if (shouldGzip) {
+            input = input.pipe(zlib.createGzip())
+        }
+        input.pipe(res)
+    });
 }
 
 // System Level Export
