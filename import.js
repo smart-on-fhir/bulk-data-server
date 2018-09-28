@@ -24,6 +24,7 @@ const TIME_MAP = {
 const GROUPS = [
     {
         weight: 9,
+        id: 1,
         resource: {
             "resourceType":"Group",
             "id":"3d7d2344-ca49-40ac-9e1f-88b40fff3bd9",
@@ -39,6 +40,7 @@ const GROUPS = [
     },
     {
         weight: 3,
+        id: 2,
         resource: {
             "resourceType":"Group",
             "id":"a58071e4-ba37-48e3-d116-6cdf38107b57",
@@ -54,6 +56,7 @@ const GROUPS = [
     },
     {
         weight: 1,
+        id: 3,
         resource: {
             "resourceType":"Group",
             "id":"3aa93632-9afb-4d91-d3bb-48a1572b970f",
@@ -69,6 +72,7 @@ const GROUPS = [
     },
     {
         weight: 1,
+        id: 4,
         resource: {
             "resourceType":"Group",
             "id":"c56f9ba9-bf36-43a9-c30d-5963d7cd486b",
@@ -84,6 +88,7 @@ const GROUPS = [
     },
     {
         weight: 8,
+        id: 5,
         resource: {
             "resourceType":"Group",
             "id":"6f4f7ae7-9662-4f50-9756-02127875c0a4",
@@ -99,6 +104,7 @@ const GROUPS = [
     },
     {
         weight: 1,
+        id: 6,
         resource: {
             "resourceType":"Group",
             "id":"b19809ab-8d29-4381-8778-f8162b32defb",
@@ -114,6 +120,7 @@ const GROUPS = [
     },
     {
         weight: 2,
+        id: 7,
         resource: {
             "resourceType":"Group",
             "id":"4adcfdca-c352-4a47-aed7-fb5635da20a5",
@@ -129,6 +136,7 @@ const GROUPS = [
     },
     {
         weight: 7,
+        id: 8,
         resource: {
             "resourceType":"Group",
             "id":"e47262b6-e02a-435a-fdf1-023003bdec1a",
@@ -248,7 +256,7 @@ async function insertResource(entry, patientId, group) {
 async function getGroups() {
     let totalWeight = GROUPS.reduce((out, g) => out + g.weight, 0);
     return GROUPS.map(g => ({
-        id    : g.resource.id,
+        id    : g.id,
         weight: g.weight / totalWeight,
         cur   : 0
     }));
@@ -352,9 +360,9 @@ function createDatabase() {
     ))
     .then(() => DB.promise(
         "run",
-        `INSERT INTO "data"("resource_json", "fhir_type", "modified_date") VALUES ` +
+        `INSERT INTO "data"("id", "resource_json", "fhir_type", "modified_date") VALUES ` +
         GROUPS.map(g => (
-            `('${JSON.stringify(g.resource)}', "Group", "${moment().format()}")`
+            `(${g.id}, '${JSON.stringify(g.resource)}', "Group", "${moment().format()}")`
         )).join(",")
     ));
 }
