@@ -140,15 +140,20 @@ module.exports = (req, res) => {
         // by dereferencing the jku URL
         if (header.jku && clientDetailsToken.jwks_url) {
             return Lib.fetchJwks(clientDetailsToken.jwks_url)
-            .then(json => {
-                if (!Array.isArray(json.keys)) {
-                    Lib.replyWithOAuthError(res, "invalid_grant", {
-                        message: "The remote jwks object has no keys array."
+                .then(json => {
+                    if (!Array.isArray(json.keys)) {
+                        Lib.replyWithOAuthError(res, "invalid_grant", {
+                            message: "The remote jwks object has no keys array."
+                        });
+                        return Promise.reject();
+                    }
+                    return json.keys
+                }).catch(error => {
+                    Lib.replyWithOAuthError(res, "invalid_client", {
+                        message: "Requesting the remote JWKS returned an error.\n" + error
                     });
                     return Promise.reject();
-                }
-                return json.keys
-            });
+                });
         }
 
         // Case 2: Remote + local JWKS -----------------------------------------
@@ -164,6 +169,11 @@ module.exports = (req, res) => {
                         keys = keys.concat(clientDetailsToken.jwks.keys);
                     }
                     return keys;
+                }).catch(error => {
+                    Lib.replyWithOAuthError(res, "invalid_client", {
+                        message: "Requesting the remote JWKS returned an error.\n" + error
+                    });
+                    return Promise.reject();
                 });
         }
 
@@ -270,5 +280,7 @@ module.exports = (req, res) => {
 
         res.json(token);
     })
-    .catch(() => {});
+    .catch((e) => {
+        res.end(e)
+    });
 };
