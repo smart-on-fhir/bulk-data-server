@@ -453,11 +453,11 @@ function fetchJwks(url) {
                 ));
             }
 
-            if (resp.headers["content-type"].indexOf("json") == -1) {
-                return reject(new Error(
-                    `Requesting "${url}" did not return a JSON`
-                ));
-            }
+            // if (resp.headers["content-type"].indexOf("json") == -1) {
+            //     return reject(new Error(
+            //         `Requesting "${url}" did not return a JSON content-type`
+            //     ));
+            // }
 
             resolve(body);
         });
