@@ -201,9 +201,6 @@ module.exports = (req, res) => {
     // kid match the values supplied in the client's JWK header.
     .then(keys => {
 
-        // console.log(keys, header)
-        
-
         let publicKeys = keys.filter(key => {
             if (Array.isArray(key.key_ops) && key.key_ops.indexOf("verify") == -1) {
                 return false;
@@ -212,7 +209,6 @@ module.exports = (req, res) => {
         });
 
         if (!publicKeys.length) {
-            // console.log(header)
             Lib.replyWithOAuthError(res, "invalid_grant", {
                 message: `No public keys found in the JWKS with "kid" equal to "${kid
                 }" and "kty" equal to "${header.kty}"`
@@ -237,13 +233,13 @@ module.exports = (req, res) => {
                 );
                 return true;
             } catch(ex) {
-                // console.error(ex, key);
+                // console.error(ex);
                 return false;
             }
         });
 
         if (!success) {
-            // console.error(publicKeys);
+
             Lib.replyWithOAuthError(res, "invalid_grant", {
                 message: "Unable to verify the token with any of the public keys found in the JWKS"
             });
