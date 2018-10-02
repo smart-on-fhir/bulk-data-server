@@ -974,7 +974,7 @@ describe("Progress Updates", () => {
 
 describe("File Downloading", function() {
 
-    this.timeout(5000);
+    this.timeout(15000);
 
     it ("rejects invalid auth token", () => rejects(
         lib.requestPromise({
@@ -1202,8 +1202,9 @@ describe("File Downloading", function() {
             if (patients.some(p => p.id.indexOf("p2-") !== 0)) {
                 throw `Patient IDs are not prefixed with "p2-" on the second page but they should`
             }
+            done()
         })
-        .then(() => done(), ({ error }) => done(error))
+        .catch(({ error }) => done(error))
     });
 
     it ("Can go to virtual third page if multiplier allows it", done => {
@@ -1237,34 +1238,295 @@ describe("File Downloading", function() {
         .then(() => done(), ({ error }) => done(error));
     });
 
-    it ("Handles the 'm' parameter for multiplication", done => {
-        downloadPatients({
-            limit : 10,
-            offset: 15
-        })
-        .then(patients => {
-            let target = [
-                'p2', // 16
-                'p2', // 17
-                'p2', // 18
-                'p2', // 19
-                'p2', // 20
-                'p3', // 21
-                'p3', // 22
-                'p3', // 23
-                'p3', // 24
-                'p3', // 25
-            ].join(",");
-            let src = patients.map(p => p.id.substr(0, 2)).join(",")
-            if (src != target) {
-                throw `Expected ID prefixes to equal ${target} but found ${src}`
-            }
-        })
-        .then(() => done(), ({ error }) => {
-            console.error(error);
-            done(error)
-        });
+    // it ("Handles the 'm' parameter for multiplication", done => {
+    //     downloadPatients({
+    //         limit : 10,
+    //         offset: 15
+    //     })
+    //     .then(patients => {
+    //         let target = [
+    //             'p2', // 16
+    //             'p2', // 17
+    //             'p2', // 18
+    //             'p2', // 19
+    //             'p2', // 20
+    //             'p3', // 21
+    //             'p3', // 22
+    //             'p3', // 23
+    //             'p3', // 24
+    //             'p3', // 25
+    //         ].join(",");
+    //         let src = patients.map(p => p.id.substr(0, 2)).join(",")
+    //         if (src != target) {
+    //             return Promise.reject({
+    //                 error: `Expected ID prefixes to equal ${target} but found ${src}`
+    //             })
+    //             // throw `Expected ID prefixes to equal ${target} but found ${src}`
+    //         }
+    //     })
+    //     .then(() => done(), ({ error }) => {
+    //         console.error(error);
+    //         done(error)
+    //     });
+    // });
+
+    it ("Handles the virtual files properly", () => {
+
+        /**
+         * @param {Object} options 
+         * @param {String} options.resourceType The name of the resource we are testing
+         * @param {Number} options.resourceCount How many of these resources we have in the DB
+         * @param {Number} options.multiplier Set a multiplier so that we have to append some virtual resources
+         * idMap
+         * limit
+         * offset
+         * title
+         */
+        function test(options) {
+
+            const multiplier = options.multiplier || 1;
+
+            const totalLines = options.resourceCount * multiplier;
+
+            // Make sure we don't truncate the file
+            const limit = options.limit || totalLines + 10;
+
+            const offset = options.offset || 0;
+
+            // The number of resources we expect to receive
+            const expectedLines = Math.min(totalLines - offset, limit);
+
+            // Collect any errors here
+            const errors = [];
+
+            // Collect some line IDs here
+            const lines = {};
+
+            // The line counter
+            let linesLength = 0;
+
+            // Build the file download URL
+            const url = lib.buildDownloadUrl(`1.${options.resourceType}.ndjson`, {
+                m: multiplier,
+                limit,
+                offset
+            });
+
+            return new Promise((resolve, reject) => {
+                request({ url })
+                .on("error", e => errors.push(String(e)))
+                .on("end", () => {
+                    if (errors.length) {
+                        return reject(
+                            (options.title ? options.title + "\n" : "") +
+                            errors.join(",\n"));
+                    }
+
+                    // Check the expected rows length
+                    if (linesLength != expectedLines) {
+                        return reject(
+                            `${options.title ? options.title + " - " : ""
+                            } Expected ${expectedLines
+                            } lines but found ${linesLength}`
+                        );
+                    }
+                    
+                    // Check if the IDs are properly generated
+                    if (options.idMap) {
+                        for (let index in options.idMap) {
+                            if (lines[index] !== options.idMap[index]) {
+                                return reject(
+                                    (options.title ? options.title + " - " : "") +
+                                    `The ${options.resourceType} resource ID at position ${
+                                        index
+                                    }${ offset ? " (offset " + offset + ")" : ""} should be "${
+                                        options.idMap[index]}" but was "${lines[index]}"`
+                                );
+                            }
+                        }
+                    }
+
+                    resolve();
+                })
+                .on("data", chunk => {
+                    let index = linesLength++;
+                    if (options.idMap && index in options.idMap) {
+                        lines[index] = JSON.parse(chunk.toString()).id;
+                    }
+                });
+            })
+            .catch(e => {
+                if (typeof e == "string") {
+                    return Promise.reject(new Error(e))
+                }
+                return Promise.reject(e)
+            });
+        }
+
+        return Promise.all([
+
+            // 66 AllergyIntolerance X 3
+            test({
+                title: "66 AllergyIntolerance X 3",
+                resourceType : "AllergyIntolerance",
+                resourceCount: 66,
+                multiplier   : 3,
+                idMap: {
+                    0  :    "bff9cc90-831b-45da-9f26-ef4401bbe4a6",
+                    65 :    "e6add36f-c461-4e52-8e38-b5451b37d92c",
+                    66 : "o1-bff9cc90-831b-45da-9f26-ef4401bbe4a6",
+                    131: "o1-e6add36f-c461-4e52-8e38-b5451b37d92c",
+                    132: "o2-bff9cc90-831b-45da-9f26-ef4401bbe4a6",
+                    197: "o2-e6add36f-c461-4e52-8e38-b5451b37d92c"
+                }
+            }),
+
+            // 100 Patients X 2
+            test({
+                title: "100 Patients X 2",
+                resourceType : "Patient",
+                resourceCount: 100,
+                multiplier   : 2,
+                idMap: {
+                    0  :    "ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
+                    99 :    "a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
+                    100: "o1-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
+                    199: "o1-a1f91f29-b0d7-4f4c-a530-b7719dfbd470"
+                }
+            }),
+
+            // Encounters 1 to 1000
+            test({
+                title: "First 100 Encounters",
+                resourceType : "Encounter",
+                resourceCount: 2541,
+                limit        : 1000,
+                idMap: {
+                    0  : "45c74ede-6f2a-48a8-9ee8-741fd3c31f2e",
+                    999: "483024ce-2152-43c3-86a2-722badb51018"
+                }
+            }),
+
+            // Encounters 1001 to 2000
+            test({
+                title: "Encounters 1001 to 2000",
+                resourceType : "Encounter",
+                resourceCount: 2541,
+                limit        : 1000,
+                offset       : 1000,
+                idMap: {
+                    0  : "74c96b6d-2469-475c-8ae2-c8f40a0f1554", // 1001
+                    999: "ced3f0bf-adf9-45e7-8d60-141fc13873c9"  // 2000
+                }
+            }),
+
+            // Encounters 2001 to 2541
+            test({
+                title: "Encounters 2001 to 2541",
+                resourceType : "Encounter",
+                resourceCount: 2541,
+                limit        : 1000,
+                offset       : 2000,
+                idMap: {
+                    0  : "62d60065-0799-4698-a5f6-e7982319c0ab", // 2001
+                    540: "aade3a55-40c5-49ed-9403-bb0eb3f5a689", // 2541
+                    541: undefined, // make sure there are no more lines
+                }
+            }),
+
+            // The first page of virtual patients
+            test({
+                title: "The first page of virtual patients",
+                resourceType : "Patient",
+                resourceCount: 100,
+                multiplier   : 10,
+                limit        : 300,
+                idMap: {
+                    0  : "ddf5ae5c-5646-4a76-9efd-f7e697f3b728", // 1st real patient
+                    99 : "a1f91f29-b0d7-4f4c-a530-b7719dfbd470", // 99th (last) real patient
+                    100: "o1-ddf5ae5c-5646-4a76-9efd-f7e697f3b728", // 1st virtual patient
+                    199: "o1-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
+                    200: "o2-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
+                    299: "o2-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
+                    300: undefined, // make sure there are no more lines
+                }
+            }),
+
+            // Second page of virtual patients
+            test({
+                title: "The second page of virtual patients",
+                resourceType : "Patient",
+                resourceCount: 100,
+                multiplier   : 10,
+                limit        : 300,
+                offset       : 100,
+                idMap: {
+                    0  : "o2-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
+                    99 : "o2-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
+                    100: "o3-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
+                    199: "o3-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
+                    200: "o4-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
+                    299: "o4-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
+                    300: undefined, // make sure there are no more lines
+                }
+            }),
+
+            // The last page of virtual patients
+            test({
+                title: "The last page of virtual patients",
+                resourceType : "Patient",
+                resourceCount: 100,
+                multiplier   : 10,
+                limit        : 300,
+                offset       : 900,
+                idMap: {
+                    0  : "o10-ddf5ae5c-5646-4a76-9efd-f7e697f3b728", // must be a copy of patient #1
+                    99 : "o10-a1f91f29-b0d7-4f4c-a530-b7719dfbd470", // must be a copy of patient #99
+                    100: undefined // make sure there are no more lines
+                }
+            }),
+
+            // Encounters 2001 to 2541
+            test({
+                title: "Encounters 20001 to 25410",
+                resourceType : "Encounter",
+                resourceCount: 2541,
+                multiplier   : 10,
+                limit        : 10000,
+                offset       : 20000,
+                idMap: {
+                    // 0  : "62d60065-0799-4698-a5f6-e7982319c0ab", // 20001
+                    0  : "o7-fdee0938-eb4d-4f90-bc84-dc68f5322fa9", // 20001
+                    // 0  : "45c74ede-6f2a-48a8-9ee8-741fd3c31f2e", // 2001 - #1
+                //     540: "aade3a55-40c5-49ed-9403-bb0eb3f5a689", // 2541
+                //     541: undefined, // make sure there are no more lines
+                }
+            }),
+            // // test({
+            // //     resourceType : "Encounter",
+            // //     resourceCount: 2541,
+            // //     multiplier   : 2,
+            // //     // limit        : 10,
+            // //     idMap: {
+            // //         0   :    "45c74ede-6f2a-48a8-9ee8-741fd3c31f2e",
+            // //         2540:    "aade3a55-40c5-49ed-9403-bb0eb3f5a689",
+            // //         2541: "o1-45c74ede-6f2a-48a8-9ee8-741fd3c31f2e",
+            // //         4081: "o1-aade3a55-40c5-49ed-9403-bb0eb3f5a689",
+            // //     //     199: "o1-a1f91f29-b0d7-4f4c-a530-b7719dfbd470"
+            // //     }
+            // // }),
+            // // test({
+            // //     resourceType: "ImagingStudy",
+            // //     resourceCount: 17,
+            // //     multiplier   : 10
+            // // })
+        ]);
+
     });
+});
+
+describe("References", () => {
+
 });
 
 describe("All Together", () => {
