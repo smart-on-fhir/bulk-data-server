@@ -30,7 +30,6 @@ class FhirStream extends Readable
         this.statement  = null;
         this.page       = 0;
         this.total      = 0;
-        this.totalPages = 0;
         this.rowIndex   = 0;
         this.overflow   = 0;
 
@@ -118,9 +117,9 @@ class FhirStream extends Readable
     /**
      * Counts the total number of rows and sets the following properties on the
      * instance:
-     *      total      - the total rows
-     *      page       - the page number we are currently in
-     *      totalPages - the total number of pages available
+     *      total    - the total rows
+     *      page     - the page number we are currently in
+     *      overflow - the number of rewinds
      * @returns {Promise<FhirStream>} Resolves with the instance
      */
     countRecords()
@@ -131,7 +130,7 @@ class FhirStream extends Readable
         return DB.promise("get", sql, params).then(row => {
             this.total = row && row.totalRows ? row.totalRows || 0 : 0;
             this.page = Math.floor(this.offset / this.limit) + 1;
-            this.totalPages = Math.ceil((this.total * this.multiplier) / this.limit);
+            this.overflow = Math.floor(this.offset/this.total);
             return this;
         });
     }
@@ -162,16 +161,37 @@ class FhirStream extends Readable
             return this.push(null);
         }
 
-        let row = this.cache.length ? this.cache.shift() : null;
+        const row = this.cache.length ? this.cache.shift() : null;
 
         // If there is no row returned - check why
         if (!row) {
+
+            // the record index within the file
+            const localRecordIndex  = this.rowIndex;
+
+            // the record number within the entire set of resources (within multiple files)
+            const globalRecordIndex = localRecordIndex + this.offset;
+
+            // How many DB queries we will have to execute
+            const totalPages = Math.ceil((this.total * this.multiplier) / this.params.$_limit);
+
+            // the index of the last record across all files (25582) 25410
+            const lastGlobalRecordIndex = Math.min(this.total * this.multiplier, totalPages * this.limit);
+
+            // the index of the last record in this file
+            const lastLocalRecordIndex = Math.min(this.page * this.limit, this.total * this.multiplier) - globalRecordIndex;
             
-            // If this.multiplier is greater than 1, then we might have to
-            // rewind and continue (using prefixed IDs in the data)
-            if (this.rowIndex < (this.total * this.multiplier - this.offset) && this.page <= this.totalPages) {
-                this.overflow++;
-                this.params.$_offset = 0;
+
+            if (globalRecordIndex < lastGlobalRecordIndex) {
+                if (globalRecordIndex > 0 && globalRecordIndex % this.total === 0) {
+                    this.overflow++;
+                    this.params.$_offset = 0;
+                }
+                
+                if (this.params.$_offset >= this.total) {
+                    this.params.$_offset = this.params.$_offset - this.total
+                }
+                
                 return this.fetch().then(this.getNextRow);
             }
 
@@ -188,9 +208,7 @@ class FhirStream extends Readable
 
         // Compute an ID prefix to make sure all records are unique
         let prefix = [], l = 0;
-        if (this.page > 1) {
-            l = prefix.push(`p${this.page}`);
-        }
+
         if (this.overflow) {
             l = prefix.push(`o${this.overflow}`);
         }
