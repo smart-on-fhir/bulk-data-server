@@ -197,21 +197,25 @@ module.exports = (req, res) => {
         return Promise.reject();
     })
 
-    // Filter the potential keys to retain only those where the alg and
+    // Filter the potential keys to retain only those where the kty and
     // kid match the values supplied in the client's JWK header.
     .then(keys => {
+
+        // console.log(keys, header)
+        
 
         let publicKeys = keys.filter(key => {
             if (Array.isArray(key.key_ops) && key.key_ops.indexOf("verify") == -1) {
                 return false;
             }
-            return (key.kid === kid && key.alg === header.alg);
+            return (key.kid === kid && key.kty === header.kty);
         });
 
         if (!publicKeys.length) {
+            // console.log(header)
             Lib.replyWithOAuthError(res, "invalid_grant", {
                 message: `No public keys found in the JWKS with "kid" equal to "${kid
-                }" and alg equal to "${header.alg}"`
+                }" and "kty" equal to "${header.kty}"`
             });
             return Promise.reject();
         }
@@ -233,13 +237,13 @@ module.exports = (req, res) => {
                 );
                 return true;
             } catch(ex) {
-                // console.error(ex);
+                // console.error(ex, key);
                 return false;
             }
         });
 
         if (!success) {
-
+            // console.error(publicKeys);
             Lib.replyWithOAuthError(res, "invalid_grant", {
                 message: "Unable to verify the token with any of the public keys found in the JWKS"
             });

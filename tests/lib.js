@@ -196,6 +196,7 @@ function authorize(options = {}) {
     .then(res => state.clientId = res.body)
 
     .then(() => {
+
         let jwtToken = {
             iss: state.clientId,
             sub: state.clientId,
@@ -204,13 +205,16 @@ function authorize(options = {}) {
             jti: crypto.randomBytes(32).toString("hex")
         };
 
-        // Convert the private JWK to PEM private key ti sign with
+        // Convert the private JWK to PEM private key to sign with
         let privateKey = jwkToPem(state.keys.privateKey, { private: true });
 
         // Sign the jwt with our private key
         let signed = jwt.sign(jwtToken, privateKey, {
             algorithm: alg,
-            keyid: state.keys.privateKey.kid
+            keyid: state.keys.privateKey.kid,
+            header: {
+                kty: state.keys.privateKey.kty
+            }
         });
 
         return requestPromise({
@@ -226,7 +230,10 @@ function authorize(options = {}) {
         });
     })
     .then(res => {return res.body})
-    .catch(result => Promise.reject(result.outcome || result.error || result));
+    .catch(result => {
+        // console.log(result.response.body)
+        return Promise.reject(result.outcome || result.error || result)
+    });
 }
 
 module.exports = {

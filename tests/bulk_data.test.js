@@ -183,9 +183,9 @@ describe("JWKS Auth", () => {
         };
     }
 
-    function findKey(jwks, access, alg, kid) {
+    function findKey(jwks, access, kty, kid) {
         return jwks.keys.find(k => {
-            if (k.alg !== alg) return false;
+            if (k.kty !== kty) return false;
             if (kid && k.kid !== kid) return false;
             if (!Array.isArray(k.key_ops)) return false;
             if (access == "public" && k.key_ops.indexOf("verify") == -1) return false;
@@ -194,17 +194,15 @@ describe("JWKS Auth", () => {
         });
     }
 
-    function sign(jwks, alg, token, jku) {
-        let privateKey = findKey(jwks, "private", alg);
+    function sign(jwks, kty, token, jku) {
+        let privateKey = findKey(jwks, "private", kty);
         return jwt.sign(
             token,
             jwkToPem(privateKey, { private: true }),
             {
-                algorithm: alg,
+                algorithm: privateKey.alg,
                 keyid: privateKey.kid,
-                header: {
-                    jku
-                }
+                header: { jku, kty }
             }
         );
     }
@@ -247,13 +245,13 @@ describe("JWKS Auth", () => {
         .then(() => state.jwtToken = generateAuthToken(state.clientId))
 
         // Find the RS384 private key, sign with it and authenticate
-        .then(() => authenticate(sign(state.jwks, "RS384", state.jwtToken)))
+        .then(() => authenticate(sign(state.jwks, "RSA", state.jwtToken)))
 
         // Save the RS384 access token to the state
         .then(resp => state.RS384AccessToken = resp.body)
 
         // Now find the ES384 private key, sign with it and authenticate
-        .then(() => authenticate(sign(state.jwks, "ES384", state.jwtToken)))
+        .then(() => authenticate(sign(state.jwks, "EC", state.jwtToken)))
 
         // Save the ES384 access token to the state
         .then(resp => state.ES384AccessToken = resp.body)
@@ -303,13 +301,13 @@ describe("JWKS Auth", () => {
         .then(() => state.jwtToken = generateAuthToken(state.clientId))
 
         // Find the RS384 private key, sign with it and authenticate
-        .then(() => authenticate(sign(state.jwks, "RS384", state.jwtToken, state.jwks_url)))
+        .then(() => authenticate(sign(state.jwks, "RSA", state.jwtToken, state.jwks_url)))
 
         // Save the RS384 access token to the state
         .then(resp => state.RS384AccessToken = resp.body)
 
         // Now find the ES384 private key, sign with it and authenticate
-        .then(() => authenticate(sign(state.jwks, "ES384", state.jwtToken, state.jwks_url)))
+        .then(() => authenticate(sign(state.jwks, "EC", state.jwtToken, state.jwks_url)))
 
         // Save the ES384 access token to the state
         .then(resp => state.ES384AccessToken = resp.body)
@@ -1816,13 +1814,6 @@ describe("Error responses", () => {
     const privateKey  = jwkToPem(jwks.keys[1], { private: true });
     const tokenUrl    = lib.buildUrl(["auth", "token"]);
     const registerUrl = lib.buildUrl(["auth", "register"]);
-    // const alg      = options.alg || "RS384"
-
-    // return requestPromise({
-    //     url : buildUrl(["generator", "jwks"]),
-    //     qs  : { alg },
-    //     json: true
-    // })
 
     function assertError(requestOptions, expected, code, message="") {
         return lib.requestPromise(requestOptions).then(
@@ -1974,7 +1965,10 @@ describe("Error responses", () => {
                     client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                     client_assertion     : jwt.sign({ a: 1 }, privateKey, {
                         algorithm: jwks.keys[1].alg,
-                        keyid    : jwks.keys[1].kid
+                        keyid    : jwks.keys[1].kid,
+                        header: {
+                            kty: jwks.keys[1].kty
+                        }
                     })
                 }
             }, null, 400).catch(result => {
@@ -2413,7 +2407,10 @@ describe("Error responses", () => {
             }).then(token => {
                 let signed = jwt.sign(token, privateKey, {
                     algorithm: jwks.keys[1].alg,
-                    keyid    : jwks.keys[1].kid
+                    keyid    : jwks.keys[1].kid,
+                    header: {
+                        kty: jwks.keys[1].kty
+                    }
                 });
 
                 return assertError({
@@ -2430,7 +2427,7 @@ describe("Error responses", () => {
                     error: "invalid_grant",
                     error_description: `No public keys found in the JWKS with "kid" equal to "${
                         jwks.keys[1].kid
-                    }" and alg equal to "${jwks.keys[1].alg}"`
+                    }" and "kty" equal to "${jwks.keys[1].kty}"`
                 }, 400);
             })
         });
@@ -2470,7 +2467,10 @@ describe("Error responses", () => {
             }).then(token => {
                 let signed = jwt.sign(token, privateKey, {
                     algorithm: jwks.keys[1].alg,
-                    keyid    : jwks.keys[1].kid
+                    keyid    : jwks.keys[1].kid,
+                    header: {
+                        kty: jwks.keys[1].kty
+                    }
                 });
 
                 return assertError({
@@ -2510,7 +2510,10 @@ describe("Error responses", () => {
             }).then(token => {
                 let signed = jwt.sign(token, privateKey, {
                     algorithm: jwks.keys[1].alg,
-                    keyid    : jwks.keys[1].kid
+                    keyid    : jwks.keys[1].kid,
+                    header: {
+                        kty: jwks.keys[1].kty
+                    }
                 });
 
                 return assertError({
