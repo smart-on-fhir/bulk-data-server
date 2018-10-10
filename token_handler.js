@@ -205,7 +205,8 @@ module.exports = (req, res) => {
             if (Array.isArray(key.key_ops) && key.key_ops.indexOf("verify") == -1) {
                 return false;
             }
-            return (key.kid === kid && key.kty === header.kty);
+            // return (key.kid === kid && key.kty === header.kty);
+            return key.kid === kid;
         });
 
         if (!publicKeys.length) {
