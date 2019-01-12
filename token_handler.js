@@ -234,7 +234,7 @@ module.exports = (req, res) => {
                 );
                 return true;
             } catch(ex) {
-                // console.error(ex);
+                console.error(ex);
                 return false;
             }
         });
