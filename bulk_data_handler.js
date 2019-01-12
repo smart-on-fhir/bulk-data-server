@@ -9,6 +9,8 @@ const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
 const fhirStream   = require("./FhirStream");
 const zlib         = require("zlib");
+const toNdjson     = require("./transforms/dbRowToNdjson");
+const toCSV        = require("./transforms/dbRowToCSV");
 
 
 const STATE_STARTED  = 2;
@@ -178,6 +180,27 @@ function validateRequestStart(req, res, next) {
 
 const JOBS = {};
 
+const supportedFormats = {
+    "application/fhir+ndjson" : "ndjson",
+    "application/ndjson"      : "ndjson",
+    "ndjson"                  : "ndjson",
+    "text/csv"                : "csv",
+    "csv"                     : "csv"
+};
+
+const exportTypes = {
+    ndjson: {
+        fileExtension: "ndjson",
+        contentType  : "application/fhir+ndjson",
+        transform    : toNdjson
+    },
+    csv: {
+        fileExtension: "csv",
+        contentType  : "text/csv; charset=UTF-8; header=present",
+        transform    : toCSV
+    }
+};
+
 /**
  * Handles the first request of the flow (the one that comes from
  * `/$export` or `/Patient/$export` or `/group/{groupId}/$export`)
@@ -197,13 +220,15 @@ function handleRequest(req, res, groupId = null, system=false) {
         return outcomes.invalidAccept(res, accept);
     }
 
+    let ext = "ndjson";
+
     // validate the output-format parameter
     let outputFormat = req.query['output-format']
-    if (outputFormat &&
-        outputFormat != "application/fhir+ndjson" &&
-        outputFormat != "application/ndjson" &&
-        outputFormat != "ndjson") {
-        return outcomes.invalidOutputFormat(res, outputFormat);
+    if (outputFormat) {
+        ext = supportedFormats[outputFormat];
+        if (!ext) {
+            return outcomes.invalidOutputFormat(res, outputFormat);
+        }
     }
 
     // Now we need to count all the requested resources in the database.
@@ -238,6 +263,7 @@ function handleRequest(req, res, groupId = null, system=false) {
             id: crypto.randomBytes(32).toString("hex"),
             requestStart: Date.now(),
             secure: !!req.headers.authorization,
+            outputFormat: ext,
             request: (req.protocol == "https" ? "https://" : "http://") +
                 req.headers.host + req.originalUrl
         }
@@ -325,7 +351,7 @@ function handleStatus(req, res) {
         let diff = (now - requestStart)/1000;
         let pct = Math.round((diff / generationTime) * 100);
         return res.set({
-            "X-Progress": pct + "%",
+            "X-Progress" : pct + "%",
             "Retry-After": Math.ceil(generationTime - diff)
         }).status(202).end();
     }
@@ -382,9 +408,9 @@ function handleStatus(req, res) {
                         baseUrl,
                         base64url.encode(JSON.stringify(params)),
                         "/fhir/bulkfiles/",
-                        `${i + 1}.${row.fhir_type}.ndjson`
+                        `${i + 1}.${row.fhir_type}.${exportTypes[sim.outputFormat].fileExtension}`
                     )
-                })
+                });
             }
         }
 
@@ -434,8 +460,9 @@ function handleStatus(req, res) {
 };
 
 function handleFileDownload(req, res) {
-    const args = req.sim;
-    const accept = String(req.headers.accept || "");
+    const args         = req.sim;
+    const accept       = String(req.headers.accept || "");
+    const outputFormat = args.outputFormat;
 
     // Only "application/fhir+ndjson" is supported for accept headers
     // if (accept && accept.indexOf("application/fhir+ndjson") !== 0) {
@@ -453,7 +480,7 @@ function handleFileDownload(req, res) {
 
     // set the response headers
     res.set({
-        "Content-Type": "application/fhir+ndjson",
+        "Content-Type": exportTypes[outputFormat].contentType,
         "Content-Disposition": "attachment"
     });
 
@@ -477,6 +504,11 @@ function handleFileDownload(req, res) {
     });
 
     input.init().then(() => {
+        const transform = exportTypes[outputFormat].transform;
+        if (transform) {
+            input = input.pipe(transform());
+        }
+
         if (shouldDeflate) {
             input = input.pipe(zlib.createDeflate())
         }
