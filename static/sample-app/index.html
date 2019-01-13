@@ -239,7 +239,8 @@
                 );
                 $.each(groups.entry, function(i, g) {
                     var opt = $("<option/>");
-                    opt.attr("value", g.resource.id);
+                    // opt.attr("value", g.resource.id);
+                    opt.attr("value", g.resource.identifier[0].value);
                     opt.text(g.resource.name + " (" + formatNumber(g.resource.quantity) + " patients)");
                     select.append(opt);
                 });
@@ -457,7 +458,6 @@
                     $.get(base + "/fhir/$get-resource-counts")
                 )
                 .then(function(groups, resources) {
-                    // console.log(arguments)
                     buildGroupSelector(groups[0]);
                     buildResourceCheckboxes(resources[0].parameter);
                 })

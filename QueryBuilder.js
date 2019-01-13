@@ -110,7 +110,9 @@ class QueryBuilder {
                 params.$_offset = this._offset;
             }
         }
-
+        // console.log(" ======================== ");
+        // console.log(this._groupId, sql);
+        // console.log(" ======================== ");
         return { sql, params };
     }
 

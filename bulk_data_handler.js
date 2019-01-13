@@ -264,6 +264,7 @@ function handleRequest(req, res, groupId = null, system=false) {
             requestStart: Date.now(),
             secure: !!req.headers.authorization,
             outputFormat: ext,
+            group: groupId,
             request: (req.protocol == "https" ? "https://" : "http://") +
                 req.headers.host + req.originalUrl
         }
@@ -408,7 +409,7 @@ function handleStatus(req, res) {
                         baseUrl,
                         base64url.encode(JSON.stringify(params)),
                         "/fhir/bulkfiles/",
-                        `${i + 1}.${row.fhir_type}.${exportTypes[sim.outputFormat].fileExtension}`
+                        `${i + 1}.${row.fhir_type}.${exportTypes[sim.outputFormat || "ndjson"].fileExtension}`
                     )
                 });
             }
@@ -462,7 +463,7 @@ function handleStatus(req, res) {
 function handleFileDownload(req, res) {
     const args         = req.sim;
     const accept       = String(req.headers.accept || "");
-    const outputFormat = args.outputFormat;
+    const outputFormat = args.outputFormat || "ndjson";
 
     // Only "application/fhir+ndjson" is supported for accept headers
     // if (accept && accept.indexOf("application/fhir+ndjson") !== 0) {
