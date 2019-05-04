@@ -254,8 +254,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
 
     // Validate the _type parameter;
     const requestedTypes = Lib.makeArray(req.query._type || "").map(t => String(t || "").trim()).filter(Boolean);
-    const availableTypes = await DB.promise("all", "SELECT DISTINCT fhir_type FROM data");
-    const badParam = requestedTypes.find(type => !availableTypes.find(o => o.fhir_type === type));
+    const badParam = requestedTypes.some(type => config.availableResources.indexOf(type) == -1);
     if (badParam) {
         return outcomes.invalidResourceType(res, badParam);
     }
@@ -396,11 +395,9 @@ async function handleStatus(req, res) {
         multiplier = 1;
     }
 
-    // SELECT DISTINCT fhir_type FROM data;
     // Validate the _type parameter;
     const requestedTypes = Lib.makeArray(sim.type || "").map(t => String(t || "").trim()).filter(Boolean);
-    const availableTypes = await DB.promise("all", "SELECT DISTINCT fhir_type FROM data");
-    const badParam = requestedTypes.find(type => !availableTypes.find(o => o.fhir_type === type));
+    const badParam = requestedTypes.some(type => config.availableResources.indexOf(type) == -1);
     if (badParam) {
         return outcomes.invalidResourceType(res, badParam);
     }
