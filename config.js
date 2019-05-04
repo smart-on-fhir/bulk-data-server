@@ -91,5 +91,23 @@ module.exports = {
         // The requested scope is invalid, unknown, malformed, or
         // exceeds the scope granted by the resource owner.
         "invalid_scope": "Invalid scope"
-    }
+    },
+
+    availableResources: [
+        "AllergyIntolerance",
+        "CarePlan",
+        "Claim",
+        "Condition",
+        "DiagnosticReport",
+        "Encounter",
+        "Goal",
+        "Group",
+        "ImagingStudy",
+        "Immunization",
+        "MedicationRequest",
+        "Observation",
+        "Organization",
+        "Patient",
+        "Procedure"
+    ]
 };
