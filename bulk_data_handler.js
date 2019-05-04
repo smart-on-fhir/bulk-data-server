@@ -42,6 +42,12 @@ const outcomes = {
         `recognize "application/fhir+ndjson", "application/ndjson" and "ndjson"`,
         { httpCode: 400 }
     ),
+    invalidSinceParameter: (res, value) => Lib.operationOutcome(
+        res,
+        `Invalid _since parameter "${value}". It must be valid FHIR instant and ` +
+        `cannot be a date in the future"`,
+        { httpCode: 400 }
+    ),
     requireAcceptFhirJson: res => Lib.operationOutcome(
         res,
         "The Accept header must be application/fhir+json",
@@ -228,11 +234,21 @@ async function handleRequest(req, res, groupId = null, system=false) {
     let ext = "ndjson";
 
     // validate the output-format parameter
-    let outputFormat = req.query['output-format']
+    let outputFormat = req.query._outputFormat || req.query['output-format']
     if (outputFormat) {
         ext = supportedFormats[outputFormat];
         if (!ext) {
             return outcomes.invalidOutputFormat(res, outputFormat);
+        }
+    }
+
+    // Validate the "_since" parameter
+    if (req.query._since) {
+        try {
+            Lib.fhirDateTime(req.query._since, true);
+        } catch (ex) {
+            console.error(ex);
+            return outcomes.invalidSinceParameter(res, req.query._since);
         }
     }
 
@@ -477,7 +493,7 @@ async function handleStatus(req, res) {
             "output" : linksArr,
 
             // If no errors occurred, the server should return an empty array
-            "errors": errorArr
+            "error": errorArr
         }).end();
     });
 };

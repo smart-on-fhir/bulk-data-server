@@ -426,7 +426,7 @@ function uInt(x, defaultValue = 0) {
  *  now
  *  DDDDDDDDDD
  */
-function fhirDateTime(dateTime) {
+function fhirDateTime(dateTime, noFuture) {
     let t;
 
     dateTime = String(dateTime || "").trim();
@@ -445,6 +445,10 @@ function fhirDateTime(dateTime) {
 
     if (!t.isValid()) {
         throw new Error(`Invalid dateTime "${dateTime}"`);
+    }
+
+    if (noFuture && t.isAfter(moment())) {
+        throw new Error(`Invalid dateTime "${dateTime}. Future dates are not accepted!"`);
     }
 
     return t.format("YYYY-MM-DD HH:mm:ss");
