@@ -64,6 +64,11 @@ const outcomes = {
         req.sim.requestStart}) is invalid`,
         { httpCode: 400 }
     ),
+    invalidResourceType: (res, resourceType) => Lib.operationOutcome(
+        res,
+        `The requested resource type "${resourceType}" is not available on this server`,
+        { httpCode: 400 }
+    ),
     futureRequestStart: res => Lib.operationOutcome(
         res,
         "The request start time parameter (requestStart) must be " +
@@ -208,7 +213,7 @@ const exportTypes = {
  * @param {Object} res 
  * @param {Number} groupId 
  */
-function handleRequest(req, res, groupId = null, system=false) {
+async function handleRequest(req, res, groupId = null, system=false) {
 
     // Validate the accept header
     let accept = req.headers.accept;
@@ -229,6 +234,14 @@ function handleRequest(req, res, groupId = null, system=false) {
         if (!ext) {
             return outcomes.invalidOutputFormat(res, outputFormat);
         }
+    }
+
+    // Validate the _type parameter;
+    const requestedTypes = Lib.makeArray(req.query._type || "").map(t => String(t || "").trim()).filter(Boolean);
+    const availableTypes = await DB.promise("all", "SELECT DISTINCT fhir_type FROM data");
+    const badParam = requestedTypes.find(type => !availableTypes.find(o => o.fhir_type === type));
+    if (badParam) {
+        return outcomes.invalidResourceType(res, badParam);
     }
 
     // Now we need to count all the requested resources in the database.
@@ -331,7 +344,7 @@ function cancelFlow(req, res) {
     return outcomes.cancelNotFound(res);
 }
 
-function handleStatus(req, res) {
+async function handleStatus(req, res) {
     
     let sim = req.sim;
     
@@ -365,6 +378,15 @@ function handleStatus(req, res) {
     let multiplier = parseInt(String(sim.m || "1"), 10);
     if (isNaN(multiplier) || !isFinite(multiplier) || multiplier < 1) {
         multiplier = 1;
+    }
+
+    // SELECT DISTINCT fhir_type FROM data;
+    // Validate the _type parameter;
+    const requestedTypes = Lib.makeArray(sim.type || "").map(t => String(t || "").trim()).filter(Boolean);
+    const availableTypes = await DB.promise("all", "SELECT DISTINCT fhir_type FROM data");
+    const badParam = requestedTypes.find(type => !availableTypes.find(o => o.fhir_type === type));
+    if (badParam) {
+        return outcomes.invalidResourceType(res, badParam);
     }
 
     // Count all the requested resources in the database.
