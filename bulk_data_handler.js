@@ -283,6 +283,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     });
 
     // Prepare the configuration segment of the status URL. Use the current
+    const proto = req.headers["x-forwarded-proto"] || req.protocol;
     let args = Object.assign(
         Lib.getRequestedParams(req),
         builder.exportOptions(),
@@ -293,8 +294,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
             secure: !!req.headers.authorization,
             outputFormat: ext,
             group: groupId,
-            request: (req.protocol == "https" ? "https://" : "http://") +
-                req.headers.host + req.originalUrl
+            request: proto + "://" + req.headers.host + req.originalUrl
         }
     );
 
