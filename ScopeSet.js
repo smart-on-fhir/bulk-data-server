@@ -1,3 +1,5 @@
+const config = require("./config");
+
 /**
  * This class tries to make it easier and cleaner to work with scopes (mostly by
  * using the two major methods - "has" and "matches").
