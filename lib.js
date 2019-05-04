@@ -18,6 +18,16 @@ function bool(x) {
     return !RE_FALSE.test(String(x).trim());
 }
 
+function makeArray(x) {
+    if (Array.isArray(x)) {
+        return x;
+    }
+    if (typeof x == "string") {
+        return x.trim().split(/\s*,\s*/);
+    }
+    return [x];
+}
+
 function htmlEncode(html) {
     return String(html)
         .trim()
@@ -487,5 +497,6 @@ module.exports = {
     getRequestedParams,
     fhirDateTime,
     createOperationOutcome,
-    fetchJwks
+    fetchJwks,
+    makeArray
 };
