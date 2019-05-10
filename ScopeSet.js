@@ -86,13 +86,13 @@ class ScopeSet
      */
     static getInvalidSystemScopes(scopes) {
         scopes = String(scopes || "").trim();
-    
+
         if (!scopes) {
             return config.errors.missing_scope;
         }
-    
+
         scopes = scopes.split(/\s+/);
-    
+
         return scopes.find(s => !(
             /^system\/(\*|[A-Z][a-zA-Z]+)(\.(read|write|\*))?$/.test(s)
         )) || "";
