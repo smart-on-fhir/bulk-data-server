@@ -14,6 +14,12 @@ function resourceCreator(multiplier) {
             resource: {
                 resourceType: "Group",
                 id: json.id,
+                identifier: [
+                    {
+                        system: "https://bulk-data/db-id",
+                        value : group.id
+                    }
+                ],
                 quantity: group.quantity * multiplier,
                 name: json.name,
                 text: {
@@ -56,7 +62,7 @@ module.exports = (req, res) => {
     let multiplier = lib.getRequestedParams(req).m || 1;
 
     DB.all(
-        `SELECT g.resource_json, COUNT(*) AS "quantity"
+        `SELECT g.resource_json, g.id, COUNT(*) AS "quantity"
         FROM "data" as "g"
         LEFT JOIN "data" AS "d" ON (d.group_id = g.id)
         WHERE g.fhir_type = "Group"

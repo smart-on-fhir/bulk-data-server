@@ -1,15 +1,5 @@
 const lib = require("./lib");
 
-function makeArray(x) {
-    if (Array.isArray(x)) {
-        return x;
-    }
-    if (typeof x == "string") {
-        return x.trim().split(/\s*,\s*/);
-    }
-    return [x];
-}
-
 /**
  * Very simple SQL query builder. This is custom builder to ONLY handle the few
  * things we need!
@@ -110,7 +100,9 @@ class QueryBuilder {
                 params.$_offset = this._offset;
             }
         }
-
+        // console.log(" ======================== ");
+        // console.log(this._groupId, sql);
+        // console.log(" ======================== ");
         return { sql, params };
     }
 
@@ -161,7 +153,7 @@ class QueryBuilder {
     }
 
     setFhirTypes(types = []) {
-        const _types = makeArray(types).map(t => String(t || "").trim());
+        const _types = lib.makeArray(types).map(t => String(t || "").trim());
 
         // validate, sanitize
         let badParam = _types.find(type => !type.match(/^([A-Z][a-z]+)+$/));
@@ -174,7 +166,7 @@ class QueryBuilder {
 
     setColumns(cols = []) {
         // TODO: validate, sanitize
-        this._columns = makeArray(cols).filter(Boolean).map(String);
+        this._columns = lib.makeArray(cols).filter(Boolean).map(String);
     }
 
     addColumn(col) {

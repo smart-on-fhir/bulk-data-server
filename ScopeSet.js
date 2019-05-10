@@ -1,3 +1,5 @@
+const config = require("./config");
+
 /**
  * This class tries to make it easier and cleaner to work with scopes (mostly by
  * using the two major methods - "has" and "matches").
@@ -92,10 +94,8 @@ class ScopeSet
         }
 
         scopes = scopes.split(/\s+/);
-
-        return scopes.find(s => !(
-            /^system\/(\*|[A-Z][a-zA-Z]+)(\.(read|write|\*))?$/.test(s)
-        )) || "";
+        const re = new RegExp("^system/(\\*|" + config.availableResources.join("|") + ")(\\.(read|write|\\*))?$");
+        return scopes.find(s => !(re.test(s))) || "";
     }
 }
 

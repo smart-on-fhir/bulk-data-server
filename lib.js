@@ -18,6 +18,16 @@ function bool(x) {
     return !RE_FALSE.test(String(x).trim());
 }
 
+function makeArray(x) {
+    if (Array.isArray(x)) {
+        return x;
+    }
+    if (typeof x == "string") {
+        return x.trim().split(/\s*,\s*/);
+    }
+    return [x];
+}
+
 function htmlEncode(html) {
     return String(html)
         .trim()
@@ -416,7 +426,7 @@ function uInt(x, defaultValue = 0) {
  *  now
  *  DDDDDDDDDD
  */
-function fhirDateTime(dateTime) {
+function fhirDateTime(dateTime, noFuture) {
     let t;
 
     dateTime = String(dateTime || "").trim();
@@ -435,6 +445,10 @@ function fhirDateTime(dateTime) {
 
     if (!t.isValid()) {
         throw new Error(`Invalid dateTime "${dateTime}"`);
+    }
+
+    if (noFuture && t.isAfter(moment())) {
+        throw new Error(`Invalid dateTime "${dateTime}. Future dates are not accepted!"`);
     }
 
     return t.format("YYYY-MM-DD HH:mm:ss");
@@ -487,5 +501,6 @@ module.exports = {
     getRequestedParams,
     fhirDateTime,
     createOperationOutcome,
-    fetchJwks
+    fetchJwks,
+    makeArray
 };

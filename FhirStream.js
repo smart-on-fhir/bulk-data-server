@@ -204,8 +204,6 @@ class FhirStream extends Readable
         this.page = Math.floor((this.offset + this.rowIndex) / this.limit) + 1;
 
 
-        let json = row.resource_json;
-
         // Compute an ID prefix to make sure all records are unique
         let prefix = [], l = 0;
 
@@ -214,18 +212,17 @@ class FhirStream extends Readable
         }
         if (l) {
             prefix = prefix.join("-");
-            json = json.replace(RE_UID, `"id":"${prefix}-` + '$1' + '"');
+            row.resource_json = row.resource_json.replace(RE_UID, `"id":"${prefix}-` + '$1' + '"');
         }
 
         // For tests also include the modified_date
         if (this.extended) {
-            json = JSON.parse(json);
-            json.__modified_date = row.modified_date
-            json = JSON.stringify(json);
+            row.resource_json = JSON.parse(row.resource_json);
+            row.resource_json.__modified_date = row.modified_date
+            row.resource_json = JSON.stringify(row.resource_json);
         }
         
-        // place "\n" between rows but not after the last one
-        this.push((this.rowIndex ? "\n" : "") + json);
+        this.push(row);
 
         this.rowIndex += 1;
     }

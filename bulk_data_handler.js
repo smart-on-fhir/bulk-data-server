@@ -9,6 +9,8 @@ const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
 const fhirStream   = require("./FhirStream");
 const zlib         = require("zlib");
+const toNdjson     = require("./transforms/dbRowToNdjson");
+const toCSV        = require("./transforms/dbRowToCSV");
 
 
 const STATE_STARTED  = 2;
@@ -40,6 +42,12 @@ const outcomes = {
         `recognize "application/fhir+ndjson", "application/ndjson" and "ndjson"`,
         { httpCode: 400 }
     ),
+    invalidSinceParameter: (res, value) => Lib.operationOutcome(
+        res,
+        `Invalid _since parameter "${value}". It must be valid FHIR instant and ` +
+        `cannot be a date in the future"`,
+        { httpCode: 400 }
+    ),
     requireAcceptFhirJson: res => Lib.operationOutcome(
         res,
         "The Accept header must be application/fhir+json",
@@ -60,6 +68,11 @@ const outcomes = {
         res,
         `The request start time parameter (requestStart: ${
         req.sim.requestStart}) is invalid`,
+        { httpCode: 400 }
+    ),
+    invalidResourceType: (res, resourceType) => Lib.operationOutcome(
+        res,
+        `The requested resource type "${resourceType}" is not available on this server`,
         { httpCode: 400 }
     ),
     futureRequestStart: res => Lib.operationOutcome(
@@ -178,6 +191,27 @@ function validateRequestStart(req, res, next) {
 
 const JOBS = {};
 
+const supportedFormats = {
+    "application/fhir+ndjson" : "ndjson",
+    "application/ndjson"      : "ndjson",
+    "ndjson"                  : "ndjson",
+    "text/csv"                : "csv",
+    "csv"                     : "csv"
+};
+
+const exportTypes = {
+    ndjson: {
+        fileExtension: "ndjson",
+        contentType  : "application/fhir+ndjson",
+        transform    : toNdjson
+    },
+    csv: {
+        fileExtension: "csv",
+        contentType  : "text/csv; charset=UTF-8; header=present",
+        transform    : toCSV
+    }
+};
+
 /**
  * Handles the first request of the flow (the one that comes from
  * `/$export` or `/Patient/$export` or `/group/{groupId}/$export`)
@@ -185,7 +219,7 @@ const JOBS = {};
  * @param {Object} res 
  * @param {Number} groupId 
  */
-function handleRequest(req, res, groupId = null, system=false) {
+async function handleRequest(req, res, groupId = null, system=false) {
 
     // Validate the accept header
     let accept = req.headers.accept;
@@ -197,13 +231,32 @@ function handleRequest(req, res, groupId = null, system=false) {
         return outcomes.invalidAccept(res, accept);
     }
 
+    let ext = "ndjson";
+
     // validate the output-format parameter
-    let outputFormat = req.query['output-format']
-    if (outputFormat &&
-        outputFormat != "application/fhir+ndjson" &&
-        outputFormat != "application/ndjson" &&
-        outputFormat != "ndjson") {
-        return outcomes.invalidOutputFormat(res, outputFormat);
+    let outputFormat = req.query._outputFormat || req.query['output-format']
+    if (outputFormat) {
+        ext = supportedFormats[outputFormat];
+        if (!ext) {
+            return outcomes.invalidOutputFormat(res, outputFormat);
+        }
+    }
+
+    // Validate the "_since" parameter
+    if (req.query._since) {
+        try {
+            Lib.fhirDateTime(req.query._since, true);
+        } catch (ex) {
+            console.error(ex);
+            return outcomes.invalidSinceParameter(res, req.query._since);
+        }
+    }
+
+    // Validate the _type parameter;
+    const requestedTypes = Lib.makeArray(req.query._type || "").map(t => String(t || "").trim()).filter(Boolean);
+    const badParam = requestedTypes.some(type => config.availableResources.indexOf(type) == -1);
+    if (badParam) {
+        return outcomes.invalidResourceType(res, badParam);
     }
 
     // Now we need to count all the requested resources in the database.
@@ -230,6 +283,7 @@ function handleRequest(req, res, groupId = null, system=false) {
     });
 
     // Prepare the configuration segment of the status URL. Use the current
+    const proto = req.headers["x-forwarded-proto"] || req.protocol;
     let args = Object.assign(
         Lib.getRequestedParams(req),
         builder.exportOptions(),
@@ -238,8 +292,9 @@ function handleRequest(req, res, groupId = null, system=false) {
             id: crypto.randomBytes(32).toString("hex"),
             requestStart: Date.now(),
             secure: !!req.headers.authorization,
-            request: (req.protocol == "https" ? "https://" : "http://") +
-                req.headers.host + req.originalUrl
+            outputFormat: ext,
+            group: groupId,
+            request: proto + "://" + req.headers.host + req.originalUrl
         }
     );
 
@@ -304,7 +359,7 @@ function cancelFlow(req, res) {
     return outcomes.cancelNotFound(res);
 }
 
-function handleStatus(req, res) {
+async function handleStatus(req, res) {
     
     let sim = req.sim;
     
@@ -325,7 +380,7 @@ function handleStatus(req, res) {
         let diff = (now - requestStart)/1000;
         let pct = Math.round((diff / generationTime) * 100);
         return res.set({
-            "X-Progress": pct + "%",
+            "X-Progress" : pct + "%",
             "Retry-After": Math.ceil(generationTime - diff)
         }).status(202).end();
     }
@@ -338,6 +393,13 @@ function handleStatus(req, res) {
     let multiplier = parseInt(String(sim.m || "1"), 10);
     if (isNaN(multiplier) || !isFinite(multiplier) || multiplier < 1) {
         multiplier = 1;
+    }
+
+    // Validate the _type parameter;
+    const requestedTypes = Lib.makeArray(sim.type || "").map(t => String(t || "").trim()).filter(Boolean);
+    const badParam = requestedTypes.some(type => config.availableResources.indexOf(type) == -1);
+    if (badParam) {
+        return outcomes.invalidResourceType(res, badParam);
     }
 
     // Count all the requested resources in the database.
@@ -382,9 +444,9 @@ function handleStatus(req, res) {
                         baseUrl,
                         base64url.encode(JSON.stringify(params)),
                         "/fhir/bulkfiles/",
-                        `${i + 1}.${row.fhir_type}.ndjson`
+                        `${i + 1}.${row.fhir_type}.${exportTypes[sim.outputFormat || "ndjson"].fileExtension}`
                     )
-                })
+                });
             }
         }
 
@@ -428,14 +490,15 @@ function handleStatus(req, res) {
             "output" : linksArr,
 
             // If no errors occurred, the server should return an empty array
-            "errors": errorArr
+            "error": errorArr
         }).end();
     });
 };
 
 function handleFileDownload(req, res) {
-    const args = req.sim;
-    const accept = String(req.headers.accept || "");
+    const args         = req.sim;
+    const accept       = String(req.headers.accept || "");
+    const outputFormat = args.outputFormat || "ndjson";
 
     // Only "application/fhir+ndjson" is supported for accept headers
     // if (accept && accept.indexOf("application/fhir+ndjson") !== 0) {
@@ -453,7 +516,7 @@ function handleFileDownload(req, res) {
 
     // set the response headers
     res.set({
-        "Content-Type": "application/fhir+ndjson",
+        "Content-Type": exportTypes[outputFormat].contentType,
         "Content-Disposition": "attachment"
     });
 
@@ -477,6 +540,11 @@ function handleFileDownload(req, res) {
     });
 
     input.init().then(() => {
+        const transform = exportTypes[outputFormat].transform;
+        if (transform) {
+            input = input.pipe(transform());
+        }
+
         if (shouldDeflate) {
             input = input.pipe(zlib.createDeflate())
         }
