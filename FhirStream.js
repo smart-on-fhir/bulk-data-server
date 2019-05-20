@@ -2,7 +2,7 @@ const { Readable } = require("stream");
 const config       = require("./config");
 const Lib          = require("./lib");
 const QueryBuilder = require("./QueryBuilder");
-const DB           = require("./db");
+const getDB        = require("./db");
 
 const HEX    = "[a-fA-F0-9]"
 const RE_UID = new RegExp(
@@ -17,6 +17,8 @@ class FhirStream extends Readable
         super({ objectMode: true });
 
         const args      = req.sim;
+
+        this.db = getDB(+(args.stu || 3));
 
         this.limit      = Lib.uInt(args.limit, config.defaultPageSize);
         this.multiplier = Lib.uInt(args.m, 1);
@@ -105,7 +107,7 @@ class FhirStream extends Readable
         let { sql, params } = this.builder.compile();
         this.params = params;
         return new Promise((resolve, reject) => {
-            this.statement = DB.prepare(sql, params, prepareError => {
+            this.statement = this.db.prepare(sql, params, prepareError => {
                 if (prepareError) {
                     return reject(prepareError);
                 }
@@ -127,7 +129,7 @@ class FhirStream extends Readable
         // SELECT "fhir_type", COUNT(*) as "totalRows" FROM "data"
         // WHERE "fhir_type" IN("Patient") GROUP BY "fhir_type"
         let { sql, params } = this.builder.compileCount("totalRows");
-        return DB.promise("get", sql, params).then(row => {
+        return this.db.promise("get", sql, params).then(row => {
             this.total = row && row.totalRows ? row.totalRows || 0 : 0;
             this.page = Math.floor(this.offset / this.limit) + 1;
             this.overflow = Math.floor(this.offset/this.total);

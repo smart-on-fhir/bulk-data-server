@@ -1,5 +1,5 @@
 const moment = require("moment");
-const DB     = require("./db");
+const DB     = require("./db")(3);
 const Lib    = require("./lib");
 const App    = require('commander');
 

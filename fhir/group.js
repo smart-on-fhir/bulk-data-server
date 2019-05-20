@@ -59,9 +59,11 @@ function bundle(items, multiplier) {
 }
 
 module.exports = (req, res) => {
-    let multiplier = lib.getRequestedParams(req).m || 1;
+    const sim = lib.getRequestedParams(req);
+    let multiplier = sim.m || 1;
+    let stu = sim.stu || 3;
 
-    DB.all(
+    DB(stu).all(
         `SELECT g.resource_json, g.id, COUNT(*) AS "quantity"
         FROM "data" as "g"
         LEFT JOIN "data" AS "d" ON (d.group_id = g.id)

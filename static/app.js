@@ -8,7 +8,8 @@
         jwks_url  : { type: "string", defaultValue: "" },
         tlt       : { type: "number", defaultValue: CFG.defaultTokenLifeTime || 15 },
         dur       : { type: "number", defaultValue: CFG.defaultWaitTime || 10 },
-        m         : { type: "number", defaultValue: 1 }
+        m         : { type: "number", defaultValue: 1 },
+        stu       : { type: "number", defaultValue: 3 }
     };
 
     var MODEL    = new Lib.Model();
@@ -131,7 +132,8 @@
             page: +MODEL.get("page"),
             dur : +MODEL.get("dur"),
             tlt : +MODEL.get("tlt"),
-            m   : +MODEL.get("m")
+            m   : +MODEL.get("m"),
+            stu : +MODEL.get("stu")
         })));
     }
 
@@ -263,7 +265,7 @@
         MODEL.on("change:jwks change:jwks_url change:err change:tlt", generateClientId);
 
         // Whenever the advanced options change (re)generate the launchData
-        MODEL.on("change:page change:dur change:err change:tlt change:m", updateLaunchData);
+        MODEL.on("change:page change:dur change:err change:tlt change:m change:stu", updateLaunchData);
         
         // Whenever launchData changes, update the fhir server fhir_server_url
         MODEL.on("change:launchData", function updateFhirUrl(e) {
