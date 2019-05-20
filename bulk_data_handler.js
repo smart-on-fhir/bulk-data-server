@@ -4,7 +4,7 @@ const crypto       = require("crypto");
 const router       = require("express").Router({ mergeParams: true });
 const config       = require("./config");
 const Lib          = require("./lib");
-const DB           = require("./db");
+const getDB        = require("./db");
 const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
 const fhirStream   = require("./FhirStream");
@@ -405,6 +405,7 @@ async function handleStatus(req, res) {
     // Count all the requested resources in the database.
     let builder = new QueryBuilder(sim);
     let { sql, params } = builder.compileCount("cnt");
+    const DB = getDB(+(sim.stu || 3));
     DB.promise("all", sql, params).then(rows => {
         
         // Finally generate those download links
