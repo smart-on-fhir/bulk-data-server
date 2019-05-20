@@ -2,8 +2,10 @@ const DB  = require("../db");
 const Lib = require("../lib");
 
 module.exports = (req, res) => { // $get-resource-counts
-    let multiplier = Lib.getRequestedParams(req).m || 1;
-    DB.all(
+    let sim = Lib.getRequestedParams(req);
+    let multiplier = sim.m || 1;
+    let stu = +(sim.stu || 3);
+    DB(stu).all(
         `SELECT 
             fhir_type AS "resourceType",
             COUNT(*)  AS "resourcesCount"

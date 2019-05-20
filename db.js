@@ -1,22 +1,39 @@
 const sqlite3 = require("sqlite3");
 
-const DB = new sqlite3.Database(__dirname + "/database.db");
-
 /**
- * Calls database methods and returns a promise
- * @param {String} method
- * @param {[*]} args 
+ * Stores one database instance per fhir version
  */
-DB.promise = (...args) => {
-    let [method, ...params] = args;
-    return new Promise((resolve, reject) => {
-        DB[method](...params, (error, result) => {
-            if (error) {
-                return reject(error);
-            }
-            resolve(result);
-        });
-    });
-};
+const DB_INSTANCES = {};
 
-module.exports = DB;
+function getDatabase(fhirVersion)
+{
+    if (!DB_INSTANCES[fhirVersion]) {
+        const DB = new sqlite3.Database(
+            `${__dirname}/database.r${fhirVersion}.db`
+        );
+
+        /**
+         * Calls database methods and returns a promise
+         * @param {String} method
+         * @param {[*]} args 
+         */
+        DB.promise = (...args) =>
+        {
+            let [method, ...params] = args;
+            return new Promise((resolve, reject) => {
+                DB[method](...params, (error, result) => {
+                    if (error) {
+                        return reject(error);
+                    }
+                    resolve(result);
+                });
+            });
+        };
+
+        DB_INSTANCES[fhirVersion] = DB;
+    }
+
+    return DB_INSTANCES[fhirVersion];
+}
+
+module.exports = getDatabase;

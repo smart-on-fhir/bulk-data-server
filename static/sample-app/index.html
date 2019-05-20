@@ -77,12 +77,21 @@
                 border-color: #8c8c8c;
                 z-index: 2;
             }
+            #fhir-version {
+                font-size: 50%;
+                color: #FFF;
+                background: #888;
+                border-radius: 4px;
+                margin-left: 1em;
+                padding: 1px 8px 2px;
+                vertical-align: top;
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <h1 class="page-header">
-                FHIR Bulk Downloader
+                FHIR Bulk Downloader<span id="fhir-version"></span>
                 <small>sample app</small>
             </h1>
             <form>
@@ -452,7 +461,14 @@
             jQuery(function($) {
                 var base = String(STATE.server || location.origin);
                 base = base.replace(/\bfhir\/?$/, "");
-                base = base.replace(/\/[^/]*$/, "")
+                base = base.replace(/\/[^/]*$/, "");
+                // console.log(PARAMS)
+                $("#fhir-version").html({
+                    2: "FHIR DSTU2",
+                    3: "FHIR STU3",
+                    4: "FHIR R4"
+                }[PARAMS.stu || 3]);
+
                 $.when(
                     $.get(base + "/fhir/Group"),
                     $.get(base + "/fhir/$get-resource-counts")
