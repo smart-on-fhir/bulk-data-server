@@ -82,7 +82,6 @@ module.exports = {
         // The authenticated client is not authorized to use this
         // authorization grant type.
         "unauthorized_client": "Unauthorized client",
-            
 
         // The authorization grant type is not supported by the
         // authorization server.

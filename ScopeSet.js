@@ -88,13 +88,13 @@ class ScopeSet
      */
     static getInvalidSystemScopes(scopes) {
         scopes = String(scopes || "").trim();
-    
+
         if (!scopes) {
             return config.errors.missing_scope;
         }
-    
+
         scopes = scopes.split(/\s+/);
-        const re = new RegExp("^system/(\\*|" + config.availableResources.join("|") + ")(\\.(read|write|\\*))?$")
+        const re = new RegExp("^system/(\\*|" + config.availableResources.join("|") + ")(\\.(read|write|\\*))?$");
         return scopes.find(s => !(re.test(s))) || "";
     }
 }
