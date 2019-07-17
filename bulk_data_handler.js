@@ -405,7 +405,7 @@ async function handleStatus(req, res) {
     // Count all the requested resources in the database.
     let builder = new QueryBuilder(sim);
     let { sql, params } = builder.compileCount("cnt");
-    DB.promise("all", sql, params).then(rows => {
+    DB(sim.stu || 3).promise("all", sql, params).then(rows => {
         
         // Finally generate those download links
         let len = rows.length;
