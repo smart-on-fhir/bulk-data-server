@@ -254,7 +254,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
 
     // Validate the _type parameter;
     const requestedTypes = Lib.makeArray(req.query._type || "").map(t => String(t || "").trim()).filter(Boolean);
-    const badParam = requestedTypes.some(type => config.availableResources.indexOf(type) == -1);
+    const badParam = requestedTypes.find(type => config.availableResources.indexOf(type) == -1);
     if (badParam) {
         return outcomes.invalidResourceType(res, badParam);
     }
@@ -397,7 +397,7 @@ async function handleStatus(req, res) {
 
     // Validate the _type parameter;
     const requestedTypes = Lib.makeArray(sim.type || "").map(t => String(t || "").trim()).filter(Boolean);
-    const badParam = requestedTypes.some(type => config.availableResources.indexOf(type) == -1);
+    const badParam = requestedTypes.find(type => config.availableResources.indexOf(type) == -1);
     if (badParam) {
         return outcomes.invalidResourceType(res, badParam);
     }
