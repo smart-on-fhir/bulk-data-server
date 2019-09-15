@@ -26,6 +26,9 @@ module.exports = (req, res) => {
         "date": SERVER_START_TIME,
         "publisher": "Not provided",
         "kind": "instance",
+        "instantiates": [
+            "http://hl7.org/fhir/uv/bulkdata/CapabilityStatement/bulk-data"
+        ],
         "software": {
             "name": "SMART Sample Bulk FHIR Server",
             "version": "1.0"
@@ -113,6 +116,24 @@ module.exports = (req, res) => {
                         "name": "get-resource-counts",
                         "definition": {
                             "reference": "OperationDefinition/-s-get-resource-counts"
+                        }
+                    },
+                    {
+                        "name": "export",
+                        "definition": {
+                            "reference": "OperationDefinition/export"
+                        }
+                    },
+                    {
+                        "name": "patient-export",
+                        "definition": {
+                            "reference": "OperationDefinition/patient-export"
+                        }
+                    },
+                    {
+                        "name": "group-export",
+                        "definition": {
+                            "reference": "OperationDefinition/group-export"
                         }
                     }
                 ]
