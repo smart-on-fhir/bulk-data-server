@@ -7,6 +7,7 @@ const generator    = require("./generator");
 const tokenHandler = require("./token_handler");
 const register     = require("./registration_handler");
 const bulkData     = require("./bulk_data_handler");
+const bulkImporter = require("./bulk_data_importer");
 const env          = require("./env");
 const morgan       = require("morgan");
 
@@ -50,6 +51,8 @@ app.get("/server-config.js", (req, res) => {
 
 // bulk data implementation
 app.use(["/:sim/fhir", "/fhir"], bulkData);
+// stub for developing bulk data import capability
+app.use("/byron/fhir", bulkImporter);
 
 // static files
 app.use(express.static("static"));
