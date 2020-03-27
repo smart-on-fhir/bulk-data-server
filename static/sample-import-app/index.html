@@ -29,6 +29,15 @@
                 font-weight: 400;
                 letter-spacing: 7px;
             }
+            #uploads .row {
+                position: relative;
+            }
+            #uploads .row i {
+                color: #6a4;
+                margin: 1rem 0 0;
+                position: absolute;
+                right: 100%;
+            }
             .file-list, .resource-check-list {
                 display: flex;
                 flex-wrap: wrap;
@@ -104,20 +113,18 @@
                         </p>
                     </header>
                     <div class="row">
+                        <i class="fa"></i>
                         <div class="col col-sm-7 form-group">
-                            <input class="form-control" type="url" placeholder="URL of bulk data file">
+                            <input class="form-control" type="url" placeholder="URL of bulk data file" required />
                         </div>
                         <div class="col col-sm-3 form-group">
-                            <input class="form-control" type="text" placeholder="FHIR resource type">
+                            <input class="form-control" type="text" placeholder="FHIR resource type" required />
                         </div>
                         <div class="col col-sm-2 form-group">
                             <button type="button" class="btn btn-danger btn-block" disabled>Remove</button>
                         </div>
                     </div>
                 </div>
-                <!-- <div class="form-inline">
-                    <div class="form-group">e.g. inline form group</div>
-                </div> -->
                 
                 <div class="row">
                     <div class="col-sm-12 text-right">
@@ -126,6 +133,8 @@
                 </div>
 
                 <hr/>
+
+                <output name="request-json">{}</output>
 
                 <div class="row">
                     <div class="text-center col-sm-12">
@@ -140,8 +149,14 @@
         <!-- <script src="../lib.js"></script> -->
         <script>
             jQuery(function($) {
-                let target = $('#uploads');
-                let synchronizeButtons = () => {
+                const requestBody = {
+                    "inputFormat": "application/fhir+ndjson",
+                    "inputSource": "https://other-server.example.org",
+                    "storageDetail": { "type": "https" },
+                    "input": []
+                }
+                const target = $('#uploads');
+                const synchronizeButtons = () => {
                     const rows = target.find('.row');
                     const rowCount = rows.length;
                     rows.first().find("button").prop("disabled", rowCount < 2  )
@@ -149,11 +164,12 @@
                 const appendRow = () => {
                     target.append(`
                         <div class="row fade in">
+                            <i class="fa"></i>
                             <div class="col col-sm-7 form-group">
-                                <input class="form-control" type="url" placeholder="URL of bulk data file">
+                                <input class="form-control" type="url" placeholder="URL of bulk data file" required />
                             </div>
                             <div class="col col-sm-3 form-group">
-                                <input class="form-control" type="text" placeholder="FHIR resource type">
+                                <input class="form-control" type="text" placeholder="FHIR resource type" required />
                             </div>
                             <div class="col col-sm-2 form-group">
                                 <button type="button" class="btn btn-danger btn-block">Remove</button>
@@ -163,10 +179,33 @@
                     synchronizeButtons();
                 }
 
+                const updateBodyJSON = () => {
+
+                    let inputsArray = []
+                    target.find('.row').each(function() {
+                        const url = $(this).find("input[type='url']:valid")[0];
+                        const type = $(this).find("input[type='text']:valid")[0];
+                        if (url && type) {
+                            $(this).find('i').addClass('fa-check-circle')
+                            inputsArray.push({
+                                type: type.value,
+                                url: url.value
+                            })
+                        } else {
+                            $(this).find('i').removeClass('fa-check-circle');
+                        }
+                    });
+                    requestBody.input = inputsArray;
+                    $('output').text( JSON.stringify(requestBody) )
+                }
+
                 target.on('click', 'button', function(event) {
                     $(event.target).closest(".row").remove();
+                    updateBodyJSON();
                     synchronizeButtons();
                 })
+
+                target.on('change', updateBodyJSON)
 
                 $("#append-button").on('click', appendRow);
             });
