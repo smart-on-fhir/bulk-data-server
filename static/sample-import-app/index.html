@@ -38,43 +38,8 @@
                 position: absolute;
                 right: 100%;
             }
-            .file-list, .resource-check-list {
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: flex-start;
-                height: auto;
-                text-shadow: 0 1px 0 #FFF;
-            }
-            .resource-check-list label {
-                display: flex;
-                flex   : 0 1 216px;
-                margin : 2px;
-                font-weight: normal;
-            }
-            .resource-check-list label small {
-                vertical-align: top;
-                line-height: 20px;
-            }
             label > input[type="checkbox"] {
                 margin-right: 4px;
-            }
-            .download-link {
-                display: flex;
-                flex   : 0 1 216px;
-                padding: 2px 6px;
-                border-radius: 3px;
-                align-items: flex-start;
-            }
-            .download-link:hover {
-                background: #EEE;
-                text-decoration: none;
-                box-shadow: 0 0 2px -1px #000 inset; 
-            }
-            .download-link > .fa {
-                margin-right: 6px;
-                opacity: 0.8;
-                line-height: inherit;
-                color: #999;
             }
             .btn-group .btn-default {
                 font-weight: bold;
@@ -86,7 +51,7 @@
                 border-color: #8c8c8c;
                 z-index: 2;
             }
-            #fhir-version {
+            /* #fhir-version {
                 font-size: 50%;
                 color: #FFF;
                 background: #888;
@@ -94,7 +59,7 @@
                 margin-left: 1em;
                 padding: 1px 8px 2px;
                 vertical-align: top;
-            }
+            } */
         </style>
     </head>
     <body>
@@ -138,7 +103,7 @@
 
                 <div class="row">
                     <div class="text-center col-sm-12">
-                        <button class="btn btn-lg btn-success " disabled>Start Upload</button>
+                        <button id="upload-button" class="btn btn-lg btn-success " disabled>Start Upload</button>
                     </div>
                 </div>
 
@@ -149,6 +114,7 @@
         <!-- <script src="../lib.js"></script> -->
         <script>
             jQuery(function($) {
+                const uploadUrl = "/byron/fhir/$import";
                 const requestBody = {
                     "inputFormat": "application/fhir+ndjson",
                     "inputSource": "https://other-server.example.org",
@@ -179,9 +145,13 @@
                     synchronizeButtons();
                 }
 
+                function successHandler(result) {
+                    console.log("request resolved")
+                }
                 const updateBodyJSON = () => {
 
-                    let inputsArray = []
+                    let inputsArray = [];
+                    $("#upload-button").attr("disabled", true);
                     target.find('.row').each(function() {
                         const url = $(this).find("input[type='url']:valid")[0];
                         const type = $(this).find("input[type='text']:valid")[0];
@@ -191,6 +161,7 @@
                                 type: type.value,
                                 url: url.value
                             })
+                            $("#upload-button").removeAttr("disabled");
                         } else {
                             $(this).find('i').removeClass('fa-check-circle');
                         }
@@ -205,9 +176,30 @@
                     synchronizeButtons();
                 })
 
-                target.on('change', updateBodyJSON)
+                target.on('change', updateBodyJSON);
 
                 $("#append-button").on('click', appendRow);
+
+                $("form").on("submit", function(e) {
+                    e.preventDefault();
+                    console.log("making upload post request");
+                    $.ajax({
+                        url: uploadUrl,
+                        type: "POST",
+                        dataType: "json",
+                        data: JSON.stringify(requestBody),
+                        contentType: "application/json"
+                    })
+                    .then(function(content, resultCode, xhr) {
+                        if (xhr.status == 202) {
+                            console.log("result from server: Accepted")
+                            console.log(content)
+                        } else {
+                            console.log("other result (non-202)", resultCode);
+                        }
+                    })
+
+                })
             });
         </script>
     </body>
