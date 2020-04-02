@@ -51,6 +51,11 @@
                 border-color: #8c8c8c;
                 z-index: 2;
             }
+            output {
+                padding: 1rem;
+                border: dotted 2px #ccc;
+                margin-bottom: 0.5rem;
+            }
             /* #fhir-version {
                 font-size: 50%;
                 color: #FFF;
@@ -69,14 +74,20 @@
                 <small>sample app</small>
             </h1>
             <form>
-                <div id="uploads">
                     <header class="panel">
                         <h3 class="panel-heading">Data files to upload</h3>
                         <p class="panel-body">
-                            Use this section to specify URLs where your data can be retrieved.
-                            publicly accessible and in compatible format, e.g. ndjson...
+                            Specify URLs where your bulk data can be retrieved.
                         </p>
                     </header>
+                <div class="row panel">
+                    <div class="col col-sm-12">
+
+                        <label for="source">Input Source (Data Origin)</label>
+                        <input name="source" type="text" />
+                    </div>
+                </div>
+                <div id="uploads">
                     <div class="row">
                         <i class="fa"></i>
                         <div class="col col-sm-7 form-group">
@@ -103,7 +114,36 @@
 
                 <div class="row">
                     <div class="text-center col-sm-12">
-                        <button id="upload-button" class="btn btn-lg btn-success " disabled>Start Upload</button>
+                        <button id="upload-button" class="btn btn-lg btn-success " disabled>Start Import</button>
+                    </div>
+                </div>
+
+                <div class="hidden preparing-progress">
+                    <label class="text-success">
+                        Preparing files. Please wait...
+                    </label>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
+                            <span class="sr-only">0% Complete</span>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <button class="btn btn-danger" type="button" id="cancel-btn" disabled>Cancel</button>
+                        <br/>
+                        <br/>
+                    </div>
+                </div>
+
+                <div class="panel panel-success hidden">
+                    <div class="panel-heading">Import of bulk data</div>
+                    <div class="panel-body">Completed successfully <b class="badge"></b></div>
+                    <div class="panel-body file-list"></div>
+                </div>
+
+                <div class="panel panel-danger" style="display: none">
+                    <div class="panel-heading"><b>Error</b></div>
+                    <div class="panel-body">
+                        <pre id="error" class="text-danger"></pre>
                     </div>
                 </div>
 
@@ -113,11 +153,13 @@
         <script src="../vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
         <!-- <script src="../lib.js"></script> -->
         <script>
+            var TIMER;
+
             jQuery(function($) {
                 const uploadUrl = "/byron/fhir/$import";
                 const requestBody = {
                     "inputFormat": "application/fhir+ndjson",
-                    "inputSource": "https://other-server.example.org",
+                    // "inputSource": "https://other-server.example.org",
                     "storageDetail": { "type": "https" },
                     "input": []
                 }
@@ -145,10 +187,79 @@
                     synchronizeButtons();
                 }
 
+                function showError(error) {
+                    var txt = "Unknown error";
+                    if (error instanceof Error) {
+                        txt = String(error);
+                    }
+                    else if (error.responseJSON) { // XHR with JSON response
+                        txt = JSON.stringify(error.responseJSON, null, 4);
+                    }
+                    else if (error.status && error.statusText) { // XHR error
+                        txt = error.status + ": " + error.statusText;
+                    }
+                    else {
+                        console.log(txt + ": ", arguments);
+                    }
+
+                    $("#error").text(txt).closest(".panel").show();
+                    $(".preparing-progress").addClass("hidden");
+                }
+
+                function hideError() {
+                    $("#error").empty().closest(".panel").hide();
+                }
+
+                function waitForResult(url) {
+                    $.ajax({ url: url }).then(function(body, resultCode, xhr) {
+                        if (xhr.status == 200) {
+                            console.log("poll returned 200: import operation complete");
+                            if (TIMER) { clearTimeout(TIMER) }
+                            showResults();
+                            setProgress(100, 0);
+                        }
+                        else if (xhr.status == 202) {
+                            console.log("poll returned 202: accepted/in-progress")
+                            // parseInt(xhr.getResponseHeader("x-progress"), 10);
+                            TIMER = setTimeout(function() {
+                                waitForResult(url)
+                            }, 500)
+                        }
+                    }, showError);
+                }
+
+                function showResults(files) {
+                    $(".preparing-progress").addClass("hidden");
+                    $("output").addClass("hidden");
+                    $(".file-list").closest(".panel").removeClass("hidden");
+                    setProgress(0, 0);
+                }
+
+                function setProgress(n, dur) {
+                    if (dur !== undefined) {
+                        $(".progress-bar").css("transitionDuration", (dur || 0) + "s");
+                        setTimeout(function() {
+                            $(".progress-bar")
+                                .attr("aria-valuenow", n)
+                                .css("width", n + "%")
+                                .find(".sr-only").text(n + "% Complete");
+                        }, 20);
+                    } else {
+                        $(".progress-bar")
+                            .attr("aria-valuenow", n)
+                            .css("width", n + "%")
+                            .find(".sr-only").text(n + "% Complete");
+                    }
+                }
+
                 function successHandler(result) {
                     console.log("request resolved")
+                    $(".preparing-progress").addClass("hidden");
+                    setProgress(0, 0);
+                    $("").closest(".panel").removeClass("hidden");
                 }
-                const updateBodyJSON = () => {
+
+                function updateBodyJSON() {
 
                     let inputsArray = [];
                     $("#upload-button").attr("disabled", true);
@@ -183,22 +294,33 @@
                 $("form").on("submit", function(e) {
                     e.preventDefault();
                     console.log("making upload post request");
+                    requestBody.inputSource = $("input[name='source']").val();
+                    // if the import request is properly formed the server
+                    // should accept it (202) and return a URL to poll
+                    // as a 'Content-Location' header
+                    // at which point we hand off to confirmation function...
                     $.ajax({
                         url: uploadUrl,
                         type: "POST",
-                        dataType: "json",
+                        dataType: "text",
                         data: JSON.stringify(requestBody),
-                        contentType: "application/json"
+                        contentType: "application/json",
                     })
-                    .then(function(content, resultCode, xhr) {
-                        if (xhr.status == 202) {
-                            console.log("result from server: Accepted")
-                            console.log(content)
-                        } else {
-                            console.log("other result (non-202)", resultCode);
-                        }
+                    .done(function(data){
+                        console.log("jQuery done; result from server:", data);
+                        $("#upload-button").closest(".row").addClass("hidden");
+                        setProgress(0, 0);
+                        $(".preparing-progress").removeClass("hidden");
+                        waitForResult("/byron/fhir/status");
                     })
-
+                    .fail(function(xhr, status, errorThrown){
+                        console.log("jQuery fail; server error:", status);
+                        console.log(errorThrown);
+                        showError(xhr);
+                    })
+                    .always(function(xhr, status){
+                        console.log("jQuery always (done or fail); server status:", status);
+                    });
                 })
             });
         </script>
