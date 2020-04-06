@@ -6,6 +6,7 @@ const moment    = require("moment");
 const config    = require("./config");
 const base64url = require("base64-url");
 const request   = require("request");
+const outcomes  = require("./outcomes");
 
 const RE_GT    = />/g;
 const RE_LT    = /</g;
@@ -478,6 +479,34 @@ function fetchJwks(url) {
     });
 }
 
+/**
+ * Simple Express middleware that will require the request to have "accept"
+ * header set to "application/fhir+ndjson".
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+function requireFhirJsonAcceptHeader(req, res, next) {
+    if (req.headers.accept != "application/fhir+json") {
+        return outcomes.requireAcceptFhirJson(res);
+    }
+    next();
+}
+
+/**
+ * Simple Express middleware that will require the request to have "prefer"
+ * header set to "respond-async".
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+function requireRespondAsyncHeader(req, res, next) {
+    if (req.headers.prefer != "respond-async") {
+        return outcomes.requirePreferAsync(res);
+    }
+    next();
+}
+
 module.exports = {
     htmlEncode,
     readFile,
@@ -502,5 +531,7 @@ module.exports = {
     fhirDateTime,
     createOperationOutcome,
     fetchJwks,
-    makeArray
+    makeArray,
+    requireRespondAsyncHeader,
+    requireFhirJsonAcceptHeader
 };

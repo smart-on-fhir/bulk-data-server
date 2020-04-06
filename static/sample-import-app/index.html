@@ -32,7 +32,7 @@
             #uploads .row {
                 position: relative;
             }
-            #uploads .row i {
+            #uploads i.checkmark {
                 color: #6a4;
                 margin: 1rem 0 0;
                 position: absolute;
@@ -50,6 +50,9 @@
                 background-color: #d4d4d4;
                 border-color: #8c8c8c;
                 z-index: 2;
+            }
+            .btn-remove:not([disabled]) {
+                color: #a33;
             }
             output {
                 padding: 1rem;
@@ -73,33 +76,28 @@
                 FHIR Bulk Data <span style="color: #bf753e;">Uploader</span><span id="fhir-version"></span>
                 <small>sample app</small>
             </h1>
+            
             <form>
-                    <header class="panel">
-                        <h3 class="panel-heading">Data files to upload</h3>
-                        <p class="panel-body">
-                            Specify URLs where your bulk data can be retrieved.
-                        </p>
-                    </header>
-                <div class="row panel">
-                    <div class="col col-sm-12">
-
-                        <label for="source">Input Source (Data Origin)</label>
-                        <input name="source" type="text" />
+                <div class="row">
+                    <label for="source" class="col-sm-2 col-form-label">Input Source</label>
+                    <input name="source" type="text" aria-describedby="sourceFieldDescription" class="col-sm-10" />
+                </div>
+                <div class="row">
+                    <div class="col-sm-2"></div>
+                    <div class="col-sm-10">
+                        <small id="sourceFieldDescription" class="form-text text-muted">
+                            URI to indicate provenance of data to be imported. May be used for 
+                            tracking this set of imported data throughout its lifecycle.
+                            May be a FHIR endpoint that the importing system could use
+                            when matching references to previously imported data
+                        </small>
                     </div>
                 </div>
+
+                <hr/>
+
                 <div id="uploads">
-                    <div class="row">
-                        <i class="fa"></i>
-                        <div class="col col-sm-7 form-group">
-                            <input class="form-control" type="url" placeholder="URL of bulk data file" required />
-                        </div>
-                        <div class="col col-sm-3 form-group">
-                            <input class="form-control" type="text" placeholder="FHIR resource type" required />
-                        </div>
-                        <div class="col col-sm-2 form-group">
-                            <button type="button" class="btn btn-danger btn-block" disabled>Remove</button>
-                        </div>
-                    </div>
+                    <label>Specify location(s) of bulk data files</label>
                 </div>
                 
                 <div class="row">
@@ -149,6 +147,22 @@
 
             </form>
         </div>
+        <script id="rowInput" type="text/template">
+            <div class="row fade in">
+                <i class="checkmark fa"></i>
+                <div class="col col-sm-7 form-group">
+                    <input class="form-control" type="url" placeholder="URL of bulk data file" required />
+                </div>
+                <div class="col col-sm-3 form-group">
+                    <input class="form-control" type="text" placeholder="FHIR resource type" required />
+                </div>
+                <div class="col col-sm-2 form-group">
+                    <button type="button" class="btn btn-block btn-remove">
+                        <i class="fa fa-trash-o"></i> Remove
+                    </button>
+                </div>
+            </div>
+        </script>
         <script src="../vendor/jquery-1.12.3.min.js"></script>
         <script src="../vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
         <!-- <script src="../lib.js"></script> -->
@@ -163,6 +177,7 @@
                     "storageDetail": { "type": "https" },
                     "input": []
                 }
+                const rowTemplate = $("#rowInput").html();
                 const target = $('#uploads');
                 const synchronizeButtons = () => {
                     const rows = target.find('.row');
@@ -170,22 +185,10 @@
                     rows.first().find("button").prop("disabled", rowCount < 2  )
                 }
                 const appendRow = () => {
-                    target.append(`
-                        <div class="row fade in">
-                            <i class="fa"></i>
-                            <div class="col col-sm-7 form-group">
-                                <input class="form-control" type="url" placeholder="URL of bulk data file" required />
-                            </div>
-                            <div class="col col-sm-3 form-group">
-                                <input class="form-control" type="text" placeholder="FHIR resource type" required />
-                            </div>
-                            <div class="col col-sm-2 form-group">
-                                <button type="button" class="btn btn-danger btn-block">Remove</button>
-                            </div>
-                        </div>
-                    `);
+                    target.append(rowTemplate);
                     synchronizeButtons();
                 }
+                appendRow();
 
                 function showError(error) {
                     var txt = "Unknown error";
