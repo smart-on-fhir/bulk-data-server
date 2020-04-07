@@ -17,16 +17,32 @@ class DownloadTaskCollection extends Task
         this.tasks = [];
     }
 
+    /**
+     * Makes the requests for each of the included tasks. Each response is
+     * expected to return a "content-length" header which we use to compute the
+     * `total` property of this task.
+     * Note that some of these requests might fail early (e.g. 404). For that
+     * reason we use `Promise.allSettled` instead of `Promise.all`.
+     */
     init()
     {
-        return Promise.all(
+        const onError = (task, error) => {
+            // const index = this.tasks.findIndex(t => t === task);
+            task.end(error);
+        };
+
+        // @ts-ignore
+        return Promise.allSettled(
             this.files.map(fileInfo => {
                 const task = new DownloadTask(fileInfo);
                 this.tasks.push(task);
-                return task.init().then(() => {
-                    this.total += task.total;
-                    return task;
-                });
+
+                // On error set the `error` property and remove this task from
+                // the list
+                task.once("error", error => onError(task, error));
+
+                return task.init().then(() => this.total += task.total)
+                    .catch(error => onError(task, error));
             })
         );
     }
@@ -42,7 +58,11 @@ class DownloadTaskCollection extends Task
             await this.init();
         }
 
-        return Promise.all(this.tasks.map(task => {
+        // Use all the tasks that are not errored or ended
+        const realTasks = this.tasks.filter(t => !t._endTime && !t.error);
+
+        // Start all tasks and pipe them to dev/null for now
+        return Promise.all(realTasks.map(task => {
             return task.start().then(stream => stream.pipe(new DevNull()));
         }));
     }

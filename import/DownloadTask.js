@@ -28,16 +28,12 @@ class DownloadTask extends Task
                 this.total = lib.uInt(res.headers["content-length"]);
 
                 res.on("end", () => this.end());
-
-                res.on("error", (e) => {
-                    console.error(e);
-                });
+                res.on("error", (e) => this.emit("error", e));
 
                 resolve(res);
-            
             });
-          
-            req.on('error', reject);
+
+            req.on("error", (e) => this.emit("error", e));
             req.end();
         });
     }
@@ -45,12 +41,16 @@ class DownloadTask extends Task
     async start()
     {
         if (!this.response) {
-            this.response = await this.init();
+            try {
+                this.response = await this.init();
+            } catch (ex) {
+                this.error = ex;
+            }
         }
 
         const transformer = new NDJSONStream();
         const pipeline = this.response.pipe(transformer);
-        
+
         this.response.on("data", chunk => {
             this.position += Buffer.byteLength(chunk);
         });

@@ -71,7 +71,7 @@ init({
             type: "Observation"
         },
         {
-            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Immunization.ndjson",
+            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Immunizations.ndjson",
             type: "Immunization"
         },
         {
