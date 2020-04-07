@@ -1,4 +1,4 @@
-// const NDJSONStream = require("./NDJSONStream");
+const moment       = require("moment");
 const Task         = require("./Task");
 const DownloadTask = require("./DownloadTask");
 const DevNull      = require("./DevNull");
@@ -8,13 +8,45 @@ const DevNull      = require("./DevNull");
 class DownloadTaskCollection extends Task
 {
     /**
-     * @param {*[]} files 
+     * @param {object} payload
      */
-    constructor(files)
+    constructor(payload)
     {
         super();
-        this.files = files;
+        this.files = payload.input.map(fileInfo => ({ ...fileInfo }));
         this.tasks = [];
+    }
+
+    toJSON()
+    {
+        return {
+            // FHIR instant, required. NOTE: need to decide what time 
+            // ransactionTime represents.
+            //
+            // Implementor's notes
+            // -----------------------------------------------------------------
+            // An instant represent a moment and not a time interval (duration).
+            // This means it can be either the transaction start time, or the
+            // end time. That said, I think the end time makes more sense
+            // because it represents the time after which the files are
+            // available on the server. If this method is called early (before
+            // the transaction is complete), the current time will be used.
+            transactionTime: moment(this._endTime || Date.now()).format("YYYY-MM-DDTHH:mm:ss.sssZ"),
+
+            "request": "TODO: [base]/$import", // do we need more context? 
+            output: this.tasks.filter(t => t._endTime && !t.error).map(t => ({
+                type: "OperationOutcome", // these correspond to the `t.options.type` input file,
+                inputUrl: t.options.url,
+                count: "TODO",
+                url: "TODO" // optional link to the success results
+            })),
+            error: this.tasks.filter(t => t._endTime && t.error).map(t => ({
+                type: "OperationOutcome", // these correspond to the `t.options.type` input file,
+                inputUrl: t.options.url,
+                count: "TODO",
+                url: "TODO" // optional link to the success results
+            }))
+        };
     }
 
     /**
