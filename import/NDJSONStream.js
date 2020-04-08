@@ -1,4 +1,5 @@
 const Transform = require("stream").Transform;
+const config    = require("../config");
 
 /**
  * This is a transform stream that takes parts of NDJSON file as Buffer chunks
@@ -28,11 +29,12 @@ class NDJSONStream extends Transform
         this.bufferSize = this._stingBuffer.length;
 
         // Protect against very long lines (possibly bad files without EOLs).
-        if (this.bufferSize > 5000000) {
+        const max = config.ndjsonMaxLineLength;
+        if (this.bufferSize > max) {
             this._stingBuffer = "";
             this.bufferSize   = 0;
             return next(new Error(
-                "Buffer overflow. No EOL found in 5000000 subsequent characters."
+                `Buffer overflow. No EOL found in ${max} subsequent characters.`
             ));
         }
 
@@ -77,12 +79,13 @@ class NDJSONStream extends Transform
             if (this._stingBuffer) {
                 const json = JSON.parse(this._stingBuffer);
                 this._stingBuffer = "";
-                this.line += 1;
                 this.push(json);
             }
             next();
         } catch (error) {
-            next(error);
+            next(new SyntaxError(
+                `Error parsing NDJSON on line ${this.line + 1}: ${error.message}`
+            ));
         }
     }
 }
