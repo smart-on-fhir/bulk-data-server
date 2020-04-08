@@ -1,6 +1,10 @@
 const router      = require("express").Router({ mergeParams: true });
 const bodyParser  = require("body-parser");
-const Lib         = require("./lib");
+const Lib         = require("../lib");
+const { outcomes }    = require("../outcomes");
+const DownloadTaskCollection   = require("./DownloadTaskCollection");
+const DownloadTask = require("./DownloadTask");
+const TaskManager = require("./TaskManager");
 
 var sessions = {};
 var currentSession = null;
@@ -10,20 +14,26 @@ router.get("/", (req, res) => {
 });
 
 const pollingUrl = "/byron/fhir/status";
-router.get("/status", (req, res) => {
-    if (sessions[currentSession]) {
-        if (sessions[currentSession].importStatus == "done") {
+
+router.get("/status/:taskId", (req, res) => {
+    sessionId = req.params.taskId;
+    console.log("checking status of", sessionId, typeof sessionId)
+    
+    if (sessions[sessionId]) {
+        const session = sessions[sessionId];
+        if (sessions[sessionId].importStatus == "done") {
             res.status(200);
+            res.write("import completed");
         } else {
+            console.log("progress of", sessionId, ": ", session.job.progress)
+            // undefined console.log(session.job.position)
             res.status(202);
             res.setHeader("retry-after", 10);
-            res.setHeader("x-progress", 90);
+            res.setHeader("x-progress", 40);
+            res.write("bulk data import in progress");
         }
-        res.write("bulk data import in progress: \n");
-        res.write(sessions[currentSession].inputSource);
-        res.write(" ---> ")
-        res.write(sessions[currentSession].importStatus);
     } else {
+        // outcomes.__
         res.status(204);
         res.write("no session found\n");
         res.write(Object.keys(sessions).toString());
@@ -40,14 +50,17 @@ router.post("/\\$import", [
     Lib.requireRespondAsyncHeader,
     // Accept: application/fhir+json (fixed value, required)
     Lib.requireFhirJsonAcceptHeader,
-    (req, res) => {
+    (req, res, next) => {
+        console.log("first req handler")
         // Content-Type: application/json (fixed value, required)
         if (req.headers["content-type"] != "application/json") {
             return outcomes.requireJsonContentType(res);
         }
+        next();
     },
     bodyParser.json(),
     (req, res, next) => {
+        console.log("post request received")
         const {
             // inputFormat (string, required)
             // Servers SHALL support Newline Delimited JSON with a format type
@@ -86,22 +99,29 @@ router.post("/\\$import", [
             Lib.operationOutcome(res, 'The “inputSource” JSON parameter must be an URL', { httpCode: 400 });
         }
 
-        // create unique ID for this request
-        const sessionId = Date.now(); // generate UUID
-        currentSession = sessionId;
-        sessions[sessionId] = req.body;
-        sessions[sessionId].importStatus = "started";
+        // input must be an array of one or more { type, url } objects
+        if (!input.length) {
+            Lib.operationOutcome(res, "The input must be an array of object(s) with url and type values", { httpCode: 400 });
+        }
 
-        var timer = handleFileUpload(sessionId);
-        // input source is present and is a URI
-        return (req.body && req.body.inputSource ) ? true : false
-        // construct URL for client to poll status of operation
-        // const pollingUrl = base url + sessionId + something
-        res.status(200); // or should this be 202?
-        res.setHeader("Content-Location", pollingUrl);
+        console.log("request looks good...")
+        // if input not array or no contents
+            // each input properly formed?
+
+            // let tasks = new DownloadTaskCollection(input);
+            // create unique ID for this request
+            const sessionId = Date.now().toString(); // generate UUID or random via crypto
+            currentSession = sessionId;
+            sessions[sessionId] = req.body; // { inputSource, inputFormat, input, storageDetail }
+            sessions[sessionId].importStatus = "started";
+
+            var tasks = startUploadTask(sessions[sessionId]);
+            
+            console.log("session id created", sessionId, typeof sessionId)
+            
+        res.status(202);
+        res.setHeader("Content-Location", pollingUrl + "/" + sessionId);
         res.send("accepting POST request for bulk import (id:" + sessionId + ")");
-        // send JSON response of session id and/or URL
-
     }
 ]);
 
@@ -109,11 +129,14 @@ async function handleRequest(req, res, groupId = null, system=false) {
     //
 }
 
-function handleFileUpload(sessionId) {
-    return setTimeout( () => {
-        sessions[sessionId].importStatus = "done";
-        console.log("timeout completed")
-    }, 6000)
+function startUploadTask(session) {
+    // session.job = new DownloadTaskCollection(session.input); // tasks;
+    session.job = new DownloadTask(session.input[0])
+    process.stdout.write("collection created ... from " + session.input[0].url + " ... ")
+    TaskManager.add(session.job)
+    process.stdout.write("added to task manager ... ")
+    session.job.start()
+    process.stdout.write("and job started\n")
 }
 
 module.exports = router;
