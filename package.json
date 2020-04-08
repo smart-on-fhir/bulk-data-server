@@ -6,6 +6,7 @@
   "scripts": {
     "test": "NODE_ENV=test mocha tests/*.test.js",
     "test:watch": "NODE_ENV=test mocha -w tests/*.test.js",
+    "coverage": "nyc npm run test",
     "start": "node ."
   },
   "engines": {
@@ -45,6 +46,7 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.4",
-    "@types/node": "^12.12.34"
+    "@types/node": "^12.12.34",
+    "nyc": "^15.0.1"
   }
 }

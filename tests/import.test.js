@@ -82,7 +82,37 @@ describe("NDJSONStream", () => {
         input.pipe(ndjsonStream);
     });
 
+    it ("handles ndjson files that contain empty lines", (next) => {
+        const input = new MockReadable('{"a":1}\n\n\n{"a":2}', { highWaterMark: 3 });
+        const ndjsonStream = new NDJSONStream();
+
+        const result = [];
+        
+        ndjsonStream.on("data", object => result.push(object));
+
+        finished(ndjsonStream, error => {
+            assert.ok(!error);
+            assert.deepEqual(result, [{ "a" : 1 }, { "a": 2 }]);
+            next();
+        });
+
+        input.pipe(ndjsonStream);
+    });
+
     it ("handles json errors in ndjson files", (next) => {
+        const input = new MockReadable('{"a:1}\n{"a":2}', { highWaterMark: 3 });
+        const ndjsonStream = new NDJSONStream();
+
+        finished(ndjsonStream, error => {
+            assert.ok(error && error instanceof SyntaxError);
+            assert.equal(error.message, "Error parsing NDJSON on line 1: Unexpected end of JSON input");
+            next();
+        });
+
+        input.pipe(ndjsonStream);
+    });
+
+    it ("handles json errors on last line", (next) => {
         const input = new MockReadable('{"a":1}\n{"a":2', { highWaterMark: 3 });
         const ndjsonStream = new NDJSONStream();
 
