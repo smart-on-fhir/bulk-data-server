@@ -15,26 +15,32 @@ class DownloadTask extends Task
     {
         return new Promise((resolve, reject) => {
             this._startTime = Date.now();
+            try {
+                const req = https.request(this.options.url, {
+                    timeout: 0,
+                    rejectUnauthorized: process.env.NODE_ENV !== "test"
+                });
 
-            const req = https.request(this.options.url, { timeout: 0 }, res => {
+                req.on("error", reject);
+                req.on("response", res => {
+                    if (res.statusCode >= 400) {
+                        return reject(new Error(`${res.statusCode} ${res.statusMessage}`));
+                    }
 
-                if (res.statusCode >= 400) {
-                    return reject(new Error(`${res.statusCode} ${res.statusMessage}`));
-                }
+                    // If "content-length" is present in the response headers, use it
+                    // to compute the progress information. Otherwise `contentLength`
+                    // will be `0`.
+                    this.total = lib.uInt(res.headers["content-length"]);
 
-                // If "content-length" is present in the response headers, use it
-                // to compute the progress information. Otherwise `contentLength`
-                // will be `0`.
-                this.total = lib.uInt(res.headers["content-length"]);
+                    res.on("end", () => this.end());
+                    res.on("error", (e) => this.emit("error", e));
 
-                res.on("end", () => this.end());
-                res.on("error", (e) => this.emit("error", e));
-
-                resolve(res);
-            });
-
-            req.on("error", (e) => this.emit("error", e));
-            req.end();
+                    resolve(res);
+                })
+                req.end();
+            } catch (ex) {
+                reject(ex);
+            }
         });
     }
 

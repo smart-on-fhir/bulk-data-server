@@ -6,6 +6,7 @@
   "scripts": {
     "test": "NODE_ENV=test mocha tests/*.test.js",
     "test:watch": "NODE_ENV=test mocha -w tests/*.test.js",
+    "test:import": "NODE_ENV=test nyc --cache false --reporter text --reporter html mocha tests/import.test.js",
     "coverage": "nyc npm run test",
     "start": "node ."
   },

@@ -1,6 +1,6 @@
-const EventEmitter = require("events");
-const crypto       = require("crypto");
-const lib          = require("../lib");
+const { EventEmitter } = require("events");
+const crypto           = require("crypto");
+const lib              = require("../lib");
 
 class Task extends EventEmitter
 {

@@ -1,30 +1,30 @@
 
-// const request   = require("request");
-// const base64url = require("base64-url");
-// const moment    = require("moment");
+const DownloadTask = require("../import/DownloadTask");
 const assert       = require("assert");
 const { finished } = require("stream");
-
-// const crypto    = require("crypto");
-// const jwkToPem  = require("jwk-to-pem");
-// const jwt       = require("jsonwebtoken");
 const config       = require("../config");
 // const DevNull      = require("../import/DevNull");
 const NDJSONStream = require("../import/NDJSONStream");
 const MockReadable = require("./mocks/ReadStream");
-// const mockServer   = require("./mockServer");
+const mockServer   = require("./mocks/mockServer");
 
+const MOCK_BASE_URL = "https://127.0.0.1:8443/";
 
-// // @ts-ignore
-// before(next => {
-//     mockServer.httpServer.listen("8443", () => next());
-// });
+// @ts-ignore
+before(next => {
+    mockServer.httpsServer.listen("8443", () => next());
+});
 
-// // @ts-ignore
-// after(next => {
-//     mockServer.httpServer.close();
-//     next();
-// });
+// @ts-ignore
+after(next => {
+    mockServer.httpsServer.close();
+    next();
+});
+
+function fakeResponse(cfg) {
+    // @ts-ignore
+    mockServer.app.mock(cfg);
+}
 
 
 // Begin tests =================================================================
@@ -141,4 +141,68 @@ describe("NDJSONStream", () => {
 
         input.pipe(ndjsonStream);
     });
+});
+
+describe("DownloadTask", () => {
+
+    it ("rejects http urls", next => {
+        const task = new DownloadTask({
+            url: "http://127.0.0.1/missing"
+        });
+
+        assert.rejects(() => {
+            return task.init();
+        }, /Protocol "http:" not supported. Expected "https:"/)
+        .then(() => next()).catch(next);
+    });
+
+    it ("handles connection errors", async () => {
+        const task = new DownloadTask({
+            url: "https://127.0.0.1/missing" // <- does not exist!
+        });
+        try {
+            await task.init();
+            throw new Error("Did not throw");
+        } catch (ex) {
+            assert.match(ex.message, /ECONNREFUSED/);
+        }
+    });
+
+    it ("handles server errors", async () => {
+        fakeResponse({ status: 500 });
+        try {
+            const task = new DownloadTask({ url: MOCK_BASE_URL });
+            await task.init();
+            throw new Error("Did not throw");
+        } catch (ex) {
+            assert.match(ex.message, /^500/);
+        }
+    });
+
+    it ("reads the content-length header to set the total property", async () => {
+        fakeResponse({ status: 200, body: "12345" });
+        const task = new DownloadTask({ url: MOCK_BASE_URL });
+        await task.init();
+        assert.equal(task.total, 5);
+    });
+
+    it ("handles invalid file types")
+
+    it ("start() returns a stream even if the request has failed")
+    it ("handles ndjson parsing errors")
+    it ("emits events")
+    it ("computes progress and remaining time")
+});
+
+describe("DownloadTaskCollection", () => {
+    it ("computes progress and remaining time");
+    it ("builds correct summary after all tasks are finished");
+});
+
+describe("TaskManager", () => {
+    it ("get");
+    it ("has");
+    it ("add");
+    it ("remove");
+    it ("auto-remove");
 });
