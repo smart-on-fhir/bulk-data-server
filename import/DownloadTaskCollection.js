@@ -32,7 +32,7 @@ class DownloadTaskCollection extends Task
             // because it represents the time after which the files are
             // available on the server. If this method is called early (before
             // the transaction is complete), the current time will be used.
-            transactionTime: moment(this._endTime || Date.now()).format("YYYY-MM-DDTHH:mm:ss.sssZ"),
+            transactionTime: moment(this.endTime || Date.now()).format("YYYY-MM-DDTHH:mm:ss.sssZ"),
 
             // do we need more context?
             //
@@ -45,23 +45,21 @@ class DownloadTaskCollection extends Task
             request: `${config.baseUrl}/$import`,
 
             // All the files that we have successfully imported
-            output: this.tasks.filter(t => t._endTime && !t.error).map(t => ({
+            output: this.tasks.filter(t => t.endTime && !t.error).map(t => ({
                 type: "OperationOutcome", // these correspond to the `t.options.type` input file,
                 inputUrl: t.options.url,
                 count: t.count,
-
-                // optional link to the success results
                 url: `${config.baseUrl}/outcome?issueCode=processing&severity=information&message=` +
                     encodeURIComponent(`${t.count} ${t.options.type} resources imported successfully`)
             })),
 
             // All the files that we have failed to import
-            error: this.tasks.filter(t => t._endTime && t.error).map(t => ({
-                type: "OperationOutcome", // these correspond to the `t.options.type` input file,
+            error: this.tasks.filter(t => t.endTime && t.error).map(t => ({
+                type: "OperationOutcome",
                 inputUrl: t.options.url,
                 count: t.count,
                 url: `${config.baseUrl}/outcome?issueCode=exception&severity=error&message=` +
-                encodeURIComponent(`${t.options.type} resources could not be imported`)
+                    encodeURIComponent(`${t.options.type} resources could not be imported. ${t.error}`)
             }))
         };
     }

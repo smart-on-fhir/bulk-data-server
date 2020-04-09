@@ -4,6 +4,43 @@ const lib              = require("../lib");
 
 class Task extends EventEmitter
 {
+    /**
+     * The time when the task has been started (or 0 if it is not started yet)
+     * @type {number}
+     * @protected
+     */
+    #startTime = 0;
+
+    /**
+     * The time when the task was completed (or 0 if it is not complete yet)
+     * @type {number}
+     * @protected
+     */
+    #endTime = 0;
+
+    /**
+     * The total value as number (how much needs to be done). For example,
+     * for a download task this would be the total bytes that must be
+     * downloaded.
+     * @type {number}
+     * @protected
+     */
+    #total = 0;
+
+    /**
+     * The current position as number. For example, for a download task this
+     * would be the the downloaded bytes.
+     * @type {number}
+     * @private
+     */
+    #position = 0;
+
+    /**
+     * Contains the last error (if any)
+     * @type {string}
+     */
+    #error = null;
+    
     constructor(options = {})
     {
         super();
@@ -11,124 +48,35 @@ class Task extends EventEmitter
         /**
          * Any custom options passed to the constructor
          */
-        this.options = { ...options };
+        this.options = options;
 
         /**
          * Each task has an unique ID
          */
         this.id = crypto.randomBytes(32).toString("hex");
-
-        /**
-         * The time when the task has been started (or 0 if it is not started yet)
-         * @type {number}
-         * @protected
-         */
-        this._startTime = 0;
-
-        /**
-         * The time when the task was completed (or 0 if it is not complete yet)
-         * @type {number}
-         * @protected
-         */
-        this._endTime = 0;
-
-        /**
-         * The total value as number (how much needs to be done). For example,
-         * for a download task this would be the total bytes that must be
-         * downloaded.
-         * @type {number}
-         * @protected
-         */
-        this._total = 0;
-
-        /**
-         * The current position as number. For example, for a download task this
-         * would be the the downloaded bytes.
-         * @type {number}
-         * @private
-         */
-        this._position = 0;
-
-        /**
-         * Contains the last error (if any)
-         * @type {Error}
-         */
-        this.error = null;
     }
 
-    // Getters and Setters -----------------------------------------------------
+    // Read-only properties ----------------------------------------------------
 
     /**
-     * Updates the current position (how much is done)
-     * @param {number} val The value to set. Should be a positive integer
-     * and will be converted to such if it isn't.
-     * @public
-     */
-    set position(val)
-    {
-        val = lib.uInt(val);
-
-        const oldPosition = this._position;
-
-        if (oldPosition === val) {
-            return;
-        }
-
-        this._position = val;
-
-        const info = this.toJSON();
-
-        if (oldPosition === 0) {
-            this.emit("start", info);
-        }
-
-        this.emit("progress", info);
-
-        if (this._total && this._position / this._total >= 1) {
-            this.end();
-        }
-    }
-
-    /**
-     * Returns the current position (how much is done) as number
+     * Returns the task uptime (how long it ran). The result would be `0` for
+     * tasks that have not been started.
      * @returns {number}
-     * @public
      */
-    get position()
-    {
-        return this._position;
-    }
-
-    /**
-     * Sets the total value as number (how much needs to be done).
-     * @param {number} val The value to set. Should be a positive integer
-     * and will be converted to such if it isn't.
-     * @public
-     */
-    set total(val)
-    {
-        this._total = lib.uInt(val);
-    }
-
-    /**
-     * Returns the total value as number (how much needs to be done)
-     * @returns {number}
-     * @public
-     */
-    get total()
-    {
-        return this._total;
-    }
-
     get upTime()
     {
-        if (!this._startTime) {
+        if (!this.#startTime) {
             return 0;
         }
 
-        return (this._endTime || Date.now()) - this._startTime;
+        return (this.#endTime || Date.now()) - this.#startTime;
     }
 
+    /**
+     * Returns the task progress as a float between 0 and 1. The result would be
+     * `-1` for tasks that have not been started yet.
+     * @returns {number}
+     */
     get progress()
     {
         const total = this.total;
@@ -144,6 +92,8 @@ class Task extends EventEmitter
     /**
      * Returns the remaining time in milliseconds. Will return `-1` if the
      * remaining time is unknown and `0` if the task is complete.
+     * Not that this is an estimate that is very unreliable in the first stage,
+     * thus we return `-1` if the task progress is below 10%.
      * @returns {number}
      */
     get remainingTime()
@@ -159,6 +109,108 @@ class Task extends EventEmitter
         }
 
         return (upTime * (1 / progress)) - upTime;
+    }
+
+    /**
+     * Returns the time (as a timestamp in milliseconds) when the task has ended,
+     * or `0` if has not.
+     * @returns {number} 
+     */
+    get endTime()
+    {
+        return this.#endTime;
+    }
+
+    // Getters and Setters -----------------------------------------------------
+
+    /**
+     * Updates the current position (how much is done)
+     * @param {number} val The value to set. Should be a positive integer
+     * and will be converted to such if it isn't.
+     * @public
+     */
+    set position(val)
+    {
+        val = lib.uInt(val);
+
+        const oldPosition = this.#position;
+
+        if (oldPosition === val) {
+            return;
+        }
+
+        this.#position = val;
+
+        const info = this.toJSON();
+
+        if (oldPosition === 0) {
+            this.emit("start", info);
+        }
+
+        this.emit("progress", info);
+
+        if (this.#total && this.#position / this.#total >= 1) {
+            this.end();
+        }
+    }
+
+    /**
+     * Returns the current position (how much is done) as number
+     * @returns {number}
+     * @public
+     */
+    get position()
+    {
+        return this.#position;
+    }
+
+    /**
+     * Sets the total value as number (how much needs to be done).
+     * @param {number} val The value to set. Should be a positive integer
+     * and will be converted to such if it isn't.
+     * @public
+     */
+    set total(val)
+    {
+        this.#total = lib.uInt(val);
+    }
+
+    /**
+     * Returns the total value as number (how much needs to be done)
+     * @returns {number}
+     * @public
+     */
+    get total()
+    {
+        return this.#total;
+    }
+
+    /**
+     * Sets the start time of the task.
+     * NOTE that this should only be used once! Any subsequent attempts will be
+     * ignored!
+     * @param {number} t The start time in milliseconds
+     */
+    set startTime(t)
+    {
+        if (!this.#startTime) {
+            this.#startTime = t;
+        } else {
+            console.warn(
+                "Attempting to set the startTime of a task that has " +
+                "already been started. Task options: %j", this.options
+            );
+        }
+    }
+
+    get error()
+    {
+        return this.#error;
+    }
+    
+    set error(e)
+    {
+        this.#error = String(e);
     }
 
     // Methods -----------------------------------------------------------------
@@ -183,15 +235,15 @@ class Task extends EventEmitter
     }
 
     /**
-     * Marks the task as ended by setting the _endTime to the current timestamp
+     * Marks the task as ended by setting the #endTime to the current timestamp
      * @param {Error} [error] Optional error as reason for ending
      */
     end(error)
     {
-        if (!this._endTime) {
-            this._endTime = Date.now();
+        if (!this.#endTime) {
+            this.#endTime = Date.now();
             if (error) {
-                this.error = error;
+                this.#error = error;
             }
             this.emit("end", this.toJSON());
         }
@@ -201,18 +253,20 @@ class Task extends EventEmitter
     /**
      * Represent the task as JSON, including some properties that are otherwise
      * private or invisible.
+     * @returns {object}
      */
     toJSON()
     {
         return {
             id           : this.id,
-            position     : this._position,
-            total        : this._total,
+            position     : this.position,
+            total        : this.total,
             progress     : this.progress,
             upTime       : this.upTime,
             remainingTime: this.remainingTime,
-            started      : this._startTime > 0,
-            ended        : this._endTime > 0
+            started      : this.startTime > 0,
+            ended        : this.endTime > 0,
+            error        : this.error
         };
     }
 }

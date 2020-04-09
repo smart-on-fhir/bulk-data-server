@@ -20,7 +20,7 @@ class DownloadTask extends Task
     init()
     {
         return new Promise((resolve, reject) => {
-            this._startTime = Date.now();
+            this.startTime = Date.now();
             try {
                 const req = https.request(this.options.url, {
                     timeout: 0,
