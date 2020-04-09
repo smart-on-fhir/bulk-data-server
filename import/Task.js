@@ -1,6 +1,6 @@
-const EventEmitter = require("events");
-const crypto       = require("crypto");
-const lib          = require("../lib");
+const { EventEmitter } = require("events");
+const crypto           = require("crypto");
+const lib              = require("../lib");
 
 class Task extends EventEmitter
 {
@@ -48,6 +48,12 @@ class Task extends EventEmitter
          * @private
          */
         this._position = 0;
+
+        /**
+         * Contains the last error (if any)
+         * @type {Error}
+         */
+        this.error = null;
     }
 
     // Getters and Setters -----------------------------------------------------
@@ -56,7 +62,7 @@ class Task extends EventEmitter
      * Updates the current position (how much is done)
      * @param {number} val The value to set. Should be a positive integer
      * and will be converted to such if it isn't.
-     * @protected
+     * @public
      */
     set position(val)
     {
@@ -97,7 +103,7 @@ class Task extends EventEmitter
      * Sets the total value as number (how much needs to be done).
      * @param {number} val The value to set. Should be a positive integer
      * and will be converted to such if it isn't.
-     * @protected
+     * @public
      */
     set total(val)
     {
@@ -178,11 +184,15 @@ class Task extends EventEmitter
 
     /**
      * Marks the task as ended by setting the _endTime to the current timestamp
+     * @param {Error} [error] Optional error as reason for ending
      */
-    end()
+    end(error)
     {
         if (!this._endTime) {
             this._endTime = Date.now();
+            if (error) {
+                this.error = error;
+            }
             this.emit("end", this.toJSON());
         }
         return this;

@@ -1,4 +1,5 @@
 const Transform = require("stream").Transform;
+const config    = require("../config");
 
 /**
  * This is a transform stream that takes parts of NDJSON file as Buffer chunks
@@ -13,38 +14,43 @@ class NDJSONStream extends Transform
             readableObjectMode: true
         });
 
-        this._stingBuffer = "";
-        this.line         = 0;
-        this.bufferSize   = 0;
+        this._stringBuffer = "";
+        this._line         = 0;
+        this.bufferSize    = 0;
     }
 
+    get count()
+    {
+        return this._line;
+    }
 
     _transform(chunk, encoding, next)
     {
         // Convert the chunk buffer to string
-        this._stingBuffer += chunk.toString("utf8");
+        this._stringBuffer += chunk.toString("utf8");
 
         // Get the char length of the buffer
-        this.bufferSize = this._stingBuffer.length;
+        this.bufferSize = this._stringBuffer.length;
 
         // Protect against very long lines (possibly bad files without EOLs).
-        if (this.bufferSize > 5000000) {
-            this._stingBuffer = "";
+        const max = config.ndjsonMaxLineLength;
+        if (this.bufferSize > max) {
+            this._stringBuffer = "";
             this.bufferSize   = 0;
             return next(new Error(
-                "Buffer overflow. No EOL found in 5000000 subsequent characters."
+                `Buffer overflow. No EOL found in ${max} subsequent characters.`
             ));
         }
 
         // Find the position of the first EOL
-        let eolPos = this._stingBuffer.search(/\n/);
+        let eolPos = this._stringBuffer.search(/\n/);
 
         // The chunk might span over multiple lines
         while (eolPos > -1) {
-            const jsonString  = this._stingBuffer.substring(0, eolPos);
-            this._stingBuffer = this._stingBuffer.substring(eolPos + 1);
-            this.bufferSize   = this._stingBuffer.length;
-            this.line += 1;
+            const jsonString  = this._stringBuffer.substring(0, eolPos);
+            this._stringBuffer = this._stringBuffer.substring(eolPos + 1);
+            this.bufferSize   = this._stringBuffer.length;
+            this._line += 1;
             
             // If this is not an empty line!
             if (jsonString.length) {
@@ -52,15 +58,15 @@ class NDJSONStream extends Transform
                     const json = JSON.parse(jsonString);
                     this.push(json);
                 } catch (error) {
-                    this._stingBuffer = "";
+                    this._stringBuffer = "";
                     this.bufferSize   = 0;
                     return next(new SyntaxError(
-                        `Error parsing NDJSON on line ${this.line}: ${error.message}`
+                        `Error parsing NDJSON on line ${this._line}: ${error.message}`
                     ));
                 }
             }
 
-            eolPos = this._stingBuffer.search(/\n/);
+            eolPos = this._stringBuffer.search(/\n/);
         }
 
         next();
@@ -74,15 +80,16 @@ class NDJSONStream extends Transform
     _flush(next)
     {
         try {
-            if (this._stingBuffer) {
-                const json = JSON.parse(this._stingBuffer);
-                this._stingBuffer = "";
-                this.line += 1;
+            if (this._stringBuffer) {
+                const json = JSON.parse(this._stringBuffer);
+                this._stringBuffer = "";
                 this.push(json);
             }
             next();
         } catch (error) {
-            next(error);
+            next(new SyntaxError(
+                `Error parsing NDJSON on line ${this._line + 1}: ${error.message}`
+            ));
         }
     }
 }

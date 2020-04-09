@@ -224,7 +224,11 @@
                         else if (xhr.status == 202) {
                             console.log("poll returned 202: accepted/in-progress")
                             // calculate a transition to expand the progress bar
-                            // parseInt(xhr.getResponseHeader("x-progress"), 10);
+                            const progress = parseFloat(xhr.getResponseHeader("x-progress"));
+                            // parse retry-after
+                            const retryTime = 200;
+                            console.log("import progress reported: ", progress)
+                            // if (retryTime > 20?)
                             // if progress is -1, less than 10% has been imported
                             // and estimate will be unreliable
                             // so show 'thinking' ... animate stripe full bar (or 10% bar)
@@ -234,6 +238,8 @@
                             // at that speed, how long until complete?
                             // when is the server saying to check next?
                             // how much do we expect will be complete by then?
+                            // setProgress()
+                            setTimeout( () => waitForResult(url), retryTime );
                         }
                     }, showError);
                 }

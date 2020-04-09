@@ -5,7 +5,7 @@ const DownloadTaskCollection = require("./DownloadTaskCollection");
 // Kick-off endpoint -----------------------------------------------------------
 async function kickOff(payload)
 {
-    const batch = new DownloadTaskCollection(payload.input);
+    const batch = new DownloadTaskCollection(payload);
     TaskManager.add(batch);
     await batch.start();
     return batch.id;
@@ -30,7 +30,8 @@ function pool(task)
         console.log(
             "\n==============================================================" +
             "\nUpload Complete!"                                               +
-            "\n=============================================================="
+            "\n==============================================================" +
+            "\n" + JSON.stringify(task, null, 4)
         );
     }
 }
@@ -71,7 +72,7 @@ init({
             type: "Observation"
         },
         {
-            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Immunization.ndjson",
+            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Immunizations.ndjson",
             type: "Immunization"
         },
         {

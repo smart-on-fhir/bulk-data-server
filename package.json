@@ -6,10 +6,12 @@
   "scripts": {
     "test": "NODE_ENV=test mocha tests/*.test.js",
     "test:watch": "NODE_ENV=test mocha -w tests/*.test.js",
+    "test:import": "NODE_ENV=test nyc --cache false --reporter text --reporter html mocha tests/import.test.js",
+    "coverage": "nyc npm run test",
     "start": "node ."
   },
   "engines": {
-    "node": "9.0.0"
+    "node": "12"
   },
   "repository": {
     "type": "git",
@@ -42,5 +44,10 @@
     "request": "^2.83.0",
     "sqlite3": "^4.1.1",
     "walk": "^2.3.9"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.4",
+    "@types/node": "^12.12.34",
+    "nyc": "^15.0.1"
   }
 }

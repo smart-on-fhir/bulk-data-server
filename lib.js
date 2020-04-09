@@ -468,6 +468,30 @@ function requireRespondAsyncHeader(req, res, next) {
     next();
 }
 
+/**
+ * Returns the absolute base URL of the given request
+ * @param {object} request 
+ */
+function getBaseUrl(request) {
+    
+    // protocol
+    let proto = request.headers["x-forwarded-proto"];
+    if (!proto) {
+        proto = request.socket.encrypted ? "https" : "http";
+    }
+
+    // host
+    let host = request.headers.host;
+    if (request.headers["x-forwarded-host"]) {
+        host = request.headers["x-forwarded-host"];
+        if (request.headers["x-forwarded-port"]) {
+            host += ":" + request.headers["x-forwarded-port"];
+        }
+    }
+
+    return proto + "://" + host;
+}
+
 module.exports = {
     htmlEncode,
     readFile,
@@ -494,5 +518,6 @@ module.exports = {
     fetchJwks,
     makeArray,
     requireRespondAsyncHeader,
-    requireFhirJsonAcceptHeader
+    requireFhirJsonAcceptHeader,
+    getBaseUrl
 };

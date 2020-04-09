@@ -7,6 +7,12 @@ const NDJSONStream = require("./NDJSONStream");
 
 class DownloadTask extends Task
 {
+    constructor(options = {})
+    {
+        super(options);
+        this._count = 0;
+    }
+
     /**
      * Makes the request in order to receive the response headers and obtain the
      * "content-length" header (if any).
@@ -15,44 +21,59 @@ class DownloadTask extends Task
     {
         return new Promise((resolve, reject) => {
             this._startTime = Date.now();
-
-            const req = https.request(this.options.url, { timeout: 0 }, res => {
-
-                if (res.statusCode >= 400) {
-                    return reject(new Error(`${res.statusCode} ${res.statusMessage}`));
-                }
-
-                // If "content-length" is present in the response headers, use it
-                // to compute the progress information. Otherwise `contentLength`
-                // will be `0`.
-                this.total = lib.uInt(res.headers["content-length"]);
-
-                res.on("end", () => this.end());
-
-                res.on("error", (e) => {
-                    console.error(e);
+            try {
+                const req = https.request(this.options.url, {
+                    timeout: 0,
+                    rejectUnauthorized: process.env.NODE_ENV !== "test"
                 });
 
-                resolve(res);
-            
-            });
-          
-            req.on('error', reject);
-            req.end();
+                req.on("error", reject);
+                req.on("response", res => {
+                    if (res.statusCode >= 400) {
+                        return reject(new Error(`${res.statusCode} ${res.statusMessage}`));
+                    }
+
+                    // If "content-length" is present in the response headers, use it
+                    // to compute the progress information. Otherwise `contentLength`
+                    // will be `0`.
+                    this.total = lib.uInt(res.headers["content-length"]);
+
+                    res.on("end", () => this.end());
+                    res.on("error", (e) => this.emit("error", e));
+
+                    resolve(res);
+                })
+                req.end();
+            } catch (ex) {
+                reject(ex);
+            }
         });
+    }
+
+    get count()
+    {
+        return this._count;
     }
 
     async start()
     {
         if (!this.response) {
-            this.response = await this.init();
+            try {
+                this.response = await this.init();
+            } catch (ex) {
+                this.error = ex;
+            }
         }
 
         const transformer = new NDJSONStream();
         const pipeline = this.response.pipe(transformer);
-        
+
         this.response.on("data", chunk => {
             this.position += Buffer.byteLength(chunk);
+        });
+
+        transformer.on("data", () => {
+            this._count = transformer.count;
         });
 
         return pipeline;
