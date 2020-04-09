@@ -7,7 +7,13 @@ const NDJSONStream = require("./NDJSONStream");
 
 class DownloadTask extends Task
 {
-    constructor(options = {})
+    /**
+     * Creates a DownloadTask instance
+     * @param {object} options
+     * @param {string} options.url
+     * @param {string} options.type 
+     */
+    constructor(options)
     {
         super(options);
         this._count = 0;
@@ -29,6 +35,7 @@ class DownloadTask extends Task
 
                 req.on("error", reject);
                 req.on("response", res => {
+                    this.response = res;
                     if (res.statusCode >= 400) {
                         return reject(new Error(`${res.statusCode} ${res.statusMessage}`));
                     }
