@@ -15,10 +15,14 @@ class NDJSONStream extends Transform
         });
 
         this._stringBuffer = "";
-        this.line          = 0;
+        this._line         = 0;
         this.bufferSize    = 0;
     }
 
+    get count()
+    {
+        return this._line;
+    }
 
     _transform(chunk, encoding, next)
     {
@@ -46,7 +50,7 @@ class NDJSONStream extends Transform
             const jsonString  = this._stringBuffer.substring(0, eolPos);
             this._stringBuffer = this._stringBuffer.substring(eolPos + 1);
             this.bufferSize   = this._stringBuffer.length;
-            this.line += 1;
+            this._line += 1;
             
             // If this is not an empty line!
             if (jsonString.length) {
@@ -57,7 +61,7 @@ class NDJSONStream extends Transform
                     this._stringBuffer = "";
                     this.bufferSize   = 0;
                     return next(new SyntaxError(
-                        `Error parsing NDJSON on line ${this.line}: ${error.message}`
+                        `Error parsing NDJSON on line ${this._line}: ${error.message}`
                     ));
                 }
             }
@@ -84,7 +88,7 @@ class NDJSONStream extends Transform
             next();
         } catch (error) {
             next(new SyntaxError(
-                `Error parsing NDJSON on line ${this.line + 1}: ${error.message}`
+                `Error parsing NDJSON on line ${this._line + 1}: ${error.message}`
             ));
         }
     }

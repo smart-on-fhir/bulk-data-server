@@ -7,6 +7,12 @@ const NDJSONStream = require("./NDJSONStream");
 
 class DownloadTask extends Task
 {
+    constructor(options = {})
+    {
+        super(options);
+        this._count = 0;
+    }
+
     /**
      * Makes the request in order to receive the response headers and obtain the
      * "content-length" header (if any).
@@ -44,6 +50,11 @@ class DownloadTask extends Task
         });
     }
 
+    get count()
+    {
+        return this._count;
+    }
+
     async start()
     {
         if (!this.response) {
@@ -59,6 +70,10 @@ class DownloadTask extends Task
 
         this.response.on("data", chunk => {
             this.position += Buffer.byteLength(chunk);
+        });
+
+        transformer.on("data", () => {
+            this._count = transformer.count;
         });
 
         return pipeline;
