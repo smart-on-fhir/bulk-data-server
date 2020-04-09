@@ -20,7 +20,8 @@ function pool(task)
     process.stdout.write(
         "  " + "▉".repeat(pct) + "░".repeat(100 - pct) + " " +
         Math.round(position/(1024 * 1024)) + "MB downloaded " +
-        Math.ceil(remainingTime/1000) + "s remaining" + "          \r"
+        (remainingTime === -1 ? "" :  Math.ceil(remainingTime/1000) + "s remaining") +
+        "          \r"
     );
 
     if (progress < 1) {
@@ -64,7 +65,7 @@ init({
             type: "Patient"
         },
         {
-            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Procedure.ndjson",
+            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Procedures.ndjson",
             type: "Procedure"
         },
         {
@@ -72,7 +73,7 @@ init({
             type: "Observation"
         },
         {
-            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Immunizations.ndjson",
+            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Immunization.ndjson",
             type: "Immunization"
         },
         {
