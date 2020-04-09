@@ -27,6 +27,8 @@ module.exports = {
     jwtSecret: process.env.SECRET || "this-is-our-big-secret",
 
     ndjsonMaxLineLength: 5000000,
+    
+    maxParallelDownloads: 3,
 
     errors: {
         "missing_parameter"               : "Missing %s parameter",
