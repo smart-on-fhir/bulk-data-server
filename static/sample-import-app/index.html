@@ -223,10 +223,23 @@
                         }
                         else if (xhr.status == 202) {
                             console.log("poll returned 202: accepted/in-progress")
-                            // parseInt(xhr.getResponseHeader("x-progress"), 10);
-                            TIMER = setTimeout(function() {
-                                waitForResult(url)
-                            }, 500)
+                            // calculate a transition to expand the progress bar
+                            const progress = parseFloat(xhr.getResponseHeader("x-progress"));
+                            // parse retry-after
+                            const retryTime = 200;
+                            console.log("import progress reported: ", progress)
+                            // if (retryTime > 20?)
+                            // if progress is -1, less than 10% has been imported
+                            // and estimate will be unreliable
+                            // so show 'thinking' ... animate stripe full bar (or 10% bar)
+                            // or creep initial effort ... transition to 10% or some fraction thereof
+                            // if there is progress, compare to previous time mark
+                            // how much was added?
+                            // at that speed, how long until complete?
+                            // when is the server saying to check next?
+                            // how much do we expect will be complete by then?
+                            // setProgress()
+                            setTimeout( () => waitForResult(url), retryTime );
                         }
                     }, showError);
                 }
@@ -305,15 +318,21 @@
                     $.ajax({
                         url: uploadUrl,
                         type: "POST",
-                        dataType: "text",
+                        dataType: "application/fhir+json",
+                        headers: {
+                            Accept: "application/fhir+json",
+                            Prefer: "respond-async",
+                        },
                         data: JSON.stringify(requestBody),
                         contentType: "application/json",
                     })
-                    .done(function(data){
+                    .done(function(data, status, xhr){
                         console.log("jQuery done; result from server:", data);
                         $("#upload-button").closest(".row").addClass("hidden");
                         setProgress(0, 0);
                         $(".preparing-progress").removeClass("hidden");
+                        var rh = xhr.getResponseHeader("Content-Location")
+                        console.log(rh)
                         waitForResult("/byron/fhir/status");
                     })
                     .fail(function(xhr, status, errorThrown){
@@ -323,7 +342,19 @@
                     })
                     .always(function(xhr, status){
                         console.log("jQuery always (done or fail); server status:", status);
-                    });
+                        const statusUrl = xhr.getResponseHeader("content-location");
+                        if (statusUrl) {
+                            console.log("found response header to location to query", statusUrl);
+                            waitForResult(statusUrl)
+                        }
+                    })
+                    // not resolving with .then for some reason
+                    // .then((body, textStatus, xhr) => {
+                    //     console.log("ajax request resolved with status", textStatus)
+                    //     const rh = xhr.getResponseHeader('Content-Location')
+                    //     // console.log(rh)
+                    // })
+                    // .catch()
                 })
             });
         </script>
