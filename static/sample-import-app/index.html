@@ -120,7 +120,6 @@
                     <label class="text-success">
                         Preparing files. Please wait...
                     </label>
-                    <div id="percent-complete"><span>???</span> %</div>
                     <div class="progress">
                         <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
                             <span class="sr-only">0% Complete</span>
@@ -169,6 +168,7 @@
         <!-- <script src="../lib.js"></script> -->
         <script>
             var TIMER;
+            var TICK;
 
             jQuery(function($) {
                 const uploadUrl = "/byron/fhir/$import";
@@ -219,38 +219,29 @@
                         if (xhr.status == 200) {
                             console.log("poll returned 200: import operation complete");
                             if (TIMER) { clearTimeout(TIMER) }
-                            // disable while fine-tuning progress bar behavior...
-                            // showResults();
-                            // setProgress(100, 0);
+                            setProgress(100, 0);
+                            showResults();
                         }
                         else if (xhr.status == 202) {
-                            console.log("poll returned 202: accepted/in-progress")
                             // calculate a transition to expand the progress bar
                             const progress = parseFloat(xhr.getResponseHeader("x-progress"));
-                            const retryTime = xhr.getResponseHeader("retry-after");
-                            // if progress is -1, less than 10% has been imported
-                            if (progress < 0) {
-                                console.log("import progress: undetermined")
-                                setProgress(9, 0)
+                            const retryTime = xhr.getResponseHeader("retry-after"); // in milliseconds?
+                            if (progress < 1) {
+                                // if reported progress is -1, server is indicating less than 10% has been imported
+                                setProgress(1, 0.5);
                             } else {
-                                console.log("import progress reported: ", progress)
-                                setProgress(progress, 0)
+                                // server reporting a percentage of file(s) imported
+                                setProgress(progress, 0);
+                                if (retryTime > 20) { // otherwise not worth animating
+                                    const interval = Date.now() - TICK;
+                                    var expectedIncrement = (retryTime / interval) * progress; // in %
+                                    expectedIncrement = Math.max(0, expectedIncrement);
+                                    setProgress( progress + expectedIncrement, retryTime / 1000)
+                                }
                             }
-                            $("#percent-complete span").text(progress);
-                            // if (retryTime > 20?)
-                            // and estimate will be unreliable
-                            // so show 'thinking' ... animate stripe full bar (or 10% bar)
-                            // or creep initial effort ... transition to 10% or some fraction thereof
-                            // if there is progress, compare to previous time mark
-                            // how much was added?
-                            // at that speed, how long until complete?
-                            // when is the server saying to check next?
-                            // how much do we expect will be complete by then?
-                            // setProgress()
-                            setTimeout( () => waitForResult(url), retryTime );
+                            TIMER = setTimeout( () => waitForResult(url), retryTime );
                         }
-                    })
-                    // }, showError);
+                    }, showError);
                 }
 
                 function showResults(files) {
@@ -358,7 +349,9 @@
                         const statusUrl = xhr.getResponseHeader("content-location");
                         if (statusUrl) {
                             console.log("found response header to location to query", statusUrl);
-                            waitForResult(statusUrl)
+                            // start stopwatch
+                            TICK = Date.now();
+                            waitForResult(statusUrl);
                         }
                     })
                     // not resolving with .then for some reason
