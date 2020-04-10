@@ -168,6 +168,7 @@
         <!-- <script src="../lib.js"></script> -->
         <script>
             var TIMER;
+            var TICK;
 
             jQuery(function($) {
                 const uploadUrl = "/byron/fhir/$import";
@@ -218,15 +219,27 @@
                         if (xhr.status == 200) {
                             console.log("poll returned 200: import operation complete");
                             if (TIMER) { clearTimeout(TIMER) }
-                            showResults();
                             setProgress(100, 0);
+                            showResults();
                         }
                         else if (xhr.status == 202) {
-                            console.log("poll returned 202: accepted/in-progress")
-                            // parseInt(xhr.getResponseHeader("x-progress"), 10);
-                            TIMER = setTimeout(function() {
-                                waitForResult(url)
-                            }, 500)
+                            // calculate a transition to expand the progress bar
+                            const progress = parseFloat(xhr.getResponseHeader("x-progress"));
+                            const retryTime = xhr.getResponseHeader("retry-after"); // in milliseconds?
+                            if (progress < 1) {
+                                // if reported progress is -1, server is indicating less than 10% has been imported
+                                setProgress(1, 0.5);
+                            } else {
+                                // server reporting a percentage of file(s) imported
+                                setProgress(progress, 0);
+                                if (retryTime > 20) { // otherwise not worth animating
+                                    const interval = Date.now() - TICK;
+                                    var expectedIncrement = (retryTime / interval) * progress; // in %
+                                    expectedIncrement = Math.max(0, expectedIncrement);
+                                    setProgress( progress + expectedIncrement, retryTime / 1000)
+                                }
+                            }
+                            TIMER = setTimeout( () => waitForResult(url), retryTime );
                         }
                     }, showError);
                 }
@@ -238,20 +251,22 @@
                     setProgress(0, 0);
                 }
 
-                function setProgress(n, dur) {
+                function setProgress(pct, dur) {
+                    pct = Math.round(pct);
+                    console.log("setting progress:", pct, "%")
                     if (dur !== undefined) {
                         $(".progress-bar").css("transitionDuration", (dur || 0) + "s");
                         setTimeout(function() {
                             $(".progress-bar")
-                                .attr("aria-valuenow", n)
-                                .css("width", n + "%")
-                                .find(".sr-only").text(n + "% Complete");
+                                .attr("aria-valuenow", pct)
+                                .css("width", pct + "%")
+                                .find(".sr-only").text(pct + "% Complete");
                         }, 20);
                     } else {
                         $(".progress-bar")
                             .attr("aria-valuenow", n)
-                            .css("width", n + "%")
-                            .find(".sr-only").text(n + "% Complete");
+                            .css("width", pct + "%")
+                            .find(".sr-only").text(pct + "% Complete");
                     }
                 }
 
@@ -305,25 +320,47 @@
                     $.ajax({
                         url: uploadUrl,
                         type: "POST",
-                        dataType: "text",
+                        dataType: "application/fhir+json",
+                        headers: {
+                            Accept: "application/fhir+json",
+                            Prefer: "respond-async",
+                        },
                         data: JSON.stringify(requestBody),
                         contentType: "application/json",
                     })
-                    .done(function(data){
+                    .done(function(data, status, xhr){
                         console.log("jQuery done; result from server:", data);
                         $("#upload-button").closest(".row").addClass("hidden");
-                        setProgress(0, 0);
                         $(".preparing-progress").removeClass("hidden");
+                        setProgress(0, 0);
+                        var rh = xhr.getResponseHeader("Content-Location")
+                        console.log(rh)
                         waitForResult("/byron/fhir/status");
                     })
                     .fail(function(xhr, status, errorThrown){
+                        // 202 ends up here unfortunately
                         console.log("jQuery fail; server error:", status);
                         console.log(errorThrown);
-                        showError(xhr);
+                        // showError(xhr);
                     })
                     .always(function(xhr, status){
                         console.log("jQuery always (done or fail); server status:", status);
-                    });
+                        $(".preparing-progress").removeClass("hidden");
+                        const statusUrl = xhr.getResponseHeader("content-location");
+                        if (statusUrl) {
+                            console.log("found response header to location to query", statusUrl);
+                            // start stopwatch
+                            TICK = Date.now();
+                            waitForResult(statusUrl);
+                        }
+                    })
+                    // not resolving with .then for some reason
+                    // .then((body, textStatus, xhr) => {
+                    //     console.log("ajax request resolved with status", textStatus)
+                    //     const rh = xhr.getResponseHeader('Content-Location')
+                    //     // console.log(rh)
+                    // })
+                    // .catch()
                 })
             });
         </script>

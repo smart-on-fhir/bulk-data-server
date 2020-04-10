@@ -1,5 +1,49 @@
-// import { operationOutcome } from "./lib";
-const { operationOutcome } = require("./lib");
+const RE_GT    = />/g;
+const RE_LT    = /</g;
+const RE_AMP   = /&/g;
+const RE_QUOT  = /"/g;
+
+function htmlEncode(html) {
+    return String(html)
+        .trim()
+        .replace(RE_AMP , "&amp;")
+        .replace(RE_LT  , "&lt;")
+        .replace(RE_GT  , "&gt;")
+        .replace(RE_QUOT, "&quot;");
+}
+
+function operationOutcome(res, message, options = {}) {
+    return res.status(options.httpCode || 500).json(
+        createOperationOutcome(message, options)
+    );
+}
+
+function createOperationOutcome(message, {
+        httpCode  = 500,
+        issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
+        severity  = "error"       // fatal | error | warning | information
+    } = {})
+{
+    return {
+        "resourceType": "OperationOutcome",
+        "text": {
+            "status": "generated",
+            "div": `<div xmlns="http://www.w3.org/1999/xhtml">` +
+            `<h1>Operation Outcome</h1><table border="0"><tr>` +
+            `<td style="font-weight:bold;">${severity}</td><td>[]</td>` +
+            `<td><pre>${htmlEncode(message)}</pre></td></tr></table></div>`
+        },
+        "issue": [
+            {
+                "severity"   : severity,
+                "code"       : issueCode,
+                "diagnostics": message
+            }
+        ]
+    };
+}
+
+
 
 // Errors as operationOutcome responses
 const outcomes = {
@@ -31,6 +75,11 @@ const outcomes = {
         res,
         `Invalid _since parameter "${value}". It must be valid FHIR instant and ` +
         `cannot be a date in the future"`,
+        { httpCode: 400 }
+    ),
+    requireJsonContentType: res => operationOutcome(
+        res,
+        "The Content-Type header must be application/json",
         { httpCode: 400 }
     ),
     requireAcceptFhirJson: res => operationOutcome(
@@ -100,8 +149,12 @@ const outcomes = {
         `Your request has been accepted. You can check it's status at "${location}"`,
         { httpCode: 202, severity: "information" }
     )
+    // importAccepted - same behavior
 };
 
 module.exports = {
-    outcomes
+    outcomes,
+    htmlEncode,
+    operationOutcome,
+    createOperationOutcome
 }

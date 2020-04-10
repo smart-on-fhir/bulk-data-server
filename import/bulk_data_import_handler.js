@@ -1,33 +1,47 @@
 const router      = require("express").Router({ mergeParams: true });
 const bodyParser  = require("body-parser");
-const Lib         = require("./lib");
-
-var sessions = {};
-var currentSession = null;
+const Lib         = require("../lib");
+const { outcomes }    = require("../outcomes");
+const DownloadTaskCollection   = require("./DownloadTaskCollection");
+const TaskManager = require("./TaskManager");
 
 router.get("/", (req, res) => {
     res.send("router for handling bulk import requests");
 });
 
 const pollingUrl = "/byron/fhir/status";
-router.get("/status", (req, res) => {
-    if (sessions[currentSession]) {
-        if (sessions[currentSession].importStatus == "done") {
-            res.status(200);
-        } else {
-            res.status(202);
-            res.setHeader("retry-after", 10);
-            res.setHeader("x-progress", 90);
-        }
-        res.write("bulk data import in progress: \n");
-        res.write(sessions[currentSession].inputSource);
-        res.write(" ---> ")
-        res.write(sessions[currentSession].importStatus);
-    } else {
-        res.status(204);
+
+router.get("/status/:taskId", (req, res) => {
+    const taskId = req.params.taskId;
+    
+    const task = TaskManager.get(taskId)
+    if (!task) {
+        // missing --> 404
+        res.status(404);
         res.write("no session found\n");
-        res.write(Object.keys(sessions).toString());
+        // operation ouctome?
+        res.end();
+        return;
     }
+
+    // task exists; check its progress
+
+    // task finished
+    let progress = task.progress
+    if (progress >= 1) {
+        res.status(200);
+        res.json(task.toJSON())
+        res.end();
+        return;
+    }
+
+    // task is in progress or still starting
+    res.status(202);
+    // calculate interval to ask client to check back after
+    // based on... current progress and elapsed time
+    res.setHeader("retry-after", 100);
+    res.setHeader("x-progress", progress*100 + "%");
+    res.write("bulk data import in progress");
     res.end();
 })
 
@@ -40,14 +54,16 @@ router.post("/\\$import", [
     Lib.requireRespondAsyncHeader,
     // Accept: application/fhir+json (fixed value, required)
     Lib.requireFhirJsonAcceptHeader,
-    (req, res) => {
+    (req, res, next) => {
         // Content-Type: application/json (fixed value, required)
         if (req.headers["content-type"] != "application/json") {
             return outcomes.requireJsonContentType(res);
         }
+        next();
     },
     bodyParser.json(),
     (req, res, next) => {
+        console.log("post request received")
         const {
             // inputFormat (string, required)
             // Servers SHALL support Newline Delimited JSON with a format type
@@ -86,34 +102,25 @@ router.post("/\\$import", [
             Lib.operationOutcome(res, 'The “inputSource” JSON parameter must be an URL', { httpCode: 400 });
         }
 
-        // create unique ID for this request
-        const sessionId = Date.now(); // generate UUID
-        currentSession = sessionId;
-        sessions[sessionId] = req.body;
-        sessions[sessionId].importStatus = "started";
+        // input must be an array of one or more { type, url } objects
+        if (!input.length) {
+            Lib.operationOutcome(res, "The input must be an array of object(s) with url and type values", { httpCode: 400 });
+        }
 
-        var timer = handleFileUpload(sessionId);
-        // input source is present and is a URI
-        return (req.body && req.body.inputSource ) ? true : false
-        // construct URL for client to poll status of operation
-        // const pollingUrl = base url + sessionId + something
-        res.status(200); // or should this be 202?
-        res.setHeader("Content-Location", pollingUrl);
-        res.send("accepting POST request for bulk import (id:" + sessionId + ")");
-        // send JSON response of session id and/or URL
+        console.log("request looks good ... kicking off import task manager")
+        // if input not array or no contents
+            // each input properly formed?
 
+        const tasks = new DownloadTaskCollection(req.body);
+        TaskManager.add(tasks);
+        tasks.start()
+        .then(() => console.log("########################  job created with id", tasks.id));
+            
+        res.status(202);
+        // use config.baseUrl + "/" + ...
+        res.setHeader("Content-Location", pollingUrl + "/" + tasks.id);
+        res.end();
     }
 ]);
-
-async function handleRequest(req, res, groupId = null, system=false) {
-    //
-}
-
-function handleFileUpload(sessionId) {
-    return setTimeout( () => {
-        sessions[sessionId].importStatus = "done";
-        console.log("timeout completed")
-    }, 6000)
-}
 
 module.exports = router;

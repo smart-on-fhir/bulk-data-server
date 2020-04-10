@@ -7,7 +7,7 @@ const generator    = require("./generator");
 const tokenHandler = require("./token_handler");
 const register     = require("./registration_handler");
 const bulkData     = require("./bulk_data_handler");
-const bulkImporter = require("./bulk_data_importer");
+const bulkImporter = require("./import/bulk_data_import_handler");
 const env          = require("./env");
 const morgan       = require("morgan");
 
