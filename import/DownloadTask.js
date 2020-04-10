@@ -2,6 +2,7 @@ const https        = require("https");
 const lib          = require("../lib");
 const Task         = require("./Task");
 const NDJSONStream = require("./NDJSONStream");
+const ResourceValidator = require("./ResourceValidator");
 
 
 
@@ -73,7 +74,9 @@ class DownloadTask extends Task
         }
 
         const transformer = new NDJSONStream();
-        const pipeline = this.response.pipe(transformer);
+        const pipeline = this.response
+            .pipe(transformer)
+            .pipe(new ResourceValidator(this.options.type));
 
         this.response.on("data", chunk => {
             this.position += Buffer.byteLength(chunk);
