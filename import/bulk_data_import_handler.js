@@ -12,9 +12,9 @@ router.get("/", (req, res) => {
 const pollingUrl = "/byron/fhir/status";
 
 router.get("/status/:taskId", (req, res) => {
-    let taskId = req.params.taskId;
+    const taskId = req.params.taskId;
     
-    let task = TaskManager.get(taskId)
+    const task = TaskManager.get(taskId)
     if (!task) {
         // missing --> 404
         res.status(404);
@@ -39,7 +39,7 @@ router.get("/status/:taskId", (req, res) => {
     res.status(202);
     // calculate interval to ask client to check back after
     // based on... current progress and elapsed time
-    res.setHeader("retry-after", 10);
+    res.setHeader("retry-after", 100);
     res.setHeader("x-progress", progress*100 + "%");
     res.write("bulk data import in progress");
     res.end();
