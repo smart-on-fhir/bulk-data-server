@@ -2,8 +2,8 @@ const moment       = require("moment");
 const Task         = require("./Task");
 const DownloadTask = require("./DownloadTask");
 const DevNull      = require("./DevNull");
+const Queue        = require("./Queue");
 const config       = require("../config");
-
 
 
 class DownloadTaskCollection extends Task
@@ -32,7 +32,7 @@ class DownloadTaskCollection extends Task
             // because it represents the time after which the files are
             // available on the server. If this method is called early (before
             // the transaction is complete), the current time will be used.
-            transactionTime: moment(this._endTime || Date.now()).format("YYYY-MM-DDTHH:mm:ss.sssZ"),
+            transactionTime: moment(this.endTime || Date.now()).format("YYYY-MM-DDTHH:mm:ss.sssZ"),
 
             // do we need more context?
             //
@@ -45,23 +45,21 @@ class DownloadTaskCollection extends Task
             request: `${config.baseUrl}/$import`,
 
             // All the files that we have successfully imported
-            output: this.tasks.filter(t => t._endTime && !t.error).map(t => ({
+            output: this.tasks.filter(t => t.endTime && !t.error).map(t => ({
                 type: "OperationOutcome", // these correspond to the `t.options.type` input file,
                 inputUrl: t.options.url,
                 count: t.count,
-
-                // optional link to the success results
                 url: `${config.baseUrl}/outcome?issueCode=processing&severity=information&message=` +
                     encodeURIComponent(`${t.count} ${t.options.type} resources imported successfully`)
             })),
 
             // All the files that we have failed to import
-            error: this.tasks.filter(t => t._endTime && t.error).map(t => ({
-                type: "OperationOutcome", // these correspond to the `t.options.type` input file,
+            error: this.tasks.filter(t => t.endTime && t.error).map(t => ({
+                type: "OperationOutcome",
                 inputUrl: t.options.url,
                 count: t.count,
                 url: `${config.baseUrl}/outcome?issueCode=exception&severity=error&message=` +
-                encodeURIComponent(`${t.options.type} resources could not be imported`)
+                    encodeURIComponent(`${t.options.type} resources could not be imported. ${t.error}`)
             }))
         };
     }
@@ -73,47 +71,89 @@ class DownloadTaskCollection extends Task
      * Note that some of these requests might fail early (e.g. 404). For that
      * reason we use `Promise.allSettled` instead of `Promise.all`.
      */
-    init()
+    init(parallelTasks = config.maxParallelDownloads)
     {
         const onError = (task, error) => {
-            // const index = this.tasks.findIndex(t => t === task);
             task.end(error);
         };
 
-        // @ts-ignore
-        return Promise.allSettled(
-            this.files.map(fileInfo => {
-                const task = new DownloadTask(fileInfo);
-                this.tasks.push(task);
+        const queue = new Queue(this.files.map(fileInfo => {
+            const task = new DownloadTask(fileInfo);
+            this.tasks.push(task);
 
-                // On error set the `error` property and remove this task from
-                // the list
-                task.once("error", error => onError(task, error));
+            // On error set the `error` property
+            task.once("error", error => onError(task, error));
 
-                return task.init().then(() => this.total += task.total)
-                    .catch(error => onError(task, error));
-            })
-        );
+            return task;
+        }));
+
+        // A function to be called on any task completion
+        const next = () => {
+            const task = queue.dequeue();
+            
+            if (!task) {
+                return Promise.resolve();
+            }
+
+            return task.init()
+                .then(() => this.total += task.total)
+                .catch(error => onError(task, error))
+                .finally(next);
+        };
+
+        // Begin with the initial batch
+        let batch = [];
+        while (parallelTasks-- && !queue.isEmpty()) {
+            batch.push(next());
+        }
+
+        return Promise.all(batch);
     }
 
     /**
      * Start all downloads in parallel
      */
-    async start()
+    async start(parallelTasks = config.maxParallelDownloads)
     {
-        this._startTime = Date.now();
+        this.startTime = Date.now();
 
         if (!this.tasks.length) {
-            await this.init();
+            await this.init(config.maxParallelDownloads);
         }
 
         // Use all the tasks that are not errored or ended
-        const realTasks = this.tasks.filter(t => !t._endTime && !t.error);
+        const realTasks = this.tasks.filter(t => !t.endTime && !t.error);
 
-        // Start all tasks and pipe them to dev/null for now
-        return Promise.all(realTasks.map(task => {
-            return task.start().then(stream => stream.pipe(new DevNull()));
-        }));
+        return this.run(realTasks, parallelTasks);
+    }
+
+    run(tasks, parallelTasks = config.maxParallelDownloads)
+    {
+        // Create a queue of tasks
+        const queue = new Queue(tasks);
+
+        // A function to be called on any task completion
+        const next = () => {
+            // console.log(queue.size())
+            const task = queue.dequeue();
+            
+            if (!task) {
+                return Promise.resolve();
+            }
+
+            return task.start().then(async (stream) => {
+                task.response.once("end", next);
+                stream.pipe(new DevNull());
+            });
+        };
+
+        // Begin with the initial batch
+        let batch = [];
+        while (parallelTasks-- && !queue.isEmpty()) {
+            batch.push(next());
+        }
+
+        return Promise.all(batch);
     }
 
     /**

@@ -7,7 +7,13 @@ const NDJSONStream = require("./NDJSONStream");
 
 class DownloadTask extends Task
 {
-    constructor(options = {})
+    /**
+     * Creates a DownloadTask instance
+     * @param {object} options
+     * @param {string} options.url
+     * @param {string} options.type 
+     */
+    constructor(options)
     {
         super(options);
         this._count = 0;
@@ -20,7 +26,7 @@ class DownloadTask extends Task
     init()
     {
         return new Promise((resolve, reject) => {
-            this._startTime = Date.now();
+            this.startTime = Date.now();
             try {
                 const req = https.request(this.options.url, {
                     timeout: 0,
@@ -29,6 +35,7 @@ class DownloadTask extends Task
 
                 req.on("error", reject);
                 req.on("response", res => {
+                    this.response = res;
                     if (res.statusCode >= 400) {
                         return reject(new Error(`${res.statusCode} ${res.statusMessage}`));
                     }
