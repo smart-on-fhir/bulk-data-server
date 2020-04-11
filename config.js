@@ -26,10 +26,6 @@ module.exports = {
 
     jwtSecret: process.env.SECRET || "this-is-our-big-secret",
 
-    ndjsonMaxLineLength: 5000000,
-    
-    maxParallelDownloads: 3,
-
     errors: {
         "missing_parameter"               : "Missing %s parameter",
         "invalid_parameter"               : "Invalid %s parameter",
@@ -112,5 +108,22 @@ module.exports = {
         "Organization",
         "Patient",
         "Procedure"
-    ]
+    ],
+
+    // IMPORT ------------------------------------------------------------------
+
+    // Maximum NDJSON file line length (as number of characters)
+    ndjsonMaxLineLength: 5000000,
+    
+    // How many downloads to run in parallel
+    maxParallelDownloads: 3,
+
+    // Only store the first 50 resources from each downloaded file
+    maxImportsPerResourceType: 50,
+
+    // Run database maintenance once a minute (set in milliseconds)
+    dbMaintenanceTickInterval: 60 * 1000,
+
+    // Purge records older than 10 min (set in seconds)
+    dbMaintenanceMaxRecordAge: 10 * 60
 };
