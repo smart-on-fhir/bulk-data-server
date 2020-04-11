@@ -15,6 +15,10 @@ class DownloadTaskCollection extends Task
     {
         super();
         this.files = payload.input.map(fileInfo => ({ ...fileInfo }));
+
+        /**
+         * @type DownloadTask[]
+         */
         this.tasks = [];
     }
 
@@ -127,6 +131,10 @@ class DownloadTaskCollection extends Task
         return this.run(realTasks, parallelTasks);
     }
 
+    /**
+     * @param {DownloadTask[]} tasks All the tasks that must be executed
+     * @param {number} parallelTasks How many tasks to run in parallel
+     */
     run(tasks, parallelTasks = config.maxParallelDownloads)
     {
         // Create a queue of tasks
