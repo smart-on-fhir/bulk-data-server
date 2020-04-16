@@ -144,12 +144,16 @@ const outcomes = {
         "Only application/fhir+ndjson is currently supported for accept headers",
         { httpCode: 400 }
     ),
+    importAccepted: (res, location) => operationOutcome(
+        res,
+        `Your request has been accepted. You can check it's status at "${location}"`,
+        { httpCode: 202, severity: "information" }
+    ),
     exportAccepted: (res, location) => operationOutcome(
         res,
         `Your request has been accepted. You can check it's status at "${location}"`,
         { httpCode: 202, severity: "information" }
     )
-    // importAccepted - same behavior
 };
 
 module.exports = {

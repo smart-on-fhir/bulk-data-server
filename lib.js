@@ -6,8 +6,12 @@ const moment    = require("moment");
 const config    = require("./config");
 const base64url = require("base64-url");
 const request   = require("request");
-const { htmlEncode, outcomes, operationOutcome, createOperationOutcome }
-                = require("./outcomes");
+const {
+    htmlEncode,
+    outcomes,
+    operationOutcome,
+    createOperationOutcome
+}               = require("./outcomes");
 
 const RE_GT    = />/g;
 const RE_LT    = /</g;
