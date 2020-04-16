@@ -1,0 +1,7 @@
+
+- What if an imports takes too long and by the time it is finished some of the
+  imported records are already purged?
+- How to determine the "patient_id" column value for arbitrary FHIR resource?
+- We cannot support Group exports of imported data. Perhaps we should create
+  new group for each import?
+- Need to flag imported resources, so that only they are purged after they expire. 

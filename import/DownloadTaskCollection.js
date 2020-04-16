@@ -1,9 +1,9 @@
-const moment       = require("moment");
-const Task         = require("./Task");
-const DownloadTask = require("./DownloadTask");
-const DevNull      = require("./DevNull");
-const Queue        = require("./Queue");
-const config       = require("../config");
+const moment         = require("moment");
+const Task           = require("./Task");
+const DownloadTask   = require("./DownloadTask");
+const DatabaseWriter = require("./DatabaseWriter");
+const Queue          = require("./Queue");
+const config         = require("../config");
 
 
 class DownloadTaskCollection extends Task
@@ -15,6 +15,10 @@ class DownloadTaskCollection extends Task
     {
         super();
         this.files = payload.input.map(fileInfo => ({ ...fileInfo }));
+
+        /**
+         * @type DownloadTask[]
+         */
         this.tasks = [];
     }
 
@@ -127,6 +131,10 @@ class DownloadTaskCollection extends Task
         return this.run(realTasks, parallelTasks);
     }
 
+    /**
+     * @param {DownloadTask[]} tasks All the tasks that must be executed
+     * @param {number} parallelTasks How many tasks to run in parallel
+     */
     run(tasks, parallelTasks = config.maxParallelDownloads)
     {
         // Create a queue of tasks
@@ -143,7 +151,7 @@ class DownloadTaskCollection extends Task
 
             return task.start().then(async (stream) => {
                 task.response.once("end", next);
-                stream.pipe(new DevNull());
+                stream.pipe(new DatabaseWriter());
             });
         };
 
