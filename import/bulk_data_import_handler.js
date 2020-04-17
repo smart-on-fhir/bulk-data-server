@@ -30,7 +30,9 @@ router.get("/status/:taskId", (req, res) => {
 
     // task exists; check its progress
 
-    // task finished
+    // Task(s) finished
+    // response includes successful imports and errors
+    // as two arrays of OperationOutcomes
     let progress = task.progress
     if (progress >= 1) {
         res.status(200);
@@ -57,7 +59,18 @@ router.get("/status/:taskId", (req, res) => {
     res.setHeader("x-progress", progress*100 + "%");
     res.write("bulk data import in progress / retry interval: "+delay);
     res.end();
-})
+});
+
+router.delete("/status/:taskId", (req, res) => {
+    const taskId = req.params.taskId;
+    if (TaskManager.remove(taskId)) {
+        res.setHeader('Status', 202);
+        res.send("Canceling bulk import (" + taskId + ")");
+    } else {
+        res.setHeader('Status', 404);
+        res.send("Error: Bulk import cancellation not possible because requested import task was not found");
+    }
+});
 
 router.get("/\\$import", (req, res) => {
     res.send("$import endpoint should be accessed via POST request")
