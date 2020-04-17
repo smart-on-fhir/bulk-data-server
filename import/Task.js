@@ -92,7 +92,7 @@ class Task extends EventEmitter
     /**
      * Returns the remaining time in milliseconds. Will return `-1` if the
      * remaining time is unknown and `0` if the task is complete.
-     * Not that this is an estimate that is very unreliable in the first stage,
+     * Note that this is an estimate that is very unreliable in the first stage,
      * thus we return `-1` if the task progress is below 10%.
      * @returns {number}
      */

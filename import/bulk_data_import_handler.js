@@ -41,11 +41,21 @@ router.get("/status/:taskId", (req, res) => {
 
     // task is in progress or still starting
     res.status(202);
-    // calculate interval to ask client to check back after
-    // based on... current progress and elapsed time
-    res.setHeader("retry-after", 100);
+
+    // set retry time based on task projected remaining time
+    // but restrict max and min values to a reasonable range
+    let delay;
+    const remainingTime = task.remainingTime;
+    const minDelay = 200;
+    const maxDelay = 2000;
+    if (remainingTime == -1) {
+        delay = minDelay;
+    } else {
+        delay = Math.max(Math.min(task.remainingTime / 10, maxDelay), minDelay);
+    }
+    res.setHeader("retry-after", Math.ceil(delay));
     res.setHeader("x-progress", progress*100 + "%");
-    res.write("bulk data import in progress");
+    res.write("bulk data import in progress / retry interval: "+delay);
     res.end();
 })
 

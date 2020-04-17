@@ -134,8 +134,20 @@
 
                 <div class="panel panel-success hidden">
                     <div class="panel-heading">Import of bulk data</div>
-                    <div class="panel-body">Completed successfully <b class="badge"></b></div>
-                    <div class="panel-body file-list"></div>
+                    <table class="table file-list">
+                        <thead>
+                            <tr>
+                                <th scope="col">Input file</th>
+                                <th scope="col">Resource Type</th>
+                                <th scope="col">Count</th>
+                                <th scope="col">Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr></tr>
+                        </tbody>
+                    </div>
+                    <div class="panel-body error-list hidden"></div>
                 </div>
 
                 <div class="panel panel-danger" style="display: none">
@@ -169,6 +181,7 @@
         <script>
             var TIMER;
             var TICK;
+            var inputsArray;
 
             jQuery(function($) {
                 const uploadUrl = "/byron/fhir/$import";
@@ -217,10 +230,9 @@
                 function waitForResult(url) {
                     $.ajax({ url: url }).then(function(body, resultCode, xhr) {
                         if (xhr.status == 200) {
-                            console.log("poll returned 200: import operation complete");
                             if (TIMER) { clearTimeout(TIMER) }
                             setProgress(100, 0);
-                            showResults();
+                            showResults(body);
                         }
                         else if (xhr.status == 202) {
                             // calculate a transition to expand the progress bar
@@ -244,10 +256,31 @@
                     }, showError);
                 }
 
-                function showResults(files) {
+                // if the server was able to import at least one file 
+                // it will give us a success result
+                function showResults(outcome) {
+                    // successful inputs and errors
                     $(".preparing-progress").addClass("hidden");
                     $("output").addClass("hidden");
                     $(".file-list").closest(".panel").removeClass("hidden");
+                    outcome.output.forEach(file => {
+                        const matchingInput = inputsArray.find(i => i.url === file.inputUrl);
+                        const resourceType = matchingInput ? matchingInput.type : "-";
+                        $(".file-list tbody").append(`
+                            <tr>
+                                <td>${file.inputUrl}</td>
+                                <td>${resourceType}</td>
+                                <td>${file.count}</td>
+                                <td>Successful import</td>
+                            </tr>
+                        `);
+                    })
+                    if (outcome.error) {
+                        $(".error-list").removeClass("hidden");
+                        outcome.error.forEach(err => {
+                            $(".error-list").append("<li>"+"error encountered"+"</li>")
+                        })
+                    }
                     setProgress(0, 0);
                 }
 
@@ -279,7 +312,7 @@
 
                 function updateBodyJSON() {
 
-                    let inputsArray = [];
+                    inputsArray = [];
                     $("#upload-button").attr("disabled", true);
                     target.find('.row').each(function() {
                         const url = $(this).find("input[type='url']:valid")[0];
