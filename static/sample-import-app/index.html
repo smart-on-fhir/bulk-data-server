@@ -161,7 +161,7 @@
         </div>
         <script id="rowInput" type="text/template">
             <div class="row fade in">
-                <i class="checkmark fa"></i>
+                <i class="validity checkmark fa"></i>
                 <div class="col col-sm-7 form-group">
                     <input class="form-control" type="url" placeholder="URL of bulk data file" required />
                 </div>
@@ -256,11 +256,27 @@
                     }, showError);
                 }
 
+                function cancelImport(statusUrl) {
+                    if (TIMER) { clearTimeout(TIMER) }
+                    console.log("cancellation requested");
+                    $.ajax({
+                        url: statusUrl,
+                        type: 'DELETE'
+                    })
+                    .then((body, resultCode, xhr) => {
+                        console.log("cancellation completed");
+                        console.log(body);
+                    })
+                    // show error? show success?
+                    // restore upload button
+                }
+
                 // if the server was able to import at least one file 
                 // it will give us a success result
                 function showResults(outcome) {
                     // successful inputs and errors
                     $(".preparing-progress").addClass("hidden");
+                    setProgress(0, 0);
                     $("output").addClass("hidden");
                     $(".file-list").closest(".panel").removeClass("hidden");
                     outcome.output.forEach(file => {
@@ -281,7 +297,6 @@
                             $(".error-list").append("<li>"+"error encountered"+"</li>")
                         })
                     }
-                    setProgress(0, 0);
                 }
 
                 function setProgress(pct, dur) {
@@ -318,14 +333,14 @@
                         const url = $(this).find("input[type='url']:valid")[0];
                         const type = $(this).find("input[type='text']:valid")[0];
                         if (url && type) {
-                            $(this).find('i').addClass('fa-check-circle')
+                            $(this).find('i.validity').addClass('fa-check-circle')
                             inputsArray.push({
                                 type: type.value,
                                 url: url.value
-                            })
+                            });
                             $("#upload-button").removeAttr("disabled");
                         } else {
-                            $(this).find('i').removeClass('fa-check-circle');
+                            $(this).find('i.validity').removeClass('fa-check-circle');
                         }
                     });
                     requestBody.input = inputsArray;
@@ -366,8 +381,6 @@
                         $("#upload-button").closest(".row").addClass("hidden");
                         $(".preparing-progress").removeClass("hidden");
                         setProgress(0, 0);
-                        var rh = xhr.getResponseHeader("Content-Location")
-                        console.log(rh)
                         waitForResult("/byron/fhir/status");
                     })
                     .fail(function(xhr, status, errorThrown){
@@ -382,7 +395,12 @@
                         const statusUrl = xhr.getResponseHeader("content-location");
                         if (statusUrl) {
                             console.log("found response header to location to query", statusUrl);
-                            // start stopwatch
+                            $("#cancel-btn")
+                                .removeAttr("disabled")
+                                .on('click', function() {
+                                    $("#cancel-btn").attr({"disabled": true});
+                                    cancelImport(statusUrl);
+                                });
                             TICK = Date.now();
                             waitForResult(statusUrl);
                         }

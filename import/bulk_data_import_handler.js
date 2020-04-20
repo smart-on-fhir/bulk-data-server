@@ -8,22 +8,21 @@ const {
 }                 = require("../outcomes");
 const DownloadTaskCollection   = require("./DownloadTaskCollection");
 const TaskManager = require("./TaskManager");
+const pollingBaseUrl = "/byron/fhir/status/";
 
 router.get("/", (req, res) => {
     res.send("router for handling bulk import requests");
 });
 
-const pollingBaseUrl = "/byron/fhir/status/";
-
+// Return import progress by task id generated during kick-off request
+// and provide time interval for client to wait before checking again
 router.get("/status/:taskId", (req, res) => {
-    const taskId = req.params.taskId;
-    
-    const task = TaskManager.get(taskId)
+    const taskId = req.params.taskId;    
+    const task = TaskManager.get(taskId);
+
     if (!task) {
-        // missing --> 404
         res.status(404);
-        res.write("no session found\n");
-        // operation ouctome?
+        res.write("Error: requested bulk import task not found\n");
         res.end();
         return;
     }
@@ -61,11 +60,13 @@ router.get("/status/:taskId", (req, res) => {
     res.end();
 });
 
+// Stop an import that has not completed
 router.delete("/status/:taskId", (req, res) => {
     const taskId = req.params.taskId;
     if (TaskManager.remove(taskId)) {
         res.setHeader('Status', 202);
         res.send("Canceling bulk import (" + taskId + ")");
+        return;
     } else {
         res.setHeader('Status', 404);
         res.send("Error: Bulk import cancellation not possible because requested import task was not found");
@@ -73,7 +74,7 @@ router.delete("/status/:taskId", (req, res) => {
 });
 
 router.get("/\\$import", (req, res) => {
-    res.send("$import endpoint should be accessed via POST request")
+    res.send("$import endpoint should be accessed via POST request");
 });
 
 router.post("/\\$import", [
