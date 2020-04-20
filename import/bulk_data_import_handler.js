@@ -64,12 +64,9 @@ router.get("/status/:taskId", (req, res) => {
 router.delete("/status/:taskId", (req, res) => {
     const taskId = req.params.taskId;
     if (TaskManager.remove(taskId)) {
-        res.setHeader('Status', 202);
-        res.send("Canceling bulk import (" + taskId + ")");
-        return;
+        return outcomes.cancelAccepted(res);
     } else {
-        res.setHeader('Status', 404);
-        res.send("Error: Bulk import cancellation not possible because requested import task was not found");
+        return outcomes.cancelNotFound(res);
     }
 });
 

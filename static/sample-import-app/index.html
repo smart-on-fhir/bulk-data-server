@@ -115,6 +115,7 @@
                         <button id="upload-button" class="btn btn-lg btn-success " disabled>Start Import</button>
                     </div>
                 </div>
+            </form>
 
                 <div class="hidden preparing-progress">
                     <label class="text-success">
@@ -146,18 +147,17 @@
                         <tbody>
                             <tr></tr>
                         </tbody>
-                    </div>
+                    </table>
                     <div class="panel-body error-list hidden"></div>
                 </div>
 
-                <div class="panel panel-danger" style="display: none">
+                <div class="panel panel-danger hidden">
                     <div class="panel-heading"><b>Error</b></div>
                     <div class="panel-body">
                         <pre id="error" class="text-danger"></pre>
                     </div>
                 </div>
 
-            </form>
         </div>
         <script id="rowInput" type="text/template">
             <div class="row fade in">
@@ -209,6 +209,10 @@
                     if (error instanceof Error) {
                         txt = String(error);
                     }
+                    else if (error.resourceType && error.resourceType === "OperationOutcome") {
+                        console.log(error.issue[0].diagnostics)
+                        txt = error.issue.map(i => i.diagnostics).join("\n");
+                    }
                     else if (error.responseJSON) { // XHR with JSON response
                         txt = JSON.stringify(error.responseJSON, null, 4);
                     }
@@ -219,7 +223,7 @@
                         console.log(txt + ": ", arguments);
                     }
 
-                    $("#error").text(txt).closest(".panel").show();
+                    $("#error").text(txt).closest(".panel").removeClass("hidden");
                     $(".preparing-progress").addClass("hidden");
                 }
 
@@ -266,8 +270,14 @@
                     .then((body, resultCode, xhr) => {
                         console.log("cancellation completed");
                         console.log(body);
+                        if (xhr.status == 200 || xhr.status == 202) {
+                            // show success, or at least msg
+                            showError(body);
+                        } else {
+                            // show error
+                            showError(body);
+                        }
                     })
-                    // show error? show success?
                     // restore upload button
                 }
 
@@ -322,7 +332,7 @@
                     console.log("request resolved")
                     $(".preparing-progress").addClass("hidden");
                     setProgress(0, 0);
-                    $("").closest(".panel").removeClass("hidden");
+                    // $("").closest(".panel").removeClass("hidden");
                 }
 
                 function updateBodyJSON() {
@@ -391,6 +401,7 @@
                     })
                     .always(function(xhr, status){
                         console.log("jQuery always (done or fail); server status:", status);
+                        $("form").addClass("hidden");
                         $(".preparing-progress").removeClass("hidden");
                         const statusUrl = xhr.getResponseHeader("content-location");
                         if (statusUrl) {
