@@ -93,11 +93,27 @@
                         </small>
                     </div>
                 </div>
+                <div class="row">
+                    <label class="col-sm-2">Input Format</label>
+                    <select name="input-format" id="input-format">
+                        <option value="application/fhir+ndjson">Newline Delimited JSON (ndjson)</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <label for="">Storage details / Storage protocol</label>
+                    <select name="storage-protocol" id="storage-protocol">
+                        <option value="https">https</option>
+                        <option disabled value="s3">Amazon Web Services: S3 bucket</option>
+                        <option disabled value="gcp-bucket">Google cloud storage</option>
+                        <option disabled value="azure-blob">Azure cloud storage</option>
+                    </select>
+                </div>
 
                 <hr/>
 
                 <div id="uploads">
-                    <label>Specify location(s) of bulk data files</label>
+                    <label>Specify location and FHIR type of one or more bulk data files</label>
                 </div>
                 
                 <div class="row">
@@ -109,6 +125,7 @@
                 <hr/>
 
                 <output name="request-json" class="hidden">
+                    <label>JSON request body</label>
                     <pre id="request-json"></pre>
                 </output>
 
@@ -192,18 +209,18 @@
         <script src="../vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
         <!-- <script src="../lib.js"></script> -->
         <script>
+            const uploadUrl = "/byron/fhir/$import";
             var TIMER;
             var TICK;
-            var inputsArray;
+            var requestBody = {
+                // only supported inputFormat is "application/fhir+ndjson"
+                "inputFormat": null,
+                "inputSource": null,
+                "storageDetail": null,
+                "input": []
+            }
 
             jQuery(function($) {
-                const uploadUrl = "/byron/fhir/$import";
-                const requestBody = {
-                    "inputFormat": "application/fhir+ndjson",
-                    // "inputSource": "https://other-server.example.org",
-                    "storageDetail": { "type": "https" },
-                    "input": []
-                }
                 const rowTemplate = $("#rowInput").html();
                 const formInputFiles = $('#uploads');
                 const synchronizeButtons = () => {
@@ -243,7 +260,7 @@
 
                 function hideError() {
                     $("#error").empty();
-                    $("#error").closest(".panel").hide();
+                    $("#error").closest(".panel").addClass("hidden");
                 }
 
                 function hideResults() {
@@ -316,7 +333,7 @@
                     $("output").addClass("hidden");
                     $(".file-list").closest(".panel").removeClass("hidden");
                     outcome.output.forEach(file => {
-                        const matchingInput = inputsArray.find(i => i.url === file.inputUrl);
+                        const matchingInput = requestBody.input.find(i => i.url === file.inputUrl);
                         const resourceType = matchingInput ? matchingInput.type : "-";
                         $(".file-list tbody").append(`
                             <tr>
@@ -361,16 +378,19 @@
                     // $("").closest(".panel").removeClass("hidden");
                 }
 
-                function updateBodyJSON() {
-                    inputsArray = [];
+                function generateRequestJSON() {
                     $("#upload-button").attr("disabled", true);
                     $("output").removeClass("hidden");
+                    const inputFormat = $("select[name='input-format'").val();
+                    const inputSource = $("input[name='source']").val();
+                    const storageDetail = { "type": $("select[name='storage-protocol']").val() }
+                    const input = [];
                     formInputFiles.find('.import-file').each(function() {
                         const url = $(this).find("input[type='url']:valid")[0];
                         const type = $(this).find("input[type='text']:valid")[0];
                         if (url && type) {
                             $(this).find('i.validity').addClass('fa-check-circle')
-                            inputsArray.push({
+                            input.push({
                                 type: type.value,
                                 url: url.value
                             });
@@ -379,18 +399,17 @@
                             $(this).find('i.validity').removeClass('fa-check-circle');
                         }
                     });
-                    requestBody.input = inputsArray;
-                    requestBody.inputSource = $("input[name='source']").val();
-                    $('#request-json').text( JSON.stringify(requestBody) );
+                    requestBody = { inputFormat, inputSource, storageDetail, input };
+                    $('#request-json').text( JSON.stringify(requestBody, null, "\t") );
                 }
 
                 formInputFiles.on('click', 'button.btn-remove', function(event) {
                     $(event.target).closest(".import-file").remove();
-                    updateBodyJSON();
+                    generateRequestJSON();
                     synchronizeButtons();
                 })
 
-                $("form").on('change', updateBodyJSON);
+                $("form").on('change', generateRequestJSON);
 
                 $("#append-button").on('click', appendRow);
 
