@@ -108,7 +108,9 @@
 
                 <hr/>
 
-                <output name="request-json">{}</output>
+                <output name="request-json" class="hidden">
+                    <pre id="request-json"></pre>
+                </output>
 
                 <div class="row">
                     <div class="text-center col-sm-12">
@@ -117,50 +119,61 @@
                 </div>
             </form>
 
-                <div class="hidden preparing-progress">
-                    <label class="text-success">
-                        Preparing files. Please wait...
-                    </label>
-                    <div class="progress">
-                        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
-                            <span class="sr-only">0% Complete</span>
-                        </div>
-                    </div>
-                    <div class="text-center">
-                        <button class="btn btn-danger" type="button" id="cancel-btn" disabled>Cancel</button>
-                        <br/>
-                        <br/>
+            <div class="hidden preparing-progress">
+                <label class="text-success">
+                    Preparing files. Please wait...
+                </label>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
+                        <span class="sr-only">0% Complete</span>
                     </div>
                 </div>
+                <div class="text-center">
+                    <button class="btn btn-danger" type="button" id="cancel-btn" disabled>Cancel</button>
+                    <br/>
+                    <br/>
+                </div>
+            </div>
 
-                <div class="panel panel-success hidden">
-                    <div class="panel-heading">Import of bulk data</div>
-                    <table class="table file-list">
-                        <thead>
-                            <tr>
-                                <th scope="col">Input file</th>
-                                <th scope="col">Resource Type</th>
-                                <th scope="col">Count</th>
-                                <th scope="col">Result</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr></tr>
-                        </tbody>
-                    </table>
-                    <div class="panel-body error-list hidden"></div>
+            <div class="panel panel-success hidden">
+                <div class="panel-heading">
+                    Results of bulk data import
+                    <button type="button" class="close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
+                <table class="table file-list">
+                    <thead>
+                        <tr>
+                            <th scope="col">Input file</th>
+                            <th scope="col">Resource Type</th>
+                            <th scope="col">Count</th>
+                            <th scope="col">Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr></tr>
+                    </tbody>
+                </table>
+                <div class="panel-body error-list hidden"></div>
+            </div>
 
-                <div class="panel panel-danger hidden">
-                    <div class="panel-heading"><b>Error</b></div>
-                    <div class="panel-body">
-                        <pre id="error" class="text-danger"></pre>
-                    </div>
+            <div class="panel panel-danger hidden">
+                <div class="panel-heading">
+                    <b>Error(s) encountered</b>
+                    <button type="button" class="close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
+                <div class="panel-body">
+                    <pre id="error" class="text-danger"></pre>
+                </div>
+            </div>
 
         </div>
+
         <script id="rowInput" type="text/template">
-            <div class="row fade in">
+            <div class="row import-file fade in">
                 <i class="validity checkmark fa"></i>
                 <div class="col col-sm-7 form-group">
                     <input class="form-control" type="url" placeholder="URL of bulk data file" required />
@@ -192,17 +205,17 @@
                     "input": []
                 }
                 const rowTemplate = $("#rowInput").html();
-                const target = $('#uploads');
+                const formInputFiles = $('#uploads');
                 const synchronizeButtons = () => {
-                    const rows = target.find('.row');
+                    const rows = formInputFiles.find('.row');
                     const rowCount = rows.length;
                     rows.first().find("button").prop("disabled", rowCount < 2  )
                 }
                 const appendRow = () => {
-                    target.append(rowTemplate);
+                    formInputFiles.append(rowTemplate);
                     synchronizeButtons();
                 }
-                appendRow();
+                appendRow(); // form starts with input row for a single file
 
                 function showError(error) {
                     var txt = "Unknown error";
@@ -223,12 +236,25 @@
                         console.log(txt + ": ", arguments);
                     }
 
-                    $("#error").text(txt).closest(".panel").removeClass("hidden");
+                    $("#error").text(txt);
+                    $("#error").closest(".panel").removeClass("hidden");
                     $(".preparing-progress").addClass("hidden");
                 }
 
                 function hideError() {
-                    $("#error").empty().closest(".panel").hide();
+                    $("#error").empty();
+                    $("#error").closest(".panel").hide();
+                }
+
+                function hideResults() {
+                    $(".file-list").closest(".panel").addClass("hidden");
+                    $(".file-list tbody").empty();
+                }
+                
+                function resetForm() {
+                    hideError();
+                    hideResults();
+                    $("form").removeClass("hidden");
                 }
 
                 function waitForResult(url) {
@@ -336,10 +362,10 @@
                 }
 
                 function updateBodyJSON() {
-
                     inputsArray = [];
                     $("#upload-button").attr("disabled", true);
-                    target.find('.row').each(function() {
+                    $("output").removeClass("hidden");
+                    formInputFiles.find('.import-file').each(function() {
                         const url = $(this).find("input[type='url']:valid")[0];
                         const type = $(this).find("input[type='text']:valid")[0];
                         if (url && type) {
@@ -354,18 +380,21 @@
                         }
                     });
                     requestBody.input = inputsArray;
-                    $('output').text( JSON.stringify(requestBody) )
+                    requestBody.inputSource = $("input[name='source']").val();
+                    $('#request-json').text( JSON.stringify(requestBody) );
                 }
 
-                target.on('click', 'button', function(event) {
-                    $(event.target).closest(".row").remove();
+                formInputFiles.on('click', 'button.btn-remove', function(event) {
+                    $(event.target).closest(".import-file").remove();
                     updateBodyJSON();
                     synchronizeButtons();
                 })
 
-                target.on('change', updateBodyJSON);
+                $("form").on('change', updateBodyJSON);
 
                 $("#append-button").on('click', appendRow);
+
+                $(".close").on("click", resetForm);
 
                 $("form").on("submit", function(e) {
                     e.preventDefault();
