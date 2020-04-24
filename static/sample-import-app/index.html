@@ -124,9 +124,18 @@
 
                 <hr/>
 
-                <output name="request-json" class="hidden">
-                    <label>JSON request body</label>
-                    <pre id="request-json"></pre>
+                <output id="generated-request" name="request-json" class=""><!-- class=hidden -->
+                        <p>
+                            <span>View generated output: </span>
+                            <button type="button" class="btn btn-secondary" data-toggle="collapse" aria-expanded="true" data-target="#request-curl">Curl command</button>
+                            <button type="button" class="btn btn-secondary collapsed" data-toggle="collapse" aria-expanded="false"  data-target="#request-json">JSON request body</button>
+                        </p>
+                        <div id="request-curl" class="collapse">
+                            <pre>curl https://example.com</pre>
+                        </div>
+                        <div id="request-json" class="collapse">
+                            <pre>(to be replaced)</pre>
+                        </div>
                 </output>
 
                 <div class="row">
@@ -400,7 +409,11 @@
                         }
                     });
                     requestBody = { inputFormat, inputSource, storageDetail, input };
-                    $('#request-json').text( JSON.stringify(requestBody, null, "\t") );
+                    $('#request-json pre').text( JSON.stringify(requestBody, null, "\t") );
+                }
+
+                function generateCurlCommand() {
+
                 }
 
                 formInputFiles.on('click', 'button.btn-remove', function(event) {
