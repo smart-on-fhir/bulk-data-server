@@ -337,10 +337,10 @@
                         const resourceType = matchingInput ? matchingInput.type : "-";
                         $(".file-list tbody").append(`
                             <tr>
-                                <td>${file.inputUrl}</td>
+                                <td><span title="${file.inputUrl}">${file.inputUrl.substr(0,25)}....${file.inputUrl.substr(-20)}</span></td>
                                 <td>${resourceType}</td>
                                 <td>${file.count}</td>
-                                <td>Successful import</td>
+                                <td><a href="${file.url}">Outcome details</a></td>
                             </tr>
                         `);
                     })

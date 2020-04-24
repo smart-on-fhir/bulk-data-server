@@ -10,7 +10,8 @@ const bulkData     = require("./bulk_data_handler");
 const bulkImporter = require("./import/bulk_data_import_handler");
 const env          = require("./env");
 const morgan       = require("morgan");
-
+const operationOutcome = require("./outcomes");
+const encodedOutcome   = require("./outcome_handler");
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.get("/server-config.js", (req, res) => {
 
 // bulk data implementation
 app.use(["/:sim/fhir", "/fhir"], bulkData);
+app.use("/outcome", encodedOutcome);
 // stub for developing bulk data import capability
 app.use("/byron/fhir", bulkImporter);
 
