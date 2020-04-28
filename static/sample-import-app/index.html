@@ -413,16 +413,34 @@
                 }
 
                 function generateCurlCommand() {
+                    // `curl options url(s)`
+                    var command = ["curl"];
+                    var data = `-d '${JSON.stringify(requestBody)}'`;
+                    var options = [
+                        "-X POST",
+                        "-H 'Content-Type: application/json'",
+                        "-H 'Accept: application/fhir+json'",
+                        "-H 'Prefer: respond-async'",
+                    ];
+                    command.push(options.join(" "));
+                    command.push(data);
+                    command.push("'https://example.net/fhirserver" + uploadUrl + "'");
+                    $("#request-curl pre").text( command.join(" ") );
+                }
 
+
+                function updateRequests() {
+                    generateRequestJSON();
+                    generateCurlCommand();
                 }
 
                 formInputFiles.on('click', 'button.btn-remove', function(event) {
                     $(event.target).closest(".import-file").remove();
-                    generateRequestJSON();
+                    updateRequests();
                     synchronizeButtons();
                 })
 
-                $("form").on('change', generateRequestJSON);
+                $("form").on('change', updateRequests );
 
                 $("#append-button").on('click', appendRow);
 
