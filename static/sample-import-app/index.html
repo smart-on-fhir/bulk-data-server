@@ -93,6 +93,8 @@
             <option value="Group">Group</option>
             <option value="ImagingStudy">ImagingStudy</option>
             <option value="Immunization">Immunization</option>
+            <option value="Medication">Medication</option>
+
             <option value="MedicationRequest">MedicationRequest</option>
             <option value="Observation">Observation</option>
             <option value="Organization">Organization</option>
@@ -106,16 +108,19 @@
                 <small>sample app</small>
             </h1>
 
-            <ul class="nav nav-tabs" role="tablist">
-                <li role="presentation" class="active"><a href="#home" aria-controls="home" role="tab" data-toggle="tab">Import Settings</a></li>
-                <li role="presentation"><a href="#profile" aria-controls="profile" role="tab" data-toggle="tab">Import Results</a></li>
+            <ul class="nav nav-tabs hidden" id="steps" role="tablist">
+                <li class="nav-item" role="presentation" class="active">
+                    <a id="form-tab" class="nav-link" href="#form" role="tab" data-toggle="tab"aria-controls="form" aria-selected="true">Import Settings</a>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <a id="results-tab" class="nav-link" href="#results" role="tab" data-toggle="tab" aria-controls="steps" aria-selected="false">Import Results</a>
+                </li>
             </ul>
 
             <br/>
 
             <div class="tab-content">
-                <div role="tabpanel" class="tab-pane active" id="home">
-            
+                <div role="tabpanel" id="form" class="tab-pane active">
                     <form>
                         <div class="row">
                             <div class="col-sm-5 col-md-4 col-lg-2">
@@ -214,9 +219,9 @@
                         <br/>
                     </form>
                 </div>
-                <div role="tabpanel" class="tab-pane" id="profile">
+                <div role="tabpanel" id="results" class="tab-pane">
 
-                    <div class="hidden preparing-progress">
+                    <div class="panel preparing-progress hidden">
                         <label class="text-success">
                             Preparing files. Please wait...
                         </label>
@@ -349,12 +354,6 @@
                     $(".file-list tbody").empty();
                 }
                 
-                function resetForm() {
-                    hideError();
-                    hideResults();
-                    $("form").removeClass("hidden");
-                }
-
                 function waitForResult(url) {
                     $.ajax({
                         url: url,
@@ -410,13 +409,20 @@
                     // restore upload button
                 }
 
+                function hideTabs() {
+                    $('.nav-tabs').addClass("hidden")
+                }
+                function showTabs() {
+                    $('.nav-tabs').removeClass("hidden")
+                }
+
                 // if the server was able to import at least one file 
                 // it will give us a success result
                 function showResults(outcome) {
                     // successful inputs and errors
                     $(".preparing-progress").addClass("hidden");
                     setProgress(0, 0);
-                    $("output").addClass("hidden");
+                    // $("output").addClass("hidden");
                     $(".file-list").closest(".panel").removeClass("hidden");
                     outcome.output.forEach(file => {
                         const matchingInput = requestBody.input.find(i => i.url === file.inputUrl);
@@ -560,7 +566,7 @@
 
                 $("#append-button").on('click', appendRow);
 
-                $(".close").on("click", resetForm);
+                // $(".close").on("click", resetForm);
 
                 $("form").on('click', '#code-preview .btn', e => {
                     // const $input = $(input);
@@ -617,9 +623,12 @@
                     })
                     .always(function(xhr, status){
                         console.log("jQuery always (done or fail); server status:", status);
-                        $("form").addClass("hidden");
+                        hideError();
+                        hideResults();
                         $(".preparing-progress").removeClass("hidden");
-                        const statusUrl = xhr.getResponseHeader("content-location");
+                            const statusUrl = xhr.getResponseHeader("content-location");
+                        showTabs();
+                        $("#results-tab").tab("show");
                         if (statusUrl) {
                             console.log("found response header to location to query", statusUrl);
                             $("#cancel-btn")
