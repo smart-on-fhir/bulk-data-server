@@ -59,6 +59,11 @@
                 border: dotted 2px #ccc; */
                 margin-bottom: 0.5rem;
             }
+            #request-curl pre,
+            #request-http pre {
+                height: 14em;
+                overflow-y: scroll;
+            }
             /* #fhir-version {
                 font-size: 50%;
                 color: #FFF;
@@ -122,12 +127,15 @@
             <div class="tab-content">
                 <div role="tabpanel" id="form" class="tab-pane active">
                     <form>
+                        <h4 class="page-header">
+                            <span class="text-success">Global settings</span>
+                        </h4>
                         <div class="row">
-                            <div class="col-sm-5 col-md-4 col-lg-2">
+                            <div class="col-sm-2 col-lg-2">
                                 <p class="form-control-static hidden-xs text-right" for="source"><label>Input Source</label></p>
                                 <p class="form-control-static visible-xs-block" for="source"><label>Input Source</label></p>
                             </div>
-                            <div class="col-sm-7 col-md-8 col-lg-10">
+                            <div class="col-sm-10 col-lg-10">
                                 <input name="source" type="text" aria-describedby="sourceFieldDescription" class="form-control" />
                                 <p id="sourceFieldDescription" class="form-text text-muted small">
                                     URI to indicate provenance of data to be imported. May be used for 
@@ -138,27 +146,30 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-sm-5 col-md-4 col-lg-2">
+                            <div class="col-sm-2 col-lg-2">
                                 <p class="form-control-static hidden-xs text-right"><label>Input Format</label></p>
                                 <p class="form-control-static visible-xs-block"><label>Input Format</label></p>
                             </div>
-                            <div class="col-sm-7 col-md-8 col-lg-4">
+                            <div class="col-sm-6 col-md-4 col-lg-4">
                                 <select name="input-format" id="input-format" class="form-control">
                                     <option value="application/fhir+ndjson">Newline Delimited JSON (ndjson)</option>
                                 </select>
                             </div>
                             <br class="hidden-lg" style="clear: both"/>
-                            <div class="col-sm-5 col-md-4 col-lg-3">
-                                <p class="form-control-static hidden-xs text-right"><label>Storage details</label></p>
-                                <p class="form-control-static visible-xs-block"><label>Storage details</label></p>
+                            <div class="col-sm-2 col-lg-3">
+                                <p class="form-control-static hidden-xs text-right"><label>Storage detail</label></p>
+                                <p class="form-control-static visible-xs-block"><label>Storage detail</label></p>
                             </div>
-                            <div class="col-sm-7 col-md-8 col-lg-3">
+                            <div class="col-sm-6 col-md-4 col-lg-3">
                                 <select name="storage-protocol" id="storage-protocol" class="form-control">
                                     <option value="https">https</option>
                                     <option disabled value="s3">Amazon Web Services: S3 bucket</option>
                                     <option disabled value="gcp-bucket">Google cloud storage</option>
                                     <option disabled value="azure-blob">Azure cloud storage</option>
                                 </select>
+                                <p class="form-text text-muted small">
+                                    Service / format of server that is hosting the data. Default is simply "https"
+                                </p>
                             </div>
                         </div>
 
@@ -170,12 +181,12 @@
                                 <thead>
                                     <tr>
                                         <th style="width: 2.5rem"></th>
-                                        <th>UR of bulk data file</th>
+                                        <th>URL of bulk data file</th>
                                         <th style="width: 20rem">FHIR resource type</th>
                                         <th style="width: 4rem"></th>
                                     </tr>
                                 </thead>
-                                <tbody></tbody>
+                                <tbody><!-- dynamically generated input fields --></tbody>
                             </table>
                         </div>
                         
@@ -470,31 +481,6 @@
                     // $("").closest(".panel").removeClass("hidden");
                 }
 
-                // function generateRequestJSON() {
-                //     $("#upload-button").attr("disabled", true);
-                //     $("output").removeClass("hidden");
-                //     const inputFormat = $("select[name='input-format'").val();
-                //     const inputSource = $("input[name='source']").val();
-                //     const storageDetail = { "type": $("select[name='storage-protocol']").val() }
-                //     const input = [];
-                //     formInputFiles.find('.import-file').each(function() {
-                //         const url = $(this).find("input[type='url']:valid")[0];
-                //         const type = $(this).find("input[type='text']:valid")[0];
-                //         if (url && type) {
-                //             $(this).find('i.validity').addClass('fa-check-circle')
-                //             input.push({
-                //                 type: type.value,
-                //                 url: url.value
-                //             });
-                //             $("#upload-button").removeAttr("disabled");
-                //         } else {
-                //             $(this).find('i.validity').removeClass('fa-check-circle');
-                //         }
-                //     });
-                //     requestBody = { inputFormat, inputSource, storageDetail, input };
-                //     $('#request-json pre').text( JSON.stringify(requestBody, null, "\t") );
-                // }
-
                 function generateCodes() {
                     const inputFormat = $("select[name='input-format'").val();
                     const inputSource = $("input[name='source']").val();
@@ -516,7 +502,6 @@
                         }
                     });
                     requestBody = { inputFormat, inputSource, storageDetail, input };
-                    $('#request-json pre').text( JSON.stringify(requestBody, null, "\t") );
                 }
 
                 function generateCurlCommand() {
@@ -536,9 +521,7 @@
                 }
 
                 function updateRequests() {
-                    // straighten this out
-                    generateRequestJSON();
-                    generateCurlCommand();
+                    generateCodes();
                     $('#request-http pre').text(
                         "POST /\n" +
                         "Host: r4.smarthealthit.org\n" +
@@ -548,26 +531,31 @@
                         "Cache-Control: no-cache\n\n" +
                         JSON.stringify(requestBody, null, 4)
                     );
-                    $('#request-curl pre').text(
-                        "curl -x POST url \\\n" +
-                        "--header 'Content-Type: application/json'\\\n" +
-                        "--data '" + JSON.stringify(requestBody, null, 4) + "'"
-                    );
+                    $('#request-curl pre').text(generateCurlCommand());
+                    //     "curl -x POST url \\\n" +
+                    //     "--header 'Content-Type: application/json'\\\n" +
+                    //     "--data '" + JSON.stringify(requestBody, null, 4) + "'"
+                    // );
                 }
 
                 formInputFiles.on('click', 'button.btn-remove', function(event) {
                     $(event.target).closest(".import-file").remove();
                     updateRequests();
-                    generateCodes();
                     synchronizeButtons();
                 })                
 
-                $("form").on('change', generateCodes);
+                $("form").on('change', () => {
+                    updateRequests();
+                    // $("#upload-button").attr("disabled", true);
+                    // if validate
+                    $("#upload-button").removeAttr("disabled");
+                });
 
                 $("#append-button").on('click', appendRow);
 
                 // $(".close").on("click", resetForm);
 
+                // Toggle which request output is displayed
                 $("form").on('click', '#code-preview .btn', e => {
                     // const $input = $(input);
                     const btn = $(e.target).closest(".btn");
@@ -610,7 +598,6 @@
                     })
                     .done(function(data, status, xhr){
                         console.log("jQuery done; result from server:", data);
-                        $("#upload-button").closest(".row").addClass("hidden");
                         $(".preparing-progress").removeClass("hidden");
                         setProgress(0, 0);
                         waitForResult("/byron/fhir/status");
