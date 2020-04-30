@@ -12,16 +12,21 @@ async function kickOff(payload)
 }
 
 // Status endpoint -------------------------------------------------------------
-function pool(task)
+function pool(task, i = 0)
 {
     const { position, progress, remainingTime } = task;
-    let pct = Math.round(100 * progress);
 
+    if (progress == -1) {
+        if (++i === 10) {
+            throw new Error("Failed to start the import task");
+        }
+        return setTimeout(() => pool(task, i), 200);
+    }
+    let pct = Math.round(100 * progress);
     process.stdout.write(
-        "  " + "▉".repeat(pct) + "░".repeat(100 - pct) + " " +
+        "\r\033[2K" + "▉".repeat(pct) + "░".repeat(100 - pct) + " " +
         Math.round(position/(1024 * 1024)) + "MB downloaded " +
-        (remainingTime === -1 ? "" :  Math.ceil(remainingTime/1000) + "s remaining") +
-        "          \r"
+        (remainingTime === -1 ? "" :  Math.ceil(remainingTime/1000) + "s remaining")
     );
 
     if (progress < 1) {
@@ -34,6 +39,7 @@ function pool(task)
             "\n==============================================================" +
             "\n" + JSON.stringify(task, null, 4)
         );
+        // console.dir(task.tasks);
     }
 }
 
@@ -65,7 +71,7 @@ init({
             type: "Patient"
         },
         {
-            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Procedures.ndjson",
+            url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Procedure.ndjson",
             type: "Procedure"
         },
         {
@@ -78,6 +84,18 @@ init({
         },
         {
             url : "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Condition.ndjson",
+            type: "Condition"
+        },
+
+        // GC Bucket - public file
+        {
+            url : "https://storage.googleapis.com/sandbox_bulk_data_r3/Patient.ndjson",
+            type: "Patient"
+        },
+
+        // GC Bucket - private file (should error)
+        {
+            url: "https://storage.googleapis.com/sandbox_bulk_data_r3/Condition.ndjson",
             type: "Condition"
         }
     ]

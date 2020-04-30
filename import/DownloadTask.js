@@ -4,7 +4,25 @@ const Task         = require("./Task");
 const NDJSONStream = require("./NDJSONStream");
 const ResourceValidator = require("./ResourceValidator");
 
+const ACCEPTABLE_CONTENT_TYPES = [
+    "application/x-ndjson",
+    "text/x-ndjson",
+    "application/json",
+    "text/json",
+    "text/plain",
+    "application/octet-stream"
+];
 
+const REDIRECT_CODES = [
+    // HTTP Status Code | HTTP Version | Temporary / Permanent | Cacheable      | Request Method Subsequent Request
+    301,                // HTTP/1.0      Permanent               Yes             GET / POST may change
+    302,                // HTTP/1.0      Temporary               not by default  GET / POST may change
+    303,                // HTTP/1.1      Temporary               never           always GET
+    307,                // HTTP/1.1      Temporary               not by default  may not change
+    308                 // HTTP/1.1      Permanent               by default      may not change
+];
+
+const MAX_REDIRECTS = 10;
 
 class DownloadTask extends Task
 {
@@ -26,36 +44,63 @@ class DownloadTask extends Task
      */
     init()
     {
-        return new Promise((resolve, reject) => {
-            this.startTime = Date.now();
-            try {
-                const req = https.request(this.options.url, {
-                    timeout: 0,
-                    rejectUnauthorized: process.env.NODE_ENV !== "test"
-                });
+        let redirects = 0;
 
-                req.on("error", reject);
-                req.on("response", res => {
-                    this.response = res;
-                    if (res.statusCode >= 400) {
-                        return reject(new Error(`${res.statusCode} ${res.statusMessage}`));
-                    }
+        const request = (url = this.options.url) => {
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = https.request(url, {
+                        timeout: 0,
+                        rejectUnauthorized: process.env.NODE_ENV !== "test"
+                    });
+    
+                    req.once("error", reject);
+                    req.on("response", res => {
 
-                    // If "content-length" is present in the response headers, use it
-                    // to compute the progress information. Otherwise `contentLength`
-                    // will be `0`.
-                    this.total = lib.uInt(res.headers["content-length"]);
+                        // Follow redirects
+                        if (REDIRECT_CODES.indexOf(res.statusCode) > -1) {
+                            if (++redirects > MAX_REDIRECTS) {
+                                return reject(new Error("Too many redirects"));
+                            }
+                            return request(res.headers.location).then(resolve, reject);
+                        }
 
-                    res.on("end", () => this.end());
-                    res.on("error", (e) => this.emit("error", e));
+                        this.response = res;
 
-                    resolve(res);
-                })
-                req.end();
-            } catch (ex) {
-                reject(ex);
-            }
-        });
+                        if (res.statusCode >= 400) {
+                            return reject(new Error(`${res.statusCode} ${res.statusMessage}`));
+                        }
+
+                        // Check if the returned content-type can be handled
+                        const contentType = String(res.headers["content-type"]).toLocaleLowerCase();
+                        const match = ACCEPTABLE_CONTENT_TYPES.find(type => contentType.indexOf(type) === 0);
+                        if (!match) {
+                            return reject(new Error(
+                                `Invalid content-type (${contentType}) returned from ${url
+                                }. Supported content types are "${ACCEPTABLE_CONTENT_TYPES.join('", "')}".`
+                            ));
+                        }
+    
+                        // If "content-length" is present in the response headers, use it
+                        // to compute the progress information. Otherwise `contentLength`
+                        // will be `0`.
+                        this.total = lib.uInt(res.headers["content-length"]);
+    
+                        res.on("end", () => this.end());
+                        res.on("error", (e) => this.emit("error", e));
+    
+                        resolve(res);
+                    })
+                    req.end();
+                } catch (ex) {
+                    reject(ex);
+                }
+            });    
+        };
+
+        this.startTime = Date.now();
+        
+        return request();
     }
 
     get count()
