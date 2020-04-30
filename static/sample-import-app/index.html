@@ -232,7 +232,7 @@
                 </div>
                 <div role="tabpanel" id="results" class="tab-pane">
 
-                    <div class="panel preparing-progress hidden">
+                    <div id="preparing-progress" class="panel preparing-progress hidden">
                         <label class="text-success">
                             Preparing files. Please wait...
                         </label>
@@ -248,38 +248,46 @@
                         </div>
                     </div>
 
-                    <div class="panel panel-success hidden">
-                        <div class="panel-heading">
-                            Results of bulk data import
-                            <button type="button" class="close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
+                    <div id="success-result" class="hidden">
+                        <div class="panel panel-success">
+                            <div class="panel-heading">
+                                Results of bulk data import
+                            </div>
+                            <table class="table file-list">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Input file</th>
+                                        <th scope="col">Resource Type</th>
+                                        <th scope="col">Count</th>
+                                        <th scope="col">Result</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr></tr>
+                                </tbody>
+                            </table>
                         </div>
-                        <table class="table file-list">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Input file</th>
-                                    <th scope="col">Resource Type</th>
-                                    <th scope="col">Count</th>
-                                    <th scope="col">Result</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr></tr>
-                            </tbody>
-                        </table>
                         <div class="panel-body error-list hidden"></div>
+                        <div class="row">
+                            <div class="text-center col-sm-12">
+                                <button type="button" class="go-back btn btn-warning"><i class="fa fa-chevron-left"></i> Return to form</button>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="panel panel-danger hidden">
-                        <div class="panel-heading">
-                            <b>Error(s) encountered</b>
-                            <button type="button" class="close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
+                    <div id="error-result" class="hidden">
+                        <div class="panel panel-danger">
+                            <div class="panel-heading">
+                                <b>Error(s) encountered</b>
+                            </div>
+                            <div class="panel-body">
+                                <pre id="error" class="text-danger"></pre>
+                            </div>
                         </div>
-                        <div class="panel-body">
-                            <pre id="error" class="text-danger"></pre>
+                        <div class="row">
+                            <div class="text-center col-sm-12">
+                                <button type="button" class="go-back btn btn-warning"><i class="fa fa-chevron-left"></i> Return to form</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -351,17 +359,19 @@
                     }
 
                     $("#error").text(txt);
-                    $("#error").closest(".panel").removeClass("hidden");
+                    $("#error-result").removeClass("hidden");
                     $(".preparing-progress").addClass("hidden");
                 }
 
                 function hideError() {
                     $("#error").empty();
-                    $("#error").closest(".panel").addClass("hidden");
+                    // $("#error").closest(".panel").addClass("hidden");
+                    $("#error-result").addClass("hidden")
                 }
 
                 function hideResults() {
-                    $(".file-list").closest(".panel").addClass("hidden");
+                    // $(".file-list").closest(".panel").addClass("hidden");
+                    $("#success-result").addClass("hidden");
                     $(".file-list tbody").empty();
                 }
                 
@@ -431,10 +441,10 @@
                 // it will give us a success result
                 function showResults(outcome) {
                     // successful inputs and errors
-                    $(".preparing-progress").addClass("hidden");
+                    $("#preparing-progress").addClass("hidden");
                     setProgress(0, 0);
                     // $("output").addClass("hidden");
-                    $(".file-list").closest(".panel").removeClass("hidden");
+                    $("#success-result").removeClass("hidden");
                     outcome.output.forEach(file => {
                         const matchingInput = requestBody.input.find(i => i.url === file.inputUrl);
                         const resourceType = matchingInput ? matchingInput.type : "-";
@@ -554,6 +564,9 @@
                 $("#append-button").on('click', appendRow);
 
                 // $(".close").on("click", resetForm);
+                $(".go-back").on("click", () => {
+                    $("#form-tab").tab("show");
+                })
 
                 // Toggle which request output is displayed
                 $("form").on('click', '#code-preview .btn', e => {
@@ -598,7 +611,7 @@
                     })
                     .done(function(data, status, xhr){
                         console.log("jQuery done; result from server:", data);
-                        $(".preparing-progress").removeClass("hidden");
+                        $("#preparing-progress").removeClass("hidden");
                         setProgress(0, 0);
                         waitForResult("/byron/fhir/status");
                     })
@@ -612,7 +625,7 @@
                         console.log("jQuery always (done or fail); server status:", status);
                         hideError();
                         hideResults();
-                        $(".preparing-progress").removeClass("hidden");
+                        $("#preparing-progress").removeClass("hidden");
                             const statusUrl = xhr.getResponseHeader("content-location");
                         showTabs();
                         $("#results-tab").tab("show");
