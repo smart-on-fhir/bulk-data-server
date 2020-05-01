@@ -36,12 +36,37 @@ const rateLimit = () => {
                 rec.requests = 1;
                 rec.requestsPerMinute = 1;
                 rec.firstRequestAt = now;
+                rec.violatedAt = 0;
             } else {
                 rec.requestsPerMinute += 1;    
             }
         }
 
+        // Servers SHOULD keep an accounting of status queries received from a
+        // given client, and if a client is polling too frequently, the server
+        // SHOULD respond with a 429 Too Many Requests status code in addition
+        // to a Retry-After header, and optionally a FHIR OperationOutcome
+        // resource with further explanation.
         if (rec.requestsPerMinute > config.maxRequestsPerMinute) {
+
+            if (!rec.violatedAt) {
+                rec.violatedAt = now;
+            }
+
+            // If excessively frequent status queries persist, the server MAY
+            // return a 429 Too Many Requests status code and terminate the
+            // session. Other standard HTTP 4XX as well as 5XX status codes may
+            // be used to identify errors as mentioned.
+            const violationDiff = (now - rec.violatedAt) / 1000;
+            if (violationDiff > config.maxViolationDuration) {
+                const taskId = req.params.taskId;
+                if (taskId) {
+                    TaskManager.remove(taskId);
+                }
+                return operationOutcome(res, 'Too many requests. Import aborted!', { httpCode: 429 });
+            }
+
+
             const delay = Math.ceil((now - rec.firstRequestAt) / 1000);
             res.setHeader("Retry-After", delay);
             return operationOutcome(res, `Too many requests. Please try again in ${delay} seconds.`, { httpCode: 429 });

@@ -128,5 +128,9 @@ module.exports = {
     dbMaintenanceMaxRecordAge: 10 * 60,
 
     // If this is exceeded reply with 429 Too many requests (works per IP)
-    maxRequestsPerMinute: 30
+    maxRequestsPerMinute: 30,
+
+    // If a client violates the maxRequestsPerMinute restriction for more than
+    // this duration (in seconds) the import session will be terminated
+    maxViolationDuration: 60
 };
