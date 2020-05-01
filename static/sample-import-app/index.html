@@ -54,10 +54,14 @@
             .btn-remove:not([disabled]) {
                 color: #a33;
             }
-            output {
-                /* padding: 1rem;
-                border: dotted 2px #ccc; */
+            output#generated-request {}
+            .form-bottom {
                 margin-bottom: 0.5rem;
+                border-radius: 13px;
+                border-bottom: #ddd 6px solid;
+                box-shadow: 0px 15px 10px -8px #eee;
+                padding: 2.5rem;
+                margin-bottom: 2.5rem;
             }
             #request-curl pre,
             #request-http pre {
@@ -73,6 +77,7 @@
                 padding: 1px 8px 2px;
                 vertical-align: top;
             } */
+            .bump-right { margin-left: 2.5rem; }
             .table > tbody > tr > td {
                 vertical-align: middle;
             }
@@ -494,10 +499,10 @@
                         </h4>
                         <div class="row">
                             <div class="col-sm-2 col-lg-2">
-                                <p class="form-control-static hidden-xs text-right" for="source"><label>Input Source</label></p>
+                                <p class="form-control-static hidden-xs bump-right" for="source"><label>Input Source</label></p>
                                 <p class="form-control-static visible-xs-block" for="source"><label>Input Source</label></p>
                             </div>
-                            <div class="col-sm-10 col-lg-6">
+                            <div class="col-sm-4 col-lg-6">
                                 <input name="source" type="url" aria-describedby="sourceFieldDescription" class="form-control" required />
                                 <p id="sourceFieldDescription" class="form-text text-muted small">
                                     URI to indicate provenance of data to be imported. May be used for 
@@ -506,27 +511,11 @@
                                     when matching references to previously imported data
                                 </p>
                             </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-sm-2 col-lg-2">
-                                <p class="form-control-static hidden-xs text-right"><label>Input Format</label></p>
-                                <p class="form-control-static visible-xs-block"><label>Input Format</label></p>
-                            </div>
-                            <div class="col-sm-6 col-md-4 col-lg-4">
-                                <select name="input-format" id="input-format" class="form-control">
-                                    <option value="application/fhir+ndjson">Newline Delimited JSON (ndjson)</option>
-                                </select>
-                                <p class="form-text text-muted small">
-                                    The universal format for FHIR bulk import is <a href="http://ndjson.org">NDJSON</a>.
-                                    Support for other formats will vary.
-                                </p>
-                            </div>
-                            <br class="hidden-lg" style="clear: both"/>
                             <div class="col-sm-2 col-lg-2">
                                 <p class="form-control-static hidden-xs text-right"><label>Storage detail</label></p>
                                 <p class="form-control-static visible-xs-block"><label>Storage detail</label></p>
                             </div>
-                            <div class="col-sm-6 col-lg-2">
+                            <div class="col-sm-4 col-lg-2">
                                 <select name="storage-protocol" id="storage-protocol" class="form-control">
                                     <option value="https">https</option>
                                     <option disabled value="s3">Amazon Web Services: S3 bucket</option>
@@ -556,48 +545,51 @@
                             </table>
                         </div>
                         
-                        <div class="row">
+                        <div class="row form-bottom">
                             <div class="col-sm-12 text-center">
-                                <button type="button" id="append-button" class="btn btn-success"><i class="fa fa-plus"></i> Add additional data source</button>
+                                <button type="button" id="append-button" class="btn btn-warning"><i class="fa fa-plus"></i> Add additional data source</button>
                             </div>
+                                        </td>
+                                    </tr>
+                                </thead>
+                            </table>
                         </div>
 
-                        <hr/>
-
-                        <output id="generated-request">
-                            <div class="form-group">
-                                <span class="form-control-static">View generated output: </span>
-                                <div class="btn-group" id="code-preview">
-                                    <label class="btn btn-default" data-value="http">HTTP</label>
-                                    <label class="btn btn-default" data-value="curl">CURL</label>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-xs-12" id="request-curl" style="display: none">
-                                    <i class="close fa fa-clipboard"></i>
-                                    <br/>
-                                    <div>
-                                        <pre>curl</pre>
-                                    </div>
-                                </div>
-                                <div class="col-xs-12" id="request-http" style="display: none">
-                                    <i class=" fa fa-clipboard"></i>
-                                    <br/>
-                                    <div>
-                                        <pre>http</pre>
-                                    </div>
-                                </div>
-                            </div>
-                        </output>
-                        <hr/>
                         <div class="row">
-                            <div class="text-center col-sm-12">
-                                <button id="upload-button" class="btn btn-lg btn-warning" disabled>Start Import <i class="fa fa-chevron-right"></i></button>
+                            <div class="text-right col-sm-12">
+                                <button id="upload-button" class="btn btn-lg btn-success" disabled>Start Import <i class="fa fa-chevron-right"></i></button>
                             </div>
+                            <output id="generated-request">
+                                <div class="form-group">
+                                    <span class="form-control-static">View generated output: </span>
+                                    <div class="btn-group" id="code-preview">
+                                        <label class="btn btn-default" data-value="http">HTTP</label>
+                                        <label class="btn btn-default" data-value="curl">CURL</label>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-xs-12" id="request-curl" style="display: none">
+                                        <i class="close fa fa-clipboard"></i>
+                                        <br/>
+                                        <div>
+                                            <pre>curl</pre>
+                                        </div>
+                                    </div>
+                                    <div class="col-xs-12" id="request-http" style="display: none">
+                                        <i class=" fa fa-clipboard"></i>
+                                        <br/>
+                                        <div>
+                                            <pre>http</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </output>
+    
                         </div>
-                        <br/>
                     </form>
+
                 </div>
+
                 <div role="tabpanel" id="results" class="tab-pane">
 
                     <div id="preparing-progress" class="panel preparing-progress hidden">
@@ -697,7 +689,7 @@
                 const rowTemplate = $("#rowInput").html();
                 const formInputFiles = $('#uploads tbody');
                 const synchronizeButtons = () => {
-                    const rows = formInputFiles.find('.row');
+                    const rows = formInputFiles.find('.import-file');
                     const rowCount = rows.length;
                     rows.first().find("button").prop("disabled", rowCount < 2  )
                 }
