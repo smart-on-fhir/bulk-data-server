@@ -100,6 +100,8 @@ router.get("/status/:taskId", rateLimit(), (req, res) => {
     // as two arrays of OperationOutcomes
     let progress = task.progress
     if (progress >= 1) {
+        const firstCompletedAt = Math.min(...task.tasks.map(t => t.endTime));
+        res.setHeader("Expires", new Date(firstCompletedAt + config.dbMaintenanceMaxRecordAge * 1000).toUTCString());
         res.status(200);
         res.json(task.toJSON())
         res.end();
