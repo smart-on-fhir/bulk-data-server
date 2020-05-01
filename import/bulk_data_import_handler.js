@@ -10,13 +10,54 @@ const DownloadTaskCollection   = require("./DownloadTaskCollection");
 const TaskManager = require("./TaskManager");
 const pollingBaseUrl = "/byron/fhir/status/";
 
+const rateLimit = () => {
+
+    const history = {};
+
+    return function(req, res, next)
+    {
+        const ip  = req.ip;
+        const now = Date.now();
+
+        let rec = history[ip];
+        if (!rec) {
+            rec = history[ip] = {
+                requests: 1,
+                requestsPerMinute: 1,
+                firstRequestAt: now
+            };
+        } else {
+            
+            const diff = (now - rec.firstRequestAt) / 60000;
+
+            // If the last request was more than one minute ago, reset to
+            // initial values and don't care about limits
+            if (diff > 1) {
+                rec.requests = 1;
+                rec.requestsPerMinute = 1;
+                rec.firstRequestAt = now;
+            } else {
+                rec.requestsPerMinute += 1;    
+            }
+        }
+
+        if (rec.requestsPerMinute > config.maxRequestsPerMinute) {
+            const delay = Math.ceil((now - rec.firstRequestAt) / 1000);
+            res.setHeader("Retry-After", delay);
+            return operationOutcome(res, `Too many requests. Please try again in ${delay} seconds.`, { httpCode: 429 });
+        }
+
+        next();
+    };
+}
+
 router.get("/", (req, res) => {
     res.send("router for handling bulk import requests");
 });
 
 // Return import progress by task id generated during kick-off request
 // and provide time interval for client to wait before checking again
-router.get("/status/:taskId", (req, res) => {
+router.get("/status/:taskId", rateLimit(), (req, res) => {
     const taskId = req.params.taskId;    
     const task = TaskManager.get(taskId);
 
@@ -47,8 +88,8 @@ router.get("/status/:taskId", (req, res) => {
     // but restrict max and min values to a reasonable range
     let delay;
     const remainingTime = task.remainingTime;
-    const minDelay = 200;
-    const maxDelay = 2000;
+    const minDelay = 1 / (config.maxRequestsPerMinute / 60000);
+    const maxDelay = minDelay * 2;
     if (remainingTime == -1) {
         delay = minDelay;
     } else {

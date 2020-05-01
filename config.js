@@ -125,5 +125,8 @@ module.exports = {
     dbMaintenanceTickInterval: 60 * 1000,
 
     // Purge records older than 10 min (set in seconds)
-    dbMaintenanceMaxRecordAge: 10 * 60
+    dbMaintenanceMaxRecordAge: 10 * 60,
+
+    // If this is exceeded reply with 429 Too many requests (works per IP)
+    maxRequestsPerMinute: 30
 };
