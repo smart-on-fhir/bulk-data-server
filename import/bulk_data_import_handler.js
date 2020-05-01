@@ -156,6 +156,14 @@ router.post("/\\$import", [
             return operationOutcome(res, "Each “input” element must contain url and type", { httpCode: 400 });
         }
 
+        // Check if another import is running
+        const remainingTime = TaskManager.getRemainingTime();
+        if (remainingTime !== 0) {
+            // retry after remainingTime, or if that is unknown - after 10s
+            res.setHeader("Retry-After", remainingTime < 0 ? 10 : Math.ceil(remainingTime / 1000));
+            return operationOutcome(res, "Another import operation is currently running. Please try again later.", { httpCode: 429 });
+        }
+
         console.log("request looks good ... kicking off import task manager")
 
         const tasks = new DownloadTaskCollection(req.body);

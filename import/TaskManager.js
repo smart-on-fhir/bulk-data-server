@@ -31,9 +31,30 @@ function has(id)
     return TASKS.hasOwnProperty(id);
 }
 
+/**
+ * Returns:
+ * -  0 - if all the tasks are completed
+ * - -1 - if at least one task is not started yet (unknown time remaining)
+ * - +n - positive int remaining time otherwise
+ */
+function getRemainingTime()
+{
+    let sum = 0;
+    for (const taskId in TASKS) {
+        const task = TASKS[taskId];
+        const remainingTime = task.remainingTime;
+        if (remainingTime < 0) {
+            return -1;
+        }
+        sum += remainingTime;
+    }
+    return Math.ceil(sum);
+}
+
 module.exports = {
     get,
     add,
     remove,
-    has
+    has,
+    getRemainingTime
 };
