@@ -56,12 +56,12 @@
             }
             output#generated-request {}
             .form-bottom {
-                margin-bottom: 0.5rem;
+
                 border-radius: 13px;
-                border-bottom: #ddd 6px solid;
-                box-shadow: 0px 15px 10px -8px #eee;
-                padding: 2.5rem;
-                margin-bottom: 2.5rem;
+                border-bottom: #d5d5d5 1px solid;
+                box-shadow: 0px 20px 16px -10px #ececec;
+                padding: 0 0 5rem;
+                margin-bottom: 3.5rem;
             }
             #request-curl pre,
             #request-http pre {
@@ -493,9 +493,17 @@
 
             <div class="tab-content">
                 <div role="tabpanel" id="form" class="tab-pane active">
+                    <div class="panel panel-info">
+                        <div class="panel-heading">Introduction</div>
+                        <p class="panel-body">
+                            This app demonstrates a basic bulk import of FHIR resources, based on the
+                            <a href="https://github.com/smart-on-fhir/bulk-import" target="_blank" rel="noopener noreferrer">$import operation proposal</a>. 
+                            Command-line equivalents of the generated request are made available at the bottom of the page for reference.
+                        </p>
+                    </div>
                     <form>
                         <h4 class="page-header">
-                            <i class="fa fa-globe"></i> <span class="text-success">Metadata for import request</span>
+                            <i class="fa fa-globe"></i> <span class="text-success">Identify origin of data</span>
                         </h4>
                         <div class="row">
                             <div class="col-sm-2 col-lg-2">
@@ -556,31 +564,27 @@
                         </div>
 
                         <div class="row">
-                            <div class="text-right col-sm-12">
+                            <div class="pull-right">
                                 <button id="upload-button" class="btn btn-lg btn-success" disabled>Start Import <i class="fa fa-chevron-right"></i></button>
                             </div>
                             <output id="generated-request">
                                 <div class="form-group">
-                                    <span class="form-control-static">View generated output: </span>
+                                    <span class="form-control-static">View generated request as: </span>
                                     <div class="btn-group" id="code-preview">
                                         <label class="btn btn-default" data-value="http">HTTP</label>
-                                        <label class="btn btn-default" data-value="curl">CURL</label>
+                                        <label class="btn btn-default" data-value="curl">curl</label>
                                     </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-xs-12" id="request-curl" style="display: none">
-                                        <i class="close fa fa-clipboard"></i>
+                                        <!-- <i class="close fa fa-clipboard"></i> -->
                                         <br/>
-                                        <div>
-                                            <pre>curl</pre>
-                                        </div>
+                                        <pre class="well"># not enough form data to generate curl command</pre>
                                     </div>
                                     <div class="col-xs-12" id="request-http" style="display: none">
-                                        <i class=" fa fa-clipboard"></i>
+                                        <!-- <i class=" fa fa-clipboard"></i> -->
                                         <br/>
-                                        <div>
-                                            <pre>http</pre>
-                                        </div>
+                                        <pre class="well"># not enough form data to generate http headers</pre>
                                     </div>
                                 </div>
                             </output>
@@ -675,7 +679,7 @@
             var TICK;
             var requestBody = {
                 // only supported inputFormat is "application/fhir+ndjson"
-                "inputFormat": null,
+                "inputFormat": "application/fhir+ndjson",
                 "inputSource": null,
                 "storageDetail": null,
                 "input": []
@@ -700,6 +704,8 @@
                 appendRow(); // form starts with input row for a single file
 
                 function showError(error) {
+                    $("#preparing-progress").addClass("hidden");
+                    
                     var txt = "Unknown error";
                     if (error instanceof Error) {
                         txt = String(error);
@@ -720,7 +726,6 @@
 
                     $("#error").text(txt);
                     $("#error-result").removeClass("hidden");
-                    $(".preparing-progress").addClass("hidden");
                 }
 
                 function hideError() {
@@ -800,7 +805,7 @@
                 // if the server was able to import at least one file 
                 // it will give us a success result
                 function showResults(outcome) {
-                    // successful inputs and errors
+                    // successful inputs and possibly errors
                     $("#preparing-progress").addClass("hidden");
                     setProgress(0, 0);
                     // $("output").addClass("hidden");
@@ -808,20 +813,27 @@
                     outcome.output.forEach(file => {
                         const matchingInput = requestBody.input.find(i => i.url === file.inputUrl);
                         const resourceType = matchingInput ? matchingInput.type : "-";
+                        // if file.inputUrl is long, truncate it
                         $(".file-list tbody").append(`
                             <tr>
                                 <td><span title="${file.inputUrl}">${file.inputUrl.substr(0,25)}....${file.inputUrl.substr(-20)}</span></td>
                                 <td>${resourceType}</td>
                                 <td>${file.count}</td>
-                                <td><a href="${file.url}">Outcome details</a></td>
+                                <td><a href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
                             </tr>
                         `);
-                    })
+                    });
                     if (outcome.error) {
-                        $(".error-list").removeClass("hidden");
-                        outcome.error.forEach(err => {
-                            $(".error-list").append("<li>"+"error encountered"+"</li>")
-                        })
+                        outcome.error.forEach(file => {
+                            $(".file-list tbody").append(`
+                                <tr>
+                                    <td><span title="${file.inputUrl}">${file.inputUrl.substr(0,25)}....${file.inputUrl.substr(-20)}</span></td>
+                                    <td>${resourceType}</td>
+                                    <td>${file.count}</td>
+                                    <td><a href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
+                                </tr>
+                            `);
+                        });
                     }
                 }
 
@@ -852,7 +864,7 @@
                 }
 
                 function generateCodes() {
-                    const inputFormat = $("select[name='input-format'").val();
+                    // const inputFormat = $("select[name='input-format'").val();
                     const inputSource = $("input[name='source']").val();
                     const storageDetail = { "type": $("select[name='storage-protocol']").val() }
                     const input = [];
@@ -871,7 +883,7 @@
                             $(this).find('.validity').removeClass('fa-check-circle');
                         }
                     });
-                    requestBody = { inputFormat, inputSource, storageDetail, input };
+                    requestBody = { "inputFormat": "application/fhir+ndjson", inputSource, storageDetail, input };
                 }
 
                 function generateCurlCommand() {
@@ -958,6 +970,7 @@
                     // should accept it (202) and return a URL to poll
                     // as a 'Content-Location' header
                     // at which point we hand off to confirmation function...
+                    hideError();
                     $.ajax({
                         url: uploadUrl,
                         type: "POST",
@@ -979,18 +992,23 @@
                         // 202 ends up here unfortunately
                         console.log("jQuery fail; server error:", status);
                         console.log(errorThrown);
-                        // showError(xhr);
+                        if (xhr.status == 202) {
+                            $("#preparing-progress").removeClass("hidden");
+                        } else {
+                            showError(xhr);
+                        }
                     })
                     .always(function(xhr, status){
                         console.log("jQuery always (done or fail); server status:", status);
-                        hideError();
                         hideResults();
-                        $("#preparing-progress").removeClass("hidden");
-                            const statusUrl = xhr.getResponseHeader("content-location");
                         showTabs();
                         $("#results-tab").tab("show");
+                        const statusUrl = xhr.getResponseHeader("content-location");
                         if (statusUrl) {
+                            $("#preparing-progress").removeClass("hidden");
                             console.log("found response header to location to query", statusUrl);
+                            // enable immediately,
+                            // but don't post DELETE unless we've heard back?
                             $("#cancel-btn")
                                 .removeAttr("disabled")
                                 .on('click', function() {
