@@ -503,12 +503,12 @@
                     </div>
                     <form>
                         <h4 class="page-header">
-                            <i class="fa fa-globe"></i> <span class="text-success">Identify origin of data</span>
+                            <i class="fa fa-globe"></i> <span class="text-success">Metadata about Import</span>
                         </h4>
                         <div class="row">
                             <div class="col-sm-2 col-lg-2">
-                                <p class="form-control-static hidden-xs bump-right" for="source"><label>Input Source</label></p>
-                                <p class="form-control-static visible-xs-block" for="source"><label>Input Source</label></p>
+                                <p class="form-control-static hidden-xs bump-right" for="source"><label>Data origin</label></p>
+                                <p class="form-control-static visible-xs-block" for="source"><label>Data origin</label></p>
                             </div>
                             <div class="col-sm-4 col-lg-6">
                                 <input name="source" type="url" aria-describedby="sourceFieldDescription" class="form-control" required />
@@ -538,7 +538,7 @@
 
                         <div id="uploads">
                             <h4 class="page-header">
-                                <i class="glyphicon glyphicon-file text-muted"></i> <span class="text-success">Specify location and FHIR type of one or more bulk data files</span>
+                                <i class="glyphicon glyphicon-file text-muted"></i> <span class="text-success">Resources to Import</span>
                             </h4>
                             <table class="table table-condensed table-striped">
                                 <thead>
@@ -677,19 +677,152 @@
             const uploadUrl = "/byron/fhir/$import";
             var TIMER;
             var TICK;
-            var requestBody = {
-                // only supported inputFormat is "application/fhir+ndjson"
-                "inputFormat": "application/fhir+ndjson",
-                "inputSource": null,
-                "storageDetail": null,
-                "input": []
-            }
 
             const STATE = {
-                codePreview: "none" // none | http | curl
+                ui: {
+                    activeTab: "form", // form | results
+                    formView: {
+                        codePreview: "none", // none | http | curl,
+                        rowDeleteEnabled: false,
+                        validRequest: false,
+                    },
+                    // results tab
+                    resultsView: {
+                        progressBarVisible: false,
+                        outcomePanelVisible: false,
+                        errorPanelVisible: false
+                    }
+                },
+                requestBody: {
+                        // only supported inputFormat is "application/fhir+ndjson"
+                        "inputFormat": "application/fhir+ndjson",
+                        "inputSource": null,
+                        "storageDetail": null,
+                        "input": []
+                    },
+                importOperation: {
+                    pollingUrl: null,
+                    progress: 0,
+                    response: null,
+                },
             };
 
             jQuery(function($) {
+                const VIEWS = {
+                    hideTabs: function() {
+                        $('.nav-tabs').addClass("hidden")
+                    },
+                    showTabs: function() {
+                        $('.nav-tabs').removeClass("hidden")
+                    },
+                    hideResults: function() {
+                        $("#success-result").addClass("hidden");
+                        $(".file-list tbody").empty();
+                    },
+                    switchToForm: function() {
+                        VIEWS.hideResults();
+                        $("#form-tab").tab("show");
+                    },
+                    switchToResults: function() {
+                        $("#results-tab").tab("show");
+                    }
+                }
+
+
+                // if the server was able to import at least one file 
+                // it will give us a success result
+                function showResults(outcome) {
+                    // successful inputs and possibly errors
+                    $("#preparing-progress").addClass("hidden");
+                    setProgress(0, 0);
+                    // $("output").addClass("hidden");
+                    $("#success-result").removeClass("hidden");
+                    outcome.output.forEach(file => {
+                        const matchingInput = STATE.requestBody.input.find(i => i.url === file.inputUrl);
+                        const resourceType = matchingInput ? matchingInput.type : "-";
+                        // if file.inputUrl is long, truncate it
+                        $(".file-list tbody").append(`
+                            <tr>
+                                <td><span title="${file.inputUrl}">${file.inputUrl.substr(0,25)}....${file.inputUrl.substr(-20)}</span></td>
+                                <td>${resourceType}</td>
+                                <td>${file.count}</td>
+                                <td><a href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
+                            </tr>
+                        `);
+                    });
+                    if (outcome.error) {
+                        outcome.error.forEach(file => {
+                            $(".file-list tbody").append(`
+                                <tr class="bg-danger">
+                                    <td><span title="${file.inputUrl}">${file.inputUrl.substr(0,25)}....${file.inputUrl.substr(-20)}</span></td>
+                                    <td>-</td>
+                                    <td>${file.count}</td>
+                                    <td><a class="text-warning" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
+                                </tr>
+                            `);
+                        });
+                    }
+                }
+
+                function setProgress(pct, dur) {
+                    pct = Math.round(pct);
+                    console.log("setting progress:", pct, "%")
+                    if (dur !== undefined) {
+                        $(".progress-bar").css("transitionDuration", (dur || 0) + "s");
+                        setTimeout(function() {
+                            $(".progress-bar")
+                                .attr("aria-valuenow", pct)
+                                .css("width", pct + "%")
+                                .find(".sr-only").text(pct + "% Complete");
+                        }, 20);
+                    } else {
+                        $(".progress-bar")
+                            .attr("aria-valuenow", n)
+                            .css("width", pct + "%")
+                            .find(".sr-only").text(pct + "% Complete");
+                    }
+                }
+
+                function successHandler(result) {
+                    console.log("request resolved")
+                    $(".preparing-progress").addClass("hidden");
+                    setProgress(0, 0);
+                    // $("").closest(".panel").removeClass("hidden");
+                }
+
+                const STEPS = {
+                    kickOffComplete: function(xhr) {
+                        console.log("kickoff complete");
+                        $("#preparing-progress").removeClass("hidden");
+                        VIEWS.hideResults();
+                        VIEWS.showTabs();
+                        $("#results-tab").tab("show");
+                        const statusUrl = xhr.getResponseHeader("content-location");
+                        if (statusUrl) {
+                            $("#preparing-progress").removeClass("hidden");
+                            console.log("found response header to location to query", statusUrl);
+                            // enable immediately,
+                            // but don't post DELETE unless we've heard back?
+                            $("#cancel-btn")
+                                .removeAttr("disabled")
+                                .on('click', function() {
+                                    $("#cancel-btn").attr({"disabled": true});
+                                    cancelImport(statusUrl);
+                                });
+                            TICK = Date.now();
+                            waitForResult(statusUrl);
+                        }
+
+                        setProgress(0, 0);
+                    },
+                    kickOffRejected: function(xhr) {
+                        console.log("kickoff failed");
+                    }
+                }
+                // operation process events
+                // incomplete form => valid data => ubmit request => receive request response 
+                // => polling status url partial progress => progress complete => outcome received
+
                 const rowTemplate = $("#rowInput").html();
                 const formInputFiles = $('#uploads tbody');
                 const synchronizeButtons = () => {
@@ -734,11 +867,6 @@
                     $("#error-result").addClass("hidden")
                 }
 
-                function hideResults() {
-                    // $(".file-list").closest(".panel").addClass("hidden");
-                    $("#success-result").addClass("hidden");
-                    $(".file-list tbody").empty();
-                }
                 
                 function waitForResult(url) {
                     $.ajax({
@@ -795,73 +923,6 @@
                     // restore upload button
                 }
 
-                function hideTabs() {
-                    $('.nav-tabs').addClass("hidden")
-                }
-                function showTabs() {
-                    $('.nav-tabs').removeClass("hidden")
-                }
-
-                // if the server was able to import at least one file 
-                // it will give us a success result
-                function showResults(outcome) {
-                    // successful inputs and possibly errors
-                    $("#preparing-progress").addClass("hidden");
-                    setProgress(0, 0);
-                    // $("output").addClass("hidden");
-                    $("#success-result").removeClass("hidden");
-                    outcome.output.forEach(file => {
-                        const matchingInput = requestBody.input.find(i => i.url === file.inputUrl);
-                        const resourceType = matchingInput ? matchingInput.type : "-";
-                        // if file.inputUrl is long, truncate it
-                        $(".file-list tbody").append(`
-                            <tr>
-                                <td><span title="${file.inputUrl}">${file.inputUrl.substr(0,25)}....${file.inputUrl.substr(-20)}</span></td>
-                                <td>${resourceType}</td>
-                                <td>${file.count}</td>
-                                <td><a href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
-                            </tr>
-                        `);
-                    });
-                    if (outcome.error) {
-                        outcome.error.forEach(file => {
-                            $(".file-list tbody").append(`
-                                <tr>
-                                    <td><span title="${file.inputUrl}">${file.inputUrl.substr(0,25)}....${file.inputUrl.substr(-20)}</span></td>
-                                    <td>${resourceType}</td>
-                                    <td>${file.count}</td>
-                                    <td><a href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
-                                </tr>
-                            `);
-                        });
-                    }
-                }
-
-                function setProgress(pct, dur) {
-                    pct = Math.round(pct);
-                    console.log("setting progress:", pct, "%")
-                    if (dur !== undefined) {
-                        $(".progress-bar").css("transitionDuration", (dur || 0) + "s");
-                        setTimeout(function() {
-                            $(".progress-bar")
-                                .attr("aria-valuenow", pct)
-                                .css("width", pct + "%")
-                                .find(".sr-only").text(pct + "% Complete");
-                        }, 20);
-                    } else {
-                        $(".progress-bar")
-                            .attr("aria-valuenow", n)
-                            .css("width", pct + "%")
-                            .find(".sr-only").text(pct + "% Complete");
-                    }
-                }
-
-                function successHandler(result) {
-                    console.log("request resolved")
-                    $(".preparing-progress").addClass("hidden");
-                    setProgress(0, 0);
-                    // $("").closest(".panel").removeClass("hidden");
-                }
 
                 function generateCodes() {
                     // const inputFormat = $("select[name='input-format'").val();
@@ -883,7 +944,7 @@
                             $(this).find('.validity').removeClass('fa-check-circle');
                         }
                     });
-                    requestBody = { "inputFormat": "application/fhir+ndjson", inputSource, storageDetail, input };
+                    STATE.requestBody = { "inputFormat": "application/fhir+ndjson", inputSource, storageDetail, input };
                 }
 
                 function generateCurlCommand() {
@@ -895,7 +956,7 @@
                         "-H 'Accept: application/fhir+json'",
                         "-H 'Prefer: respond-async'",
                     ];
-                    var data = `-d '${JSON.stringify(requestBody, null, 4)}'`;
+                    var data = `-d '${JSON.stringify(STATE.requestBody, null, 4)}'`;
                     command.push(options.join(" "));
                     command.push(data);
                     command.push("https://example.net/fhirserver");
@@ -911,7 +972,7 @@
                         "Accept-Language: en-US,en;q=0.5\n" +
                         "Accept-Encoding: gzip, deflate, br\n" +
                         "Cache-Control: no-cache\n\n" +
-                        JSON.stringify(requestBody, null, 4)
+                        JSON.stringify(STATE.requestBody, null, 4)
                     );
                     $('#request-curl pre').text(generateCurlCommand());
                     //     "curl -x POST url \\\n" +
@@ -934,11 +995,7 @@
                 });
 
                 $("#append-button").on('click', appendRow);
-
-                // $(".close").on("click", resetForm);
-                $(".go-back").on("click", () => {
-                    $("#form-tab").tab("show");
-                })
+                $(".go-back").on("click", VIEWS.switchToForm);
 
                 // Toggle which request output is displayed
                 $("form").on('click', '#code-preview .btn', e => {
@@ -965,7 +1022,7 @@
                 $("form").on("submit", function(e) {
                     e.preventDefault();
                     console.log("making upload post request");
-                    requestBody.inputSource = $("input[name='source']").val();
+                    STATE.requestBody.inputSource = $("input[name='source']").val();
                     // if the import request is properly formed the server
                     // should accept it (202) and return a URL to poll
                     // as a 'Content-Location' header
@@ -979,53 +1036,25 @@
                             Accept: "application/fhir+json",
                             Prefer: "respond-async",
                         },
-                        data: JSON.stringify(requestBody),
+                        data: JSON.stringify(STATE.requestBody),
                         contentType: "application/json",
                     })
-                    .done(function(data, status, xhr){
-                        console.log("jQuery done; result from server:", data);
-                        $("#preparing-progress").removeClass("hidden");
-                        setProgress(0, 0);
-                        waitForResult("/byron/fhir/status");
-                    })
-                    .fail(function(xhr, status, errorThrown){
-                        // 202 ends up here unfortunately
-                        console.log("jQuery fail; server error:", status);
-                        console.log(errorThrown);
-                        if (xhr.status == 202) {
-                            $("#preparing-progress").removeClass("hidden");
-                        } else {
-                            showError(xhr);
+                    .always((xhr, textStatus, error) => {
+                        console.log("ajax request resolved with textStatus", textStatus)
+                        console.log("xhr was ", xhr)
+                        // const rh = xhr.getResponseHeader('Content-Location')
+                        // console.log(rh)
+                        // good response, things okay
+                        if (xhr.status == 202 || xhr.status == 200) {
+                            // set state: positive result
+                            STEPS.kickOffComplete(xhr);
+                        }
+                        else {
+                            // set state: error
+                            STEPS.kickOffRejected(xhr);
                         }
                     })
-                    .always(function(xhr, status){
-                        console.log("jQuery always (done or fail); server status:", status);
-                        hideResults();
-                        showTabs();
-                        $("#results-tab").tab("show");
-                        const statusUrl = xhr.getResponseHeader("content-location");
-                        if (statusUrl) {
-                            $("#preparing-progress").removeClass("hidden");
-                            console.log("found response header to location to query", statusUrl);
-                            // enable immediately,
-                            // but don't post DELETE unless we've heard back?
-                            $("#cancel-btn")
-                                .removeAttr("disabled")
-                                .on('click', function() {
-                                    $("#cancel-btn").attr({"disabled": true});
-                                    cancelImport(statusUrl);
-                                });
-                            TICK = Date.now();
-                            waitForResult(statusUrl);
-                        }
-                    })
-                    // not resolving with .then for some reason
-                    // .then((body, textStatus, xhr) => {
-                    //     console.log("ajax request resolved with status", textStatus)
-                    //     const rh = xhr.getResponseHeader('Content-Location')
-                    //     // console.log(rh)
-                    // })
-                    // .catch()
+                    // .catch();
                 })
             });
         </script>
