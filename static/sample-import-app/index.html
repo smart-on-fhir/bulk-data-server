@@ -81,6 +81,9 @@
             .table > tbody > tr > td {
                 vertical-align: middle;
             }
+            .error-item {
+                cursor: pointer;
+            }
         </style>
     </head>
     <body>
@@ -485,7 +488,7 @@
                     <a id="form-tab" class="nav-link" href="#form" role="tab" data-toggle="tab"aria-controls="form" aria-selected="true">Import Settings</a>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <a id="results-tab" class="nav-link" href="#results" role="tab" data-toggle="tab" aria-controls="steps" aria-selected="false">Import Results</a>
+                    <a id="results-tab" class="nav-link" href="#results" role="tab" data-toggle="tab" aria-controls="steps" aria-selected="false">Operation Results</a>
                 </li>
             </ul>
 
@@ -494,7 +497,7 @@
             <div class="tab-content">
                 <div role="tabpanel" id="form" class="tab-pane active">
                     <div class="panel panel-info">
-                        <div class="panel-heading">Introduction</div>
+                        <div class="panel-heading">About</div>
                         <p class="panel-body">
                             This app demonstrates a basic bulk import of FHIR resources, based on the
                             <a href="https://github.com/smart-on-fhir/bulk-import" target="_blank" rel="noopener noreferrer">$import operation proposal</a>. 
@@ -503,7 +506,7 @@
                     </div>
                     <form>
                         <h4 class="page-header">
-                            <i class="fa fa-globe"></i> <span class="text-success">Metadata about Import</span>
+                            <i class="fa fa-globe text-muted"></i> <span class="text-success">Metadata for Import Operation</span>
                         </h4>
                         <div class="row">
                             <div class="col-sm-2 col-lg-2">
@@ -614,12 +617,14 @@
 
                     <div id="success-result" class="hidden">
                         <div class="panel panel-success">
-                            <div class="panel-heading">
-                                Results of bulk data import
+                            <div id="result-description" class="alert ">
+                                <span>Bulk import operation completed</span>
+                                <i class="fa fa-upload pull-right"></i>
                             </div>
                             <table class="table file-list">
                                 <thead>
                                     <tr>
+                                        <th></th>
                                         <th scope="col">Input file</th>
                                         <th scope="col">Resource Type</th>
                                         <th scope="col">Count</th>
@@ -707,6 +712,25 @@
                 },
             };
 
+            const util = {
+                extractParam: function(urlString, param) {
+                    console.log("extract param", param)
+                    if (typeof urlString === "string") {
+                        const errorUrl = new URL(urlString);
+                        const errorMsg = errorUrl.searchParams.get(param);
+                        console.log("error msg", errorMsg)
+                        return errorMsg || null;
+                    }
+                    return null;
+                },
+                truncateUrl: function(url) {
+                    if (url.length > 50) {
+                        return url.substr(0,25) + "...." + url.substr(-20);
+                    }
+                    return url;
+                }
+            }
+
             jQuery(function($) {
                 const VIEWS = {
                     hideTabs: function() {
@@ -737,29 +761,47 @@
                     setProgress(0, 0);
                     // $("output").addClass("hidden");
                     $("#success-result").removeClass("hidden");
+                    $("#result-description").removeClass("alert-warning").addClass("alert-success")
                     outcome.output.forEach(file => {
+                        $("#result-description span").text("All files successfully imported")
                         const matchingInput = STATE.requestBody.input.find(i => i.url === file.inputUrl);
                         const resourceType = matchingInput ? matchingInput.type : "-";
                         // if file.inputUrl is long, truncate it
                         $(".file-list tbody").append(`
                             <tr>
-                                <td><span title="${file.inputUrl}">${file.inputUrl.substr(0,25)}....${file.inputUrl.substr(-20)}</span></td>
+                                <td><i class="fa fa-check-circle text-success"></i></td>
+                                <td><span title="${file.inputUrl}">${util.truncateUrl(file.inputUrl)}</span></td>
                                 <td>${resourceType}</td>
                                 <td>${file.count}</td>
                                 <td><a href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
                             </tr>
                         `);
                     });
-                    if (outcome.error) {
+                    if (outcome.error && outcome.error.length) {
+                        $("#result-description").addClass("alert-warning").removeClass("alert-success");
+                        $("#result-description span").text("Problems encountered importing some files")
                         outcome.error.forEach(file => {
+                            const matchingInput = STATE.requestBody.input.find(i => i.url === file.inputUrl);
+                            const resourceType = matchingInput ? matchingInput.type : "-";
                             $(".file-list tbody").append(`
-                                <tr class="bg-danger">
-                                    <td><span title="${file.inputUrl}">${file.inputUrl.substr(0,25)}....${file.inputUrl.substr(-20)}</span></td>
-                                    <td>-</td>
+                                <tr class="bg-danger error-item">
+                                    <td><i class="fa fa-times-circle text-danger"></i></td>
+                                    <td><span title="${file.inputUrl}">${util.truncateUrl(file.inputUrl)}</span></td>
+                                    <td>${resourceType}</td>
                                     <td>${file.count}</td>
                                     <td><a class="text-warning" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
                                 </tr>
                             `);
+                            const errorMsg = util.extractParam(file.url, "message") || "Unknown problem";
+                            if (errorMsg) {
+                                $(".file-list tbody").append(`
+                                    <tr class="bg-danger error-detail hidden">
+                                        <td style="background:#8884"></td>
+                                        <td colspan="5" style="background:#8882"><em>${errorMsg}</em></td>
+                                    </tr>
+                                `);
+
+                            }
                         });
                     }
                 }
@@ -787,7 +829,6 @@
                     console.log("request resolved")
                     $(".preparing-progress").addClass("hidden");
                     setProgress(0, 0);
-                    // $("").closest(".panel").removeClass("hidden");
                 }
 
                 const STEPS = {
@@ -925,7 +966,6 @@
 
 
                 function generateCodes() {
-                    // const inputFormat = $("select[name='input-format'").val();
                     const inputSource = $("input[name='source']").val();
                     const storageDetail = { "type": $("select[name='storage-protocol']").val() }
                     const input = [];
@@ -933,7 +973,6 @@
                         const url = $(this).find("input[type='url']:valid")[0];
                         const type = $(this).find("input[type='text']:valid")[0];
                         if (url && type) {
-                            // $(this).addClass("has-success");
                             $(this).find('.validity').addClass('fa-check-circle text-success')
                             input.push({
                                 type: type.value,
@@ -993,6 +1032,9 @@
                     // if validate
                     $("#upload-button").removeAttr("disabled");
                 });
+                $(".file-list").on("click",".error-item", (e) => {
+                    $(".error-detail").toggleClass("hidden")
+                })
 
                 $("#append-button").on('click', appendRow);
                 $(".go-back").on("click", VIEWS.switchToForm);
@@ -1040,11 +1082,6 @@
                         contentType: "application/json",
                     })
                     .always((xhr, textStatus, error) => {
-                        console.log("ajax request resolved with textStatus", textStatus)
-                        console.log("xhr was ", xhr)
-                        // const rh = xhr.getResponseHeader('Content-Location')
-                        // console.log(rh)
-                        // good response, things okay
                         if (xhr.status == 202 || xhr.status == 200) {
                             // set state: positive result
                             STEPS.kickOffComplete(xhr);
