@@ -1,8 +1,12 @@
 const moment = require("moment");
-const DB     = require("./db")(3);
+const uuid   = require("uuid");
+const App    = require("commander");
+const fs     = require("fs");
+const db     = require("./db");
 const Lib    = require("./lib");
-const App    = require('commander');
+require("colors");
 
+let DB;
 
 // @see assignTimes
 const TIME_MAP = {
@@ -25,142 +29,99 @@ const GROUPS = [
     {
         weight: 9,
         id: 1,
-        resource: {
-            "resourceType":"Group",
-            "id":"3d7d2344-ca49-40ac-9e1f-88b40fff3bd9",
-            "type":"person",
-            "actual":true,
-            "quantity":3375,
-            "name":"Blue Cross Blue Shield",
-            "text":{
-                "status":"generated",
-                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Blue Cross Blue Shield</div>"
-            }
-        }
+        resource: createGroup({ name: "Blue Cross Blue Shield" })
     },
     {
         weight: 3,
         id: 2,
-        resource: {
-            "resourceType":"Group",
-            "id":"a58071e4-ba37-48e3-d116-6cdf38107b57",
-            "type":"person",
-            "actual":true,
-            "quantity":1287,
-            "name":"BMC HealthNet",
-            "text":{
-                "status":"generated",
-                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">BMC HealthNet</div>"
-            }
-        }
+        resource: createGroup({ name: "BMC HealthNet" })
     },
     {
         weight: 1,
         id: 3,
-        resource: {
-            "resourceType":"Group",
-            "id":"3aa93632-9afb-4d91-d3bb-48a1572b970f",
-            "type":"person",
-            "actual":true,
-            "quantity":404 ,
-            "name":"Fallon Health",
-            "text":{
-                "status":"generated",
-                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Fallon Health</div>"
-            }
-        }
+        resource: createGroup({ name: "Fallon Health" })
     },
     {
         weight: 1,
         id: 4,
-        resource: {
-            "resourceType":"Group",
-            "id":"c56f9ba9-bf36-43a9-c30d-5963d7cd486b",
-            "type":"person",
-            "actual":true,
-            "quantity":800 ,
-            "name":"Harvard Pilgrim Health Care",
-            "text":{
-                "status":"generated",
-                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Harvard Pilgrim Health Care</div>"
-            }
-        }
+        resource: createGroup({ name: "Harvard Pilgrim Health Care" })
     },
     {
         weight: 8,
         id: 5,
-        resource: {
-            "resourceType":"Group",
-            "id":"6f4f7ae7-9662-4f50-9756-02127875c0a4",
-            "type":"person",
-            "actual":true,
-            "quantity":2418,
-            "name":"Health New England"         ,
-            "text":{
-                "status":"generated",
-                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Health New England</div>"         
-            }
-        }
+        resource: createGroup({ name: "Health New England" })
     },
     {
         weight: 1,
         id: 6,
-        resource: {
-            "resourceType":"Group",
-            "id":"b19809ab-8d29-4381-8778-f8162b32defb",
-            "type":"person",
-            "actual":true,
-            "quantity":828 ,
-            "name":"Minuteman Health"           ,
-            "text":{
-                "status":"generated",
-                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Minuteman Health</div>"           
-            }
-        }
+        resource: createGroup({ name: "Minuteman Health" })
     },
     {
         weight: 2,
         id: 7,
-        resource: {
-            "resourceType":"Group",
-            "id":"4adcfdca-c352-4a47-aed7-fb5635da20a5",
-            "type":"person",
-            "actual":true,
-            "quantity":632 ,
-            "name":"Neighborhood Health Plan"   ,
-            "text":{
-                "status":"generated",
-                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Neighborhood Health Plan</div>"   
-            }
-        }
+        resource: createGroup({ name: "Neighborhood Health Plan" })
     },
     {
         weight: 7,
         id: 8,
-        resource: {
-            "resourceType":"Group",
-            "id":"e47262b6-e02a-435a-fdf1-023003bdec1a",
-            "type":"person",
-            "actual":true,
-            "quantity":1789,
-            "name":"Tufts Health Plan"          ,
-            "text":{
-                "status":"generated",
-                "div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Tufts Health Plan</div>"         
-            
-            }
-        }
+        resource: createGroup({ name: "Tufts Health Plan" })
     }
 ];
 
 const URN_MAP = {};
 
-let _types = {};
+function randomMoment(after, before)
+{
+    const out = moment(after);
+    let add = Math.random() * 60 * 60 * 24 * 365;
+    if (before) {
+        const beforeMoment = moment(before);
+        let diff = beforeMoment.diff(out, "seconds");
+        add = Math.random() * diff;
+    }
+    out.add(add, "seconds");
+    return out;
+}
 
-let secondLoop = []
+function createGroup({ name, id = "", members = [], type = "person" })
+{
+    return {
+        resourceType: "Group",
+        id: id || uuid.v4(),
+        active: true,
+        type,
+        actual: true,
+        quantity: members.length,
+        name,
+        text: {
+            status: "generated",
+            div: `<div xmlns="http://www.w3.org/1999/xhtml">${name}</div>`
+        },
+        member: members
+    };
+}
 
-function updateUrnMap(json) {
-    json.entry.forEach(entry => {
+/**
+ * Walks the app input directory, filters json files only, parses them and calls
+ * the callback with that JSON as argument
+ * @param {(json: object) => any} callback 
+ */
+function loopFiles(callback)
+{
+    return Lib.forEachFile({
+        dir   : App.input,
+        filter: path => path.endsWith(".json")
+    }, callback);
+}
+
+/**
+ * Reads the entries of a bundle and adds their urn uuids to the URN_MAP. Later,
+ * this map will be used to translate URN refs to relative URLs.
+ * @param {object} resource FHIR Bundle
+ */
+function updateUrnMap(resource)
+{
+    resource.entry.forEach(entry => {
         if (entry.fullUrl && entry.fullUrl.indexOf("urn:uuid:") === 0) {
             URN_MAP[entry.fullUrl] = `${entry.resource.resourceType}/${entry.resource.id}`;
         }
@@ -168,24 +129,46 @@ function updateUrnMap(json) {
 }
 
 /**
+ * Walks the app input directory, filters json files only, parses them and
+ * builds the URN_MAP
+ * @returns {Promise<*>}
+ */
+function buildUrnMap()
+{
+    return loopFiles((path, fileStats, next) => {
+        Lib.readJSON(path).then(json => {
+            if (json.resourceType == "Bundle") {
+                updateUrnMap(json);
+            } else {
+                URN_MAP[`urn:uuid:${json.id}`] = `${json.resourceType}/${json.id}`;
+            }
+        }).then(next, next);
+    });
+}
+
+/**
  * Inserts one row into the data table
+ * @param {string|number} resource_id
  * @param {String} resource_json 
  * @param {String} resourceType 
  * @param {String} time 
  * @param {String} patientId 
- * @param {Number} group 
+ * @param {Number} groupId
  */
-function insertRow(resource_json, resourceType, time, patientId, groupId) {
+function insertRow(resource_id, resource_json, resourceType, time, patientId, groupId)
+{
     return DB.promise(
         "run",
         `INSERT INTO "data" (
+            resource_id,
             resource_json,
             fhir_type,
             modified_date,
             group_id,
             patient_id
-        ) VALUES (?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
         [
+            resource_id,
             resource_json,
             resourceType,
             time || null,
@@ -195,46 +178,107 @@ function insertRow(resource_json, resourceType, time, patientId, groupId) {
     );
 }
 
-function fixReferences(obj) {
-    
+/**
+ * If the argument is scalar does nothing. Otherwise (object or array), walks it
+ * finds references that begin with "urn:uuid:" and replaces them with the
+ * corresponding value from URN_MAP. This is recursive.
+ * @throws {Error} If a reference is not found in URN_MAP
+ * @returns void
+ * @param {*} obj The variable to try to translate
+ */
+function fixReferences(obj)
+{    
     // if array just dive into it (it cannot have references anyway)
     if (Array.isArray(obj)) {
         return obj.every(fixReferences);
     }
 
-    else if (obj && typeof obj == "object") {
-        let result = true
+    if (obj && typeof obj == "object") {
         for (let key in obj) {
             if (key == "reference") {
                 let ref = obj[key];
                 if (ref.indexOf("urn:uuid:") === 0) {
                     let newRef = URN_MAP[ref];
                     if (!newRef) {
-                        return false;
+                        throw new Error(`Cannot find a reference for "${ref}".`);
                     }
                     obj[key] = newRef;
                 }
             }
             else {
-                if (result) {
-                    result = result && fixReferences(obj[key]);
-                }
+                fixReferences(obj[key]);
             }
         }
-        return result;
     }
+}
 
-    return true;
+/**
+ * Given a JSON bundle, insert everything onto the database
+ * @param {Object} json
+ * @returns {Promise<*>}
+ */
+async function insertBundle(json, path, num)
+{
+    assignTimes(json);
+    const patient = json.entry.find(e => e.resource.resourceType == "Patient");
+    const total = json.entry.length;
+    let i = 0, skipped = 0;
+    for (const entry of json.entry) {
+        const pct = Math.round(++i / total * 100);
+        let msg = "\033[2KFile " + num + ": " + path.bold + ": " + entry.resource.id + " ";
+        msg += "▉".repeat(Math.ceil(pct/10)) + "░".repeat(Math.floor(10 - pct/10)) + " ";
+        msg += pct + "%, "  + String(i).magenta.bold + " resources\r"; 
+        process.stdout.write(msg);
+        fixReferences(entry);
+        try {
+            await insertResource(entry, patient ? patient.resource.id : null, null);
+        } catch (error) {
+            if (error.code == "SQLITE_CONSTRAINT") {
+                const row = await DB.promise("get", "SELECT * FROM data WHERE resource_id = ?", entry.resource.id);
+                if (row.resource_json === JSON.stringify(entry.resource)) {
+                    // process.stdout.write(
+                    //     "\033[2K" + ("File " + num).red + ": " + path.bold + ": " + 
+                    //     ("Duplicate record of type \"" + entry.resource.resourceType + "\" #" + entry.resource.id + "\n").red
+                    // );
+                    skipped++;
+                    continue;
+                }
+                console.log("\033[2K%s\n", row.resource_json);
+            }
+            console.error(error);
+            console.log("\033[2K" + ("File " + num).red + ": " + path.bold + ": Failed entry:\n%j", entry);
+            break;
+        }
+    }
+    process.stdout.write(
+        "\r\033[2KFile " + num + ": " + String(path).bold + ": imported " +
+        String(total).magenta.bold + " resources" + (skipped ? ", " + ("skipped " + skipped).yellow.bold : "") + "\n"
+    );
+}
+
+/**
+ * Walks the app input directory, and inserts all the bundles into the database
+ * @returns {Promise<*>}
+ */
+function insertBundles()
+{
+    let i = 0;
+    return loopFiles((path, fileStats, next) => {
+        Lib.readJSON(path).then(json => {
+            i++;
+            if (json.resourceType == "Bundle") {
+                return insertBundle(json, fileStats.name, i);
+            }
+            else {
+                console.log(`===> Skipping file "${fileStats.name}" (not a bundle)`.red);
+            }
+        }).then(next, console.error);
+    });
 }
 
 async function insertResource(entry, patientId, group) {
 
     let type = entry.resource.resourceType;
-    if (!_types[type]) {
-        _types[type] = 1;
-    } else {
-        _types[type] += 1;
-    }
     
     let json = process.env.NODE_ENV == "test" ?
         {
@@ -245,54 +289,13 @@ async function insertResource(entry, patientId, group) {
         entry.resource;
      
     return Lib.stringifyJSON(json).then(json => insertRow(
+        entry.resource.id,
         json,
         type,
         entry.__time,
         patientId,
         group
     ));
-}
-
-async function getGroups() {
-    let totalWeight = GROUPS.reduce((out, g) => out + g.weight, 0);
-    return GROUPS.map(g => ({
-        id    : g.id,
-        weight: g.weight / totalWeight,
-        cur   : 0
-    }));
-}
-
-/**
- * Given a JSON bundle, insert everything onto the database
- * @param {Object} json
- * @returns {Promise<*>}
- */
-function insertBundle(json, groups) {
-    assignTimes(json);  
-    let pt = json.entry.find(o => o.resource.resourceType == "Patient");
-
-    // Skip bundles without a patient (if any)
-    if (!pt) {
-        return Promise.resolve();
-    }
-
-    let group = groups.sort((a, b) => a.cur - b.cur)[0];
-    group.cur += 1 / group.weight;
-    
-    
-    let job = Promise.resolve();
-    json.entry.forEach(entry => {
-        // Scan the resource to see if it contains references to URNs. If so,
-        // Insert that resource first, get it's ID and modify the reference.
-        if (fixReferences(entry)) {
-            job = job.then(() => insertResource(entry, pt.resource.id, group.id))
-        }
-        else {
-            secondLoop.push([entry, pt.resource.id, group.id])
-        }
-    });
-
-    return job;
 }
 
 /**
@@ -351,88 +354,347 @@ function createDatabase() {
         "run",
         `CREATE TABLE "data"(
             "id"            Integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+            "resource_id"   Text UNIQUE ON CONFLICT REPLACE,
             "patient_id"    Text,
-            "resource_json" Text,
             "fhir_type"     Text,
             "modified_date" DateTime,
-            "group_id"      Integer
+            "group_id"      Text,
+            "expires_at"    DateTime,
+            "resource_json" Text
         );`
-    ))
-    .then(() => DB.promise(
-        "run",
-        `INSERT INTO "data"("id", "resource_json", "fhir_type", "modified_date") VALUES ` +
-        GROUPS.map(g => (
-            `(${g.id}, '${JSON.stringify(g.resource)}', "Group", "${moment().format()}")`
-        )).join(",")
     ));
 }
 
-function loopFiles(callback) {
-    return Lib.forEachFile({
-        dir   : App.input,
-        filter: path => path.endsWith(".json"),
-        limit : App.limit || 100
-    }, callback);
+async function insertGroups()
+{
+    let totalWeight = GROUPS.reduce((out, g) => out + g.weight, 0);
+
+    const patients = await DB.promise("all", "SELECT * FROM data WHERE fhir_type = 'Patient'");
+
+    const groups = GROUPS.map(g => ({
+        id      : g.id,
+        weight  : g.weight / totalWeight,
+        cur     : 0,
+        resource: g.resource
+    }));
+
+    let i = 0;
+    for (const patient of patients) {
+        process.stdout.write(`\rUpdating resources for patient #${patient.resource_id}`);
+
+        // pick a group for this patient
+        let group = groups.sort((a, b) => a.cur - b.cur)[0];
+
+        // Update the patient resources to belong to this group
+        await DB.promise(
+            "run",
+            `UPDATE "data" SET group_id = ? WHERE resource_id = ? OR patient_id = ?`,
+            group.resource.id,
+            patient.resource_id,
+            patient.resource_id
+        );
+
+        // Add the patient to this group
+        group.resource.quantity = group.resource.member.push({
+            entity: {
+                reference: "urn:uuid:" + patient.resource_id
+            }
+        });
+
+        // Update group weights
+        group.cur += 1 / group.weight;
+
+        i++;
+    }
+    process.stdout.write("\r\033[2KUpdated " + i + " resources to belong to a Group\n");
+
+    // insert groups
+    for (const group of groups) {
+        console.log(`Inserting group "${group.resource.name}"`);
+        await DB.promise(
+            "run",
+            `INSERT INTO "data" (
+                resource_id,
+                resource_json,
+                fhir_type,
+                modified_date,
+                group_id,
+                patient_id
+            ) VALUES (?, ?, ?, ?, ?, ?)`,
+            group.resource.id,
+            JSON.stringify(group.resource),
+            "Group",
+            moment([2000, 0, 1]).format(),
+            null,
+            null
+        );
+    }
 }
 
-function main() {
-    // Create the database and insert the groups into it
-    createDatabase()
+async function insertDocumentReferences()
+{
+    // find the first Patient
+    // -------------------------------------------------------------------------
+    const patient = await DB.promise(
+        "get",
+        "SELECT * FROM data WHERE fhir_type = 'Patient' LIMIT 1"
+    );
 
-    // Loop over the files to build the URN_MAP
-    .then(() => loopFiles((path, fileStats, next) => {
-        Lib.readJSON(path).then(updateUrnMap).then(next);
-    }))
+    // find the first Practitioner
+    // -------------------------------------------------------------------------
+    const practitioner = await DB.promise(
+        "get",
+        "SELECT * FROM data WHERE fhir_type = 'Practitioner' LIMIT 1"
+    );
 
-    // Create a structure with group id, weight and count
-    .then(getGroups)
+    // Insert one Binary resource
+    // -------------------------------------------------------------------------
+    console.log("Creating one Binary resource");
+    const binaryId = uuid.v4();
+    const binary = {
+        resourceType: "Binary",
+        id: binaryId,
+        meta: {
+            versionId: "1",
+            lastUpdated: randomMoment("2010-05-25").format()
+        },
+        contentType: "image/jpeg",
+        content: fs.readFileSync(__dirname + "/attachments/portrait-1.jpg").toString("base64")
+    };
+    await insertRow(
+        binaryId,
+        JSON.stringify(binary),
+        "Binary",
+        binary.meta.lastUpdated,
+        patient.resource_id,
+        patient.group_id
+    );
 
-    // Loop over the files again and try to insert all resources
-    .then(groups => {
-        return loopFiles((path, fileStats, next) => {
-            Lib.readJSON(path).then(json => {
-                process.stdout.write("\033[2KInserting " + path + "...\r");
-                return insertBundle(json, groups);
-            }).then(() => next());
-        })
-    })
-
-    // If anything could not be inserted the first time (because of missing
-    // URN_MAP entry) it should be inserted now
-    .then(() => {
-        let job = Promise.resolve();
-        while (secondLoop.length) {
-            job = job.then(() => {
-                let args = secondLoop.shift();
-                if (!fixReferences(args[0])) {
-                    return secondLoop.push(args);
-                } else {
-                    return insertResource(...args);
+    // Insert one DocumentReference resource to link to the Binary above
+    // -------------------------------------------------------------------------
+    console.log("Linking the Binary resource via DocumentReference");
+    const docRef1 = {
+        resourceType: "DocumentReference",
+        id: uuid.v4(),
+        meta: {
+            versionId: "1",
+            lastUpdated: randomMoment("2018-05-25").format()
+        },
+        text: {
+            status: "generated",
+            div: "<div xmlns=\"http://www.w3.org/1999/xhtml\">User photo</div>"
+        },
+        status: "current",
+        type: {
+            coding: [
+                {
+                    system: "http://loinc.org",
+                    code  : "72170-4",
+                    display: "Photographic image Unspecified body region Document"
                 }
-            });
-        }
-        return job;
-    })
+            ],
+            text: "User photo"
+        },
+        subject: {
+            reference: `Patient/${patient.resource_id}`
+        },
+        created: randomMoment("2016-05-25", "2018-05-25").format(),
+        indexed: randomMoment("2019-05-25").format(),
+        author: [
+            {
+                "reference": `Practitioner/${practitioner.resource_id}`
+            }
+        ],
+        "description": "User photo",
+        "content": [
+            {
+                "attachment": {
+                    "contentType": "image/jpeg",
+                    "url": `/Binary/${binaryId}`,
+                    "size": 10551
+                }
+            }
+        ]
+    };
 
-    // Log the resource counts
-    .then(() => console.log("\r\033[2K", _types))
+    if (App.fhirVersion == "4") {
+        docRef1.date = docRef1.created;
+        delete docRef1.created;
+        delete docRef1.indexed;
+    }
+
+    await insertRow(
+        docRef1.id,
+        JSON.stringify(docRef1),
+        "DocumentReference",
+        docRef1.meta.lastUpdated,
+        patient.resource_id,
+        patient.group_id
+    );
+
+    // Insert one DocumentReference resource to link to an image file
+    // -------------------------------------------------------------------------
+    console.log("Add one DocumentReference to DICOM image");
+    const docRef2 = {
+        resourceType: "DocumentReference",
+        id : uuid.v4(),
+        meta: {
+            versionId: "1",
+            lastUpdated: randomMoment("2018-05-25").format()
+        },
+        text: {
+            status: "generated",
+            div: "<div xmlns=\"http://www.w3.org/1999/xhtml\">DICOM Image</div>"
+        },
+        status: "current",
+        type: {
+            coding: [
+                {
+                    system: "http://loinc.org",
+                    code: "55113-5",
+                    display: "Key images Document Radiology"
+                }
+            ],
+            text: "DICOM Image"
+        },
+        subject: {
+            reference: `Patient/${patient.resource_id}`
+        },
+        created: randomMoment("2016-05-25", "2018-05-25").format(),
+        indexed: randomMoment("2019-05-25").format(),
+        author: [
+            {
+                reference: `Practitioner/${practitioner.resource_id}`
+            }
+        ],
+        description: "DICOM Image",
+        content: [
+            {
+                attachment: {
+                    contentType:"image/jpeg",
+                    url:"/attachments/DICOM.jpg",
+                    size: 190326
+                }
+            }
+        ]
+    };
+
+    if (App.fhirVersion == "4") {
+        docRef2.date = docRef2.created;
+        delete docRef2.created;
+        delete docRef2.indexed;
+    }
+
+    await insertRow(
+        docRef2.id,
+        JSON.stringify(docRef2),
+        "DocumentReference",
+        docRef2.meta.lastUpdated,
+        patient.resource_id,
+        patient.group_id
+    );
+
+    // Insert one DocumentReference resource to link to a PDF file
+    // -------------------------------------------------------------------------
+    console.log("Add one DocumentReference to PDF file");
+    const docRef3 = {
+        resourceType: "DocumentReference",
+        id: uuid.v4(),
+        meta: {
+            versionId: "1",
+            lastUpdated: randomMoment("2018-05-25").format()
+        },
+        text: {
+            status:"generated",
+            div: "<div xmlns=\"http://www.w3.org/1999/xhtml\">PDF Document</div>"
+        },
+        status: "current",
+        type: {
+            coding: [
+                {
+                    system: "http://loinc.org",
+                    code: "69764-9",
+                    display: "Document type"
+                }
+            ],
+            text: "PDF Document"
+        },
+        subject: {
+            reference: `Patient/${patient.resource_id}`
+        },
+        created: randomMoment("2016-05-25", "2018-05-25").format(),
+        indexed: randomMoment("2019-05-25").format(),
+        author: [
+            {
+                reference: `Practitioner/${practitioner.resource_id}`
+            }
+        ],
+        description: "PDF Document",
+        content: [
+            {
+                attachment: {
+                    contentType: "application/pdf",
+                    url        : "/attachments/document.pdf",
+                    size       : 1084656
+                }
+            }
+        ]
+    };
+
+    if (App.fhirVersion == "4") {
+        docRef3.date = docRef3.created;
+        delete docRef3.created;
+        delete docRef3.indexed;
+    }
+
+    await insertRow(
+        docRef3.id,
+        JSON.stringify(docRef3),
+        "DocumentReference",
+        docRef3.meta.lastUpdated,
+        patient.resource_id,
+        patient.group_id
+    );
+}
+
+
+async function main()
+{
+    // Connect to the specified database
+    DB = db(App.fhirVersion);
+
+    // build a map to be used for reference translation later
+    await buildUrnMap();
+
+    // (Re)create the database
+    await createDatabase();
+
+    // Insert FHIR bundle files
+    await insertBundles();
+
+    // Also add some DocumentReference resources
+    await insertDocumentReferences();
+
+    // Insert groups and update records to belong to them
+    await insertGroups();
 
     // Close the DB connection
-    .then(() => DB.close())
-    
-    // Report the error and exit
-    .catch(Lib.die); 
+    DB.close();
 }
 
 // Run =========================================================================
 App
     .version('0.1.0')
     .option('-d, --input <path>', 'Input folder containing JSON FHIR patient bundles', String)
-    .option('-l, --limit', 'Only import the first N patients', parseInt)
+    .option('-f, --fhir-version <version>', 'FHIR Version (2, 3 or 4). Defaults to 4.', String, "4")
     .parse(process.argv);
 
 if (App.input) {
-    main();
+    try {
+        main();
+    } catch (e) {
+        Lib.die(e);
+    }
 }
 else {
     App.outputHelp();
