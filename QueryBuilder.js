@@ -204,12 +204,10 @@ class QueryBuilder {
     }
 
     setGroupId(gId) {
-        let _n = parseInt(gId + "", 10);
-        if (isNaN(_n) || !isFinite(_n) || _n < 0) {
-            console.error(`Invalid group id "${gId}"`);
-            return;
+        let id = String(gId).trim();
+        if (id) {
+            this._groupId = id;
         }
-        this._groupId = _n;
     }
 }
 

@@ -343,7 +343,7 @@ function handlePatient(req, res) {
  * been referred to ONC for consideration).
  */
 function handleGroup(req, res) {
-    handleRequest(req, res, +req.params.groupId);
+    handleRequest(req, res, req.params.groupId);
 }
 
 function cancelFlow(req, res) {

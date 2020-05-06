@@ -64,9 +64,9 @@ module.exports = (req, res) => {
     let stu = sim.stu || 3;
 
     DB(stu).all(
-        `SELECT g.resource_json, g.id, COUNT(*) AS "quantity"
+        `SELECT g.resource_json, g.resource_id AS id, COUNT(*) AS "quantity"
         FROM "data" as "g"
-        LEFT JOIN "data" AS "d" ON (d.group_id = g.id)
+        LEFT JOIN "data" AS "d" ON (d.group_id = g.resource_id)
         WHERE g.fhir_type = "Group"
         AND d.fhir_type = "Patient"
         GROUP BY d.group_id`,
