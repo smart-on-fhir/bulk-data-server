@@ -30,7 +30,7 @@ class DownloadTask extends Task
      * Creates a DownloadTask instance
      * @param {object} options
      * @param {string} options.url
-     * @param {string} options.type 
+     * @param {string} [options.type]
      */
     constructor(options)
     {
@@ -73,7 +73,7 @@ class DownloadTask extends Task
 
                         // Check if the returned content-type can be handled
                         const contentType = String(res.headers["content-type"]).toLocaleLowerCase();
-                        const match = ACCEPTABLE_CONTENT_TYPES.find(type => contentType.indexOf(type) === 0);
+                        const match = ACCEPTABLE_CONTENT_TYPES.find(type => contentType.indexOf(contentType) === 0);
                         if (!match) {
                             return reject(new Error(
                                 `Invalid content-type (${contentType}) returned from ${url

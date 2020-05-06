@@ -7,19 +7,16 @@ const jwkToPem  = require("jwk-to-pem");
 const jwt       = require("jsonwebtoken");
 const express   = require("express");
 const lib       = require("./lib");
-const app       = require("../index");
+const { server } = require("../index");
 const config    = require("../config");
 
-let server;
 before(next => {
-    server = app.listen(config.port, () => next());
+    if (!server.listening)
+        server.listen(config.port, () => next());
 });
 
 after(next => {
-    if (server) {
-        server.close();
-        server = null;
-    }
+    server.close();
     next();
 });
 
@@ -936,7 +933,7 @@ describe("Progress Updates", () => {
         .then(() => done(), done);
     })
 
-    it ('Includes "errors" property in the result', done => {
+    it ('Includes "error" property in the result', done => {
         lib.requestPromise({
             url: lib.buildProgressUrl({
                 requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
@@ -945,11 +942,11 @@ describe("Progress Updates", () => {
             }),
             json: true
         })
-        .then(res => assert.deepEqual(res.body.errors, []))
+        .then(res => assert.deepEqual(res.body.error, []))
         .then(() => done(), done);
     })
 
-    it ('Includes "errors" entries for unknown resources', done => {
+    it ('Includes "error" entries for unknown resources', done => {
         lib.requestPromise({
             url: lib.buildProgressUrl({
                 requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
@@ -959,12 +956,12 @@ describe("Progress Updates", () => {
             json: true
         })
         .then(res => {
-            // console.log(res.body.errors)
-            assert.ok(res.body.errors.length === 2);
-            assert.ok(res.body.errors[0].type === "OperationOutcome");
-            assert.ok(res.body.errors[0].url.split("/").pop() === "Xz.error.ndjson");
-            assert.ok(res.body.errors[1].type === "OperationOutcome");
-            assert.ok(res.body.errors[1].url.split("/").pop() === "Yz.error.ndjson");
+            // console.log(res.body.error)
+            assert.ok(res.body.error.length === 2);
+            assert.ok(res.body.error[0].type === "OperationOutcome");
+            assert.ok(res.body.error[0].url.split("/").pop() === "Xz.error.ndjson");
+            assert.ok(res.body.error[1].type === "OperationOutcome");
+            assert.ok(res.body.error[1].url.split("/").pop() === "Yz.error.ndjson");
         })
         .then(() => done(), done);
     })

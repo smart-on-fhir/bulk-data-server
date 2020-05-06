@@ -6,17 +6,27 @@ const config       = require("../config");
 const NDJSONStream = require("../import/NDJSONStream");
 const MockReadable = require("./mocks/ReadStream");
 const mockServer   = require("./mocks/mockServer");
+const lib          = require("./lib");
+const { server }   = require("../index");
 
 const MOCK_BASE_URL = "https://127.0.0.1:8443/";
+// const API_BASE = MOCK_BASE_URL + "byron/fhir";
 
-// @ts-ignore
+
 before(next => {
-    mockServer.httpsServer.listen("8443", () => next());
+    mockServer.httpsServer.listen("8443", () => {
+        if (!server.listening)
+            server.listen(config.port);
+        next()
+    });
 });
 
-// @ts-ignore
 after(next => {
     mockServer.httpsServer.close();
+    // if (server) {
+    server.close();
+        // server = null;
+    // }
     next();
 });
 
@@ -205,3 +215,70 @@ describe("TaskManager", () => {
     it ("remove");
     it ("auto-remove");
 });
+
+describe("Import kick-off endpoint", () => {
+
+    it ("Requires Content-Type: application/json", async () => {
+
+        // Send all required headers except "Content-Type"
+        return lib.requestPromise({
+            url: lib.buildUrl(["/byron/fhir/$import"]),
+            method: "POST",
+            headers: {
+                "Accept": "application/fhir+json",
+                "Prefer": "respond-async"
+            }
+        })
+        .then(() => {
+            throw new Error("Did not fail as expected");
+        })
+        .catch(error => {
+            const outcome = JSON.parse(error.response.body);
+            assert.equal(outcome.issue[0].diagnostics, "The Content-Type header must be application/json");
+        });
+    });
+
+    it ("Requires Accept: application/fhir+json", async () => {
+
+        // Send all required headers except "Accept"
+        return lib.requestPromise({
+            url: lib.buildUrl(["/byron/fhir/$import"]),
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Prefer": "respond-async"
+            }
+        })
+        .then(() => {
+            throw new Error("Did not fail as expected");
+        })
+        .catch(error => {
+            const outcome = JSON.parse(error.response.body);
+            assert.equal(outcome.issue[0].diagnostics, "The Accept header must be application/fhir+json");
+        });
+    });
+
+    it ("Requires Prefer: respond-async", async () => {
+
+        // Send all required headers except "Prefer"
+        return lib.requestPromise({
+            url: lib.buildUrl(["/byron/fhir/$import"]),
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/fhir+json"
+            }
+        })
+        .then(() => {
+            throw new Error("Did not fail as expected");
+        })
+        .catch(error => {
+            const outcome = JSON.parse(error.response.body);
+            assert.equal(outcome.issue[0].diagnostics, "The Prefer header must be respond-async");
+        });
+    });
+});
+
+describe("Import status endpoint", () => {});
+
+describe("Import cancellation endpoint", () => {});
