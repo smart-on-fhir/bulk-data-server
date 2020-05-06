@@ -9,7 +9,7 @@
     "start": "node ."
   },
   "engines": {
-    "node": "<10.0.0"
+    "node": ">=9"
   },
   "repository": {
     "type": "git",
@@ -37,11 +37,11 @@
     "jsonwebtoken": "^8.1.0",
     "jwk-lite": "^0.1.2",
     "jwk-to-pem": "^2.0.0",
-    "mocha": "^4.0.1",
+    "mocha": "^7.1.2",
     "moment": "^2.19.4",
-    "morgan": "^1.9.0",
-    "request": "^2.83.0",
-    "sqlite3": "^3.1.13",
+    "morgan": "^1.10.0",
+    "request": "^2.88.2",
+    "sqlite3": "^4.2.0",
     "walk": "^2.3.9"
   },
   "devDependencies": {
