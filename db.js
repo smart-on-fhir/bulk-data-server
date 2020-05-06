@@ -17,18 +17,20 @@ function getDatabase(fhirVersion)
          * @param {String} method
          * @param {[*]} args 
          */
-        DB.promise = (...args) =>
-        {
-            let [method, ...params] = args;
-            return new Promise((resolve, reject) => {
-                DB[method](...params, (error, result) => {
-                    if (error) {
-                        return reject(error);
-                    }
-                    resolve(result);
-                });
-            });
-        };
+        Object.defineProperty(DB, "promise", {
+            get() {
+                return function(method, ...args) {
+                    return new Promise((resolve, reject) => {
+                        DB[method](...args, (error, result) => {
+                            if (error) {
+                                return reject(error);
+                            }
+                            resolve(result);
+                        });
+                    });
+                }
+            }
+        });
 
         DB_INSTANCES[fhirVersion] = DB;
     }

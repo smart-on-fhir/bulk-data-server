@@ -107,6 +107,8 @@ module.exports = {
         "Observation",
         "Organization",
         "Patient",
-        "Procedure"
+        "Procedure",
+        "Binary",
+        "DocumentReference"
     ]
 };

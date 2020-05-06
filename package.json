@@ -31,6 +31,7 @@
   "dependencies": {
     "base64-url": "^2.0.1",
     "body-parser": "^1.18.3",
+    "colors": "^1.4.0",
     "commander": "^2.12.2",
     "express": "^4.16.2",
     "jsonwebtoken": "^8.1.0",
@@ -42,5 +43,10 @@
     "request": "^2.83.0",
     "sqlite3": "^3.1.13",
     "walk": "^2.3.9"
+  },
+  "devDependencies": {
+    "@types/mocha": "^7.0.2",
+    "@types/node": "^13.13.4",
+    "@types/uuid": "^7.0.3"
   }
 }

@@ -49,12 +49,17 @@
             label > input[type="checkbox"] {
                 margin-right: 4px;
             }
+            label.disabled {
+                opacity: 0.75;
+                filter: grayscale(1);
+            }
             .download-link {
                 display: flex;
-                flex   : 0 1 216px;
+                flex   : 0 1 25%;
                 padding: 2px 6px;
                 border-radius: 3px;
                 align-items: flex-start;
+                min-width: 16em;
             }
             .download-link:hover {
                 background: #EEE;
@@ -292,7 +297,11 @@
                 var dur        = (PARAMS.dur || 10);
                 var exportType = $(':radio[name="export-type"]:checked').val();
 
-                $(':checkbox[value="Group"]').attr("disabled", exportType == "patient");
+                $(
+                    ':checkbox[value="Group"],' +
+                    ':checkbox[value="Practitioner"],' +
+                    ':checkbox[value="Organization"]'
+                ).attr("disabled", exportType == "patient").closest("label").toggleClass("disabled", exportType == "patient");
                 
                 var type       = $(":checkbox[name=type]").not(":disabled").get();
                 var allLength  = type.length;
@@ -302,7 +311,6 @@
                 }).map(function(cb) { return cb.value; });
 
                 $("#group").prop("disabled", exportType == "system");
-                $(':checkbox[value="Group"]').attr("disabled", exportType == "patient");
 
                 var url = "/fhir";
                 if (exportType != "system") {

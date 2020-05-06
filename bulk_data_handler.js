@@ -1,7 +1,8 @@
 const base64url    = require("base64-url");
 const moment       = require("moment");
 const crypto       = require("crypto");
-const router       = require("express").Router({ mergeParams: true });
+const express      = require("express")
+const router       = express.Router({ mergeParams: true });
 const config       = require("./config");
 const Lib          = require("./lib");
 const getDB        = require("./db");
@@ -11,6 +12,7 @@ const fhirStream   = require("./FhirStream");
 const zlib         = require("zlib");
 const toNdjson     = require("./transforms/dbRowToNdjson");
 const toCSV        = require("./transforms/dbRowToCSV");
+const translator   = require("./transforms/dbRowTranslator");
 
 
 const STATE_STARTED  = 2;
@@ -541,6 +543,8 @@ function handleFileDownload(req, res) {
     });
 
     input.init().then(() => {
+        input = input.pipe(translator(req.sim));
+
         const transform = exportTypes[outputFormat].transform;
         if (transform) {
             input = input.pipe(transform());
@@ -642,6 +646,10 @@ router.get("/\\$get-resource-counts", require("./fhir/get-resource-counts"));
 
 // operation definitions
 router.use("/OperationDefinition", OpDef);
+
+// router.get("/files/", Lib.checkAuth, express.static(__dirname + "/attachments"));
+router.use('/attachments', express.static(__dirname + "/attachments"));
+
 
 
 module.exports = router;

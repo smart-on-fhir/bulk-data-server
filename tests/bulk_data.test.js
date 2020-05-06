@@ -908,6 +908,9 @@ describe("Progress Updates", () => {
     });
 
     it ('Generates correct "count" property for each link', done => {
+        // We have 100 patients. Using  a multiplier (`m`) of 10 and 22 records
+        // per file, the result should contain 45 files of 22 resources and one
+        // of 10 resources.
         lib.requestPromise({
             url: lib.buildProgressUrl({
                 requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
@@ -919,8 +922,9 @@ describe("Progress Updates", () => {
             json: true
         })
         .then(res => {
+            // console.log(res.body);
             let n = res.body.output.length;
-            if (n != 48) {
+            if (n != 46) {
                 throw `Expected 46 links but got ${n}`;
             }
             
@@ -928,15 +932,15 @@ describe("Progress Updates", () => {
                 if (i < 45 && res.body.output[i].count != 22) {
                     throw `Expected count to equal 22 but got ${res.body.output[i].count}`;
                 }
-                else if (i == 45 && res.body.output[i].count != 22) {
-                    throw `Expected count to equal 22 for the last page but got ${res.body.output[i].count}`;
+                else if (i == 45 && res.body.output[i].count != 10) {
+                    throw `Expected count to equal 10 for the last page but got ${res.body.output[i].count}`;
                 }
             }
         })
         .then(() => done(), done);
     })
 
-    it ('Includes "errors" property in the result', done => {
+    it ('Includes "error" property in the result', done => {
         lib.requestPromise({
             url: lib.buildProgressUrl({
                 requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
@@ -945,12 +949,15 @@ describe("Progress Updates", () => {
             }),
             json: true
         })
-        .then(res => assert.deepEqual(res.body.errors, []))
+        .then(res => {
+            // console.log(res.body);
+            assert.deepEqual(res.body.error, []);
+        })
         .then(() => done(), done);
     })
 
-    it ('Includes "errors" entries for unknown resources', done => {
-        lib.requestPromise({
+    it ('Includes "error" entries for unknown resources', () => {
+        return lib.requestPromise({
             url: lib.buildProgressUrl({
                 requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
                 type        : "Patient,Xz,Yz",
@@ -958,15 +965,9 @@ describe("Progress Updates", () => {
             }),
             json: true
         })
-        .then(res => {
-            // console.log(res.body.errors)
-            assert.ok(res.body.errors.length === 2);
-            assert.ok(res.body.errors[0].type === "OperationOutcome");
-            assert.ok(res.body.errors[0].url.split("/").pop() === "Xz.error.ndjson");
-            assert.ok(res.body.errors[1].type === "OperationOutcome");
-            assert.ok(res.body.errors[1].url.split("/").pop() === "Yz.error.ndjson");
-        })
-        .then(() => done(), done);
+        .catch(({ outcome }) => {
+            assert.ok(outcome.issue[0].diagnostics === 'The requested resource type "Xz" is not available on this server');
+        });
     })
 });
 
@@ -1271,253 +1272,70 @@ describe("File Downloading", function() {
     it ("Handles the virtual files properly", () => {
 
         /**
-         * @param {Object} options 
-         * @param {String} options.resourceType The name of the resource we are testing
-         * @param {Number} options.resourceCount How many of these resources we have in the DB
-         * @param {Number} options.multiplier Set a multiplier so that we have to append some virtual resources
-         * idMap
-         * limit
-         * offset
-         * title
+         * @param {string} resourceType The name of the resource we are testing
          */
-        function test(options) {
+        async function test(resourceType) {
 
-            const multiplier = options.multiplier || 1;
+            const multiplier = 3;
 
-            const totalLines = options.resourceCount * multiplier;
+            const resourceCount = (await lib.requestPromise({
+                url: lib.buildBulkUrl(["$get-resource-counts"]),
+                json: true
+            })).body.parameter.find(p => p.name === resourceType).valueInteger;
+
+            // console.log(`${resourceType}: ${resourceCount}`);
+
+            const totalLines = resourceCount * multiplier;
 
             // Make sure we don't truncate the file
-            const limit = options.limit || totalLines + 10;
-
-            const offset = options.offset || 0;
+            const limit = totalLines + 10;
 
             // The number of resources we expect to receive
-            const expectedLines = Math.min(totalLines - offset, limit);
-
-            // Collect any errors here
-            const errors = [];
-
-            // Collect some line IDs here
-            const lines = {};
-
-            // The line counter
-            let linesLength = 0;
+            const expectedLines = totalLines;
 
             // Build the file download URL
-            const url = lib.buildDownloadUrl(`1.${options.resourceType}.ndjson`, {
+            const url = lib.buildDownloadUrl(`1.${resourceType}.ndjson`, {
                 m: multiplier,
                 limit,
-                offset
+                offset: 0
             });
 
-            return new Promise((resolve, reject) => {
-                request({ url })
-                .on("error", e => errors.push(String(e)))
-                .on("end", () => {
-                    if (errors.length) {
-                        return reject(
-                            (options.title ? options.title + "\n" : "") +
-                            errors.join(",\n"));
-                    }
+            return lib.requestPromise({ url }).then(res => {
+                let lines = res.body.trim().split("\n").map(l => l.trim()).filter(Boolean).map(l => JSON.parse(l).id);
 
-                    // Check the expected rows length
-                    if (linesLength != expectedLines) {
-                        return reject(
-                            `${options.title ? options.title + " - " : ""
-                            } Expected ${expectedLines
-                            } lines but found ${linesLength}`
+                // Check the expected rows length
+                if (lines.length != expectedLines) {
+                    throw new Error(
+                        `${resourceType} - Expected ${expectedLines} lines but found ${lines.length}`
+                    );
+                }
+                
+                // Check if the IDs are properly generated
+                for (let i = resourceCount; i < resourceCount * 2; i++) {
+                    let expectedId = "o1-" + lines[i - resourceCount];
+                    if (lines[i] !== expectedId) {
+                        throw new Error(
+                            `Expecting the ID of line ${i} to equal "${expectedId}"`
                         );
                     }
-                    
-                    // Check if the IDs are properly generated
-                    if (options.idMap) {
-                        for (let index in options.idMap) {
-                            if (lines[index] !== options.idMap[index]) {
-                                return reject(
-                                    (options.title ? options.title + " - " : "") +
-                                    `The ${options.resourceType} resource ID at position ${
-                                        index
-                                    }${ offset ? " (offset " + offset + ")" : ""} should be "${
-                                        options.idMap[index]}" but was "${lines[index]}"`
-                                );
-                            }
-                        }
-                    }
-
-                    resolve();
-                })
-                .on("data", chunk => {
-                    let index = linesLength++;
-                    if (options.idMap && index in options.idMap) {
-                        lines[index] = JSON.parse(chunk.toString()).id;
-                    }
-                });
-            })
-            .catch(e => {
-                if (typeof e == "string") {
-                    return Promise.reject(new Error(e))
                 }
-                return Promise.reject(e)
+                for (let i = resourceCount * 2; i < resourceCount * 3; i++) {
+                    let expectedId = "o2-" + lines[i - resourceCount * 2];
+                    if (lines[i] !== expectedId) {
+                        throw new Error(
+                            `Expecting the ID of line ${i} to equal "${expectedId}"`
+                        );
+                    }
+                }
             });
         }
 
         return Promise.all([
-
-            // 66 AllergyIntolerance X 3
-            test({
-                title: "66 AllergyIntolerance X 3",
-                resourceType : "AllergyIntolerance",
-                resourceCount: 66,
-                multiplier   : 3,
-                idMap: {
-                    0  :    "bff9cc90-831b-45da-9f26-ef4401bbe4a6",
-                    65 :    "e6add36f-c461-4e52-8e38-b5451b37d92c",
-                    66 : "o1-bff9cc90-831b-45da-9f26-ef4401bbe4a6",
-                    131: "o1-e6add36f-c461-4e52-8e38-b5451b37d92c",
-                    132: "o2-bff9cc90-831b-45da-9f26-ef4401bbe4a6",
-                    197: "o2-e6add36f-c461-4e52-8e38-b5451b37d92c"
-                }
-            }),
-
-            // 100 Patients X 2
-            test({
-                title: "105 Patients X 2",
-                resourceType : "Patient",
-                resourceCount: 105,
-                multiplier   : 2,
-                idMap: {
-                    0  :    "ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
-                    99 :    "a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
-                    105: "o1-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
-                    204: "o1-a1f91f29-b0d7-4f4c-a530-b7719dfbd470"
-                }
-            }),
-
-            // Encounters 1 to 1000
-            test({
-                title: "First 100 Encounters",
-                resourceType : "Encounter",
-                resourceCount: 2541,
-                limit        : 1000,
-                idMap: {
-                    0  : "45c74ede-6f2a-48a8-9ee8-741fd3c31f2e",
-                    999: "483024ce-2152-43c3-86a2-722badb51018"
-                }
-            }),
-
-            // Encounters 1001 to 2000
-            test({
-                title: "Encounters 1001 to 2000",
-                resourceType : "Encounter",
-                resourceCount: 2541,
-                limit        : 1000,
-                offset       : 1000,
-                idMap: {
-                    0  : "74c96b6d-2469-475c-8ae2-c8f40a0f1554", // 1001
-                    999: "ced3f0bf-adf9-45e7-8d60-141fc13873c9"  // 2000
-                }
-            }),
-
-            // Encounters 2001 to 2541
-            // test({
-            //     title: "Encounters 2001 to 2541",
-            //     resourceType : "Encounter",
-            //     resourceCount: 2541,
-            //     limit        : 1000,
-            //     offset       : 2000,
-            //     idMap: {
-            //         0  : "62d60065-0799-4698-a5f6-e7982319c0ab", // 2001
-            //         540: "aade3a55-40c5-49ed-9403-bb0eb3f5a689", // 2541
-            //         541: undefined, // make sure there are no more lines
-            //     }
-            // }),
-
-            // The first page of virtual patients
-            // test({
-            //     title: "The first page of virtual patients",
-            //     resourceType : "Patient",
-            //     resourceCount: 100,
-            //     multiplier   : 10,
-            //     limit        : 300,
-            //     idMap: {
-            //         0  : "ddf5ae5c-5646-4a76-9efd-f7e697f3b728", // 1st real patient
-            //         99 : "a1f91f29-b0d7-4f4c-a530-b7719dfbd470", // 99th (last) real patient
-            //         100: "o1-ddf5ae5c-5646-4a76-9efd-f7e697f3b728", // 1st virtual patient
-            //         199: "o1-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
-            //         200: "o2-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
-            //         299: "o2-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
-            //         300: undefined, // make sure there are no more lines
-            //     }
-            // }),
-
-            // Second page of virtual patients
-            // test({
-            //     title: "The second page of virtual patients",
-            //     resourceType : "Patient",
-            //     resourceCount: 100,
-            //     multiplier   : 10,
-            //     limit        : 300,
-            //     offset       : 100,
-            //     idMap: {
-            //         0  : "o2-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
-            //         99 : "o2-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
-            //         100: "o3-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
-            //         199: "o3-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
-            //         200: "o4-ddf5ae5c-5646-4a76-9efd-f7e697f3b728",
-            //         299: "o4-a1f91f29-b0d7-4f4c-a530-b7719dfbd470",
-            //         300: undefined, // make sure there are no more lines
-            //     }
-            // }),
-
-            // The last page of virtual patients
-            // test({
-            //     title: "The last page of virtual patients",
-            //     resourceType : "Patient",
-            //     resourceCount: 100,
-            //     multiplier   : 10,
-            //     limit        : 300,
-            //     offset       : 900,
-            //     idMap: {
-            //         0  : "o10-ddf5ae5c-5646-4a76-9efd-f7e697f3b728", // must be a copy of patient #1
-            //         99 : "o10-a1f91f29-b0d7-4f4c-a530-b7719dfbd470", // must be a copy of patient #99
-            //         100: undefined // make sure there are no more lines
-            //     }
-            // }),
-
-            // Encounters 2001 to 2541
-            // test({
-            //     title: "Encounters 20001 to 25410",
-            //     resourceType : "Encounter",
-            //     resourceCount: 2541,
-            //     multiplier   : 10,
-            //     limit        : 10000,
-            //     offset       : 20000,
-            //     idMap: {
-            //         // 0  : "62d60065-0799-4698-a5f6-e7982319c0ab", // 20001
-            //         0  : "o7-fdee0938-eb4d-4f90-bc84-dc68f5322fa9", // 20001
-            //         // 0  : "45c74ede-6f2a-48a8-9ee8-741fd3c31f2e", // 2001 - #1
-            //     //     540: "aade3a55-40c5-49ed-9403-bb0eb3f5a689", // 2541
-            //     //     541: undefined, // make sure there are no more lines
-            //     }
-            // }),
-            // // test({
-            // //     resourceType : "Encounter",
-            // //     resourceCount: 2541,
-            // //     multiplier   : 2,
-            // //     // limit        : 10,
-            // //     idMap: {
-            // //         0   :    "45c74ede-6f2a-48a8-9ee8-741fd3c31f2e",
-            // //         2540:    "aade3a55-40c5-49ed-9403-bb0eb3f5a689",
-            // //         2541: "o1-45c74ede-6f2a-48a8-9ee8-741fd3c31f2e",
-            // //         4081: "o1-aade3a55-40c5-49ed-9403-bb0eb3f5a689",
-            // //     //     199: "o1-a1f91f29-b0d7-4f4c-a530-b7719dfbd470"
-            // //     }
-            // // }),
-            // // test({
-            // //     resourceType: "ImagingStudy",
-            // //     resourceCount: 17,
-            // //     multiplier   : 10
-            // // })
+            test("AllergyIntolerance"),
+            test("Patient"),
+            test("Device"),
+            test("DocumentReference"),
+            test("Binary")
         ]);
 
     });
