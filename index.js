@@ -1,4 +1,5 @@
 const express      = require("express");
+const http         = require("http");
 const bodyParser   = require("body-parser");
 const config       = require("./config");
 const Lib          = require("./lib");
@@ -10,7 +11,7 @@ const bulkData     = require("./bulk_data_handler");
 const bulkImporter = require("./import/bulk_data_import_handler");
 const env          = require("./env");
 const morgan       = require("morgan");
-const operationOutcome = require("./outcomes");
+// const operationOutcome = require("./outcomes");
 const encodedOutcome   = require("./outcome_handler");
 
 const app = express();
@@ -71,4 +72,7 @@ if (!module.parent) {
     });
 }
 
-module.exports = app;
+module.exports = {
+    app,
+    server: http.createServer(app)
+};

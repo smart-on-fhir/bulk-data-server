@@ -1,52 +1,8 @@
-const RE_GT    = />/g;
-const RE_LT    = /</g;
-const RE_AMP   = /&/g;
-const RE_QUOT  = /"/g;
-
-function htmlEncode(html) {
-    return String(html)
-        .trim()
-        .replace(RE_AMP , "&amp;")
-        .replace(RE_LT  , "&lt;")
-        .replace(RE_GT  , "&gt;")
-        .replace(RE_QUOT, "&quot;");
-}
-
-function operationOutcome(res, message, options = {}) {
-    return res.status(options.httpCode || 500).json(
-        createOperationOutcome(message, options)
-    );
-}
-
-function createOperationOutcome(message, {
-        httpCode  = 500,
-        issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
-        severity  = "error"       // fatal | error | warning | information
-    } = {})
-{
-    return {
-        "resourceType": "OperationOutcome",
-        "text": {
-            "status": "generated",
-            "div": `<div xmlns="http://www.w3.org/1999/xhtml">` +
-            `<h1>Operation Outcome</h1><table border="0"><tr>` +
-            `<td style="font-weight:bold;">${severity}</td><td>[]</td>` +
-            `<td><pre>${htmlEncode(message)}</pre></td></tr></table></div>`
-        },
-        "issue": [
-            {
-                "severity"   : severity,
-                "code"       : issueCode,
-                "diagnostics": message
-            }
-        ]
-    };
-}
-
+const { operationOutcome, getErrorText } = require("./lib");
 
 
 // Errors as operationOutcome responses
-const outcomes = {
+module.exports = {
     fileExpired: res => operationOutcome(
         res,
         "Access to the target resource is no longer available at the server " +
@@ -117,7 +73,7 @@ const outcomes = {
     ),
     fileGenerationFailed: res => operationOutcome(
         res,
-        Lib.getErrorText("file_generation_failed")
+        getErrorText("file_generation_failed")
     ),
     canceled: res => operationOutcome(
         res,
@@ -155,10 +111,3 @@ const outcomes = {
         { httpCode: 202, severity: "information" }
     )
 };
-
-module.exports = {
-    outcomes,
-    htmlEncode,
-    operationOutcome,
-    createOperationOutcome
-}

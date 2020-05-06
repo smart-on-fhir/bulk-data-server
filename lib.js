@@ -6,12 +6,8 @@ const moment    = require("moment");
 const config    = require("./config");
 const base64url = require("base64-url");
 const request   = require("request");
-const {
-    htmlEncode,
-    outcomes,
-    operationOutcome,
-    createOperationOutcome
-}               = require("./outcomes");
+
+
 
 const RE_GT    = />/g;
 const RE_LT    = /</g;
@@ -22,6 +18,46 @@ const RE_FALSE = /^(0|no|false|off|null|undefined|NaN|)$/i;
 
 function bool(x) {
     return !RE_FALSE.test(String(x).trim());
+}
+
+function htmlEncode(html) {
+    return String(html)
+        .trim()
+        .replace(RE_AMP , "&amp;")
+        .replace(RE_LT  , "&lt;")
+        .replace(RE_GT  , "&gt;")
+        .replace(RE_QUOT, "&quot;");
+}
+
+function operationOutcome(res, message, options = {}) {
+    return res.status(options.httpCode || 500).json(
+        createOperationOutcome(message, options)
+    );
+}
+
+function createOperationOutcome(message, {
+        httpCode  = 500,
+        issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
+        severity  = "error"       // fatal | error | warning | information
+    } = {})
+{
+    return {
+        "resourceType": "OperationOutcome",
+        "text": {
+            "status": "generated",
+            "div": `<div xmlns="http://www.w3.org/1999/xhtml">` +
+            `<h1>Operation Outcome</h1><table border="0"><tr>` +
+            `<td style="font-weight:bold;">${severity}</td><td>[]</td>` +
+            `<td><pre>${htmlEncode(message)}</pre></td></tr></table></div>`
+        },
+        "issue": [
+            {
+                "severity"   : severity,
+                "code"       : issueCode,
+                "diagnostics": message
+            }
+        ]
+    };
 }
 
 function makeArray(x) {
@@ -453,7 +489,7 @@ function fetchJwks(url) {
  */
 function requireFhirJsonAcceptHeader(req, res, next) {
     if (req.headers.accept != "application/fhir+json") {
-        return outcomes.requireAcceptFhirJson(res);
+        return require("./outcomes").requireAcceptFhirJson(res);
     }
     next();
 }
@@ -467,7 +503,7 @@ function requireFhirJsonAcceptHeader(req, res, next) {
  */
 function requireRespondAsyncHeader(req, res, next) {
     if (req.headers.prefer != "respond-async") {
-        return outcomes.requirePreferAsync(res);
+        return require("./outcomes").requirePreferAsync(res);
     }
     next();
 }

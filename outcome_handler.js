@@ -1,5 +1,5 @@
 const router                = require("express").Router({ mergeParams: true });
-const { operationOutcome }  = require("./outcomes");
+const { operationOutcome }  = require("./lib");
 
 // DownloadTaskCollection provides result containing URL 
 // for each attempted file import at this endpoint

@@ -2,10 +2,7 @@ const router      = require("express").Router({ mergeParams: true });
 const config      = require("../config");
 const bodyParser  = require("body-parser");
 const Lib         = require("../lib");
-const {
-    operationOutcome,
-    outcomes
-}                 = require("../outcomes");
+const outcomes    = require("../outcomes");
 const DownloadTaskCollection   = require("./DownloadTaskCollection");
 const TaskManager = require("./TaskManager");
 const pollingBaseUrl = "/byron/fhir/status/";
@@ -63,13 +60,13 @@ const rateLimit = () => {
                 if (taskId) {
                     TaskManager.remove(taskId);
                 }
-                return operationOutcome(res, 'Too many requests. Import aborted!', { httpCode: 429 });
+                return Lib.operationOutcome(res, 'Too many requests. Import aborted!', { httpCode: 429 });
             }
 
 
             const delay = Math.ceil((now - rec.firstRequestAt) / 1000);
             res.setHeader("Retry-After", delay);
-            return operationOutcome(res, `Too many requests. Please try again in ${delay} seconds.`, { httpCode: 429 });
+            return Lib.operationOutcome(res, `Too many requests. Please try again in ${delay} seconds.`, { httpCode: 429 });
         }
 
         next();
@@ -175,23 +172,23 @@ router.post("/\\$import", [
         } = req.body;
         // inputFormat is required
         if (!inputFormat) {
-            return operationOutcome(res, 'The “inputFormat” JSON parameter is required', { httpCode: 400 });
+            return Lib.operationOutcome(res, 'The “inputFormat” JSON parameter is required', { httpCode: 400 });
         }
         // inputFormat must be a string
         if (typeof inputFormat != "string") {
-            return operationOutcome(res, 'The “inputFormat” JSON parameter must be a string', { httpCode: 400 });
+            return Lib.operationOutcome(res, 'The “inputFormat” JSON parameter must be a string', { httpCode: 400 });
         }
         // inputSource is required
         if (!inputSource) {
-            return operationOutcome(res, 'The “inputSource” JSON parameter is required', { httpCode: 400 });
+            return Lib.operationOutcome(res, 'The “inputSource” JSON parameter is required', { httpCode: 400 });
         }
         // inputSource must be a string
         if (typeof inputSource != "string") {
-            return operationOutcome(res, 'The “inputSource” JSON parameter must be a string', { httpCode: 400 });
+            return Lib.operationOutcome(res, 'The “inputSource” JSON parameter must be a string', { httpCode: 400 });
         }
         // inputSource must be an URL
         if (!inputSource.match(/^\s*https?\:\/\//i)) {
-            return operationOutcome(res, 'The “inputSource” JSON parameter must be an URL', { httpCode: 400 });
+            return Lib.operationOutcome(res, 'The “inputSource” JSON parameter must be an URL', { httpCode: 400 });
         }
 
         // if no storageDetail, it defaults to https
@@ -209,7 +206,7 @@ router.post("/\\$import", [
         // that the server refuses to accept the request because the payload format 
         // is in an unsupported format
         if (inputFormat !== "application/fhir+ndjson") {
-            return operationOutcome(
+            return Lib.operationOutcome(
                 res,
                 `The server did not recognize the provided inputFormat ${inputFormat}. We currently only recognize Newline Delimited JSON with inputFormat "application/fhir+ndjson"`,
                 { httpCode: 415 }
@@ -218,10 +215,10 @@ router.post("/\\$import", [
 
         // input must be an array of one or more { type, url } objects
         if (!Array.isArray(input) && !input.length) {
-            return operationOutcome(res, "The input must be an array of one or more objects", { httpCode: 400 });
+            return Lib.operationOutcome(res, "The input must be an array of one or more objects", { httpCode: 400 });
         }
         if (!input.every(o => typeof o.type === "string" && typeof o.url === "string")) {
-            return operationOutcome(res, "Each “input” element must contain url and type", { httpCode: 400 });
+            return Lib.operationOutcome(res, "Each “input” element must contain url and type", { httpCode: 400 });
         }
 
         // Check if another import is running
@@ -229,7 +226,7 @@ router.post("/\\$import", [
         if (remainingTime !== 0) {
             // retry after remainingTime, or if that is unknown - after 10s
             res.setHeader("Retry-After", remainingTime < 0 ? 10 : Math.ceil(remainingTime / 1000));
-            return operationOutcome(res, "Another import operation is currently running. Please try again later.", { httpCode: 429 });
+            return Lib.operationOutcome(res, "Another import operation is currently running. Please try again later.", { httpCode: 429 });
         }
 
         console.log("request looks good ... kicking off import task manager")
