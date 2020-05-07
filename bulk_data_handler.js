@@ -2,18 +2,21 @@ const base64url    = require("base64-url");
 const moment       = require("moment");
 const crypto       = require("crypto");
 const express      = require("express")
-const router       = express.Router({ mergeParams: true });
+const zlib         = require("zlib");
 const config       = require("./config");
 const Lib          = require("./lib");
 const getDB        = require("./db");
 const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
 const fhirStream   = require("./FhirStream");
-const zlib         = require("zlib");
 const toNdjson     = require("./transforms/dbRowToNdjson");
 const toCSV        = require("./transforms/dbRowToCSV");
 const translator   = require("./transforms/dbRowTranslator");
 const outcomes     = require("./outcomes");
+const bulkImporter = require("./import/bulk_data_import_handler");
+
+
+const router = express.Router({ mergeParams: true });
 
 
 const STATE_STARTED  = 2;
@@ -252,7 +255,7 @@ async function handleStatus(req, res) {
 
     // If waiting - show progress and exit
     if (endTime.isAfter(now, "second")) {
-        let diff = (now - requestStart)/1000;
+        let diff = (+now - +requestStart)/1000;
         let pct = Math.round((diff / generationTime) * 100);
         return res.set({
             "X-Progress" : pct + "%",
@@ -373,7 +376,7 @@ async function handleStatus(req, res) {
 
 function handleFileDownload(req, res) {
     const args         = req.sim;
-    const accept       = String(req.headers.accept || "");
+    // const accept       = String(req.headers.accept || "");
     const outputFormat = args.outputFormat || "ndjson";
 
     // Only "application/fhir+ndjson" is supported for accept headers
@@ -416,22 +419,27 @@ function handleFileDownload(req, res) {
     });
 
     input.init().then(() => {
-        input = input.pipe(translator(req.sim));
+        let pipeline = input.pipe(translator(req.sim));
 
         const transform = exportTypes[outputFormat].transform;
         if (transform) {
-            input = input.pipe(transform());
+            pipeline = pipeline.pipe(transform());
         }
 
         if (shouldDeflate) {
-            input = input.pipe(zlib.createDeflate())
+            pipeline = pipeline.pipe(zlib.createDeflate())
         }
         else if (shouldGzip) {
-            input = input.pipe(zlib.createGzip())
+            pipeline = pipeline.pipe(zlib.createGzip())
         }
-        input.pipe(res)
+
+        pipeline.pipe(res);
     });
 }
+
+// =============================================================================
+// BulkData Export Endpoints
+// =============================================================================
 
 // System Level Export
 // Export data from a FHIR server whether or not it is associated with a patient.
@@ -507,6 +515,24 @@ router.delete("/bulkstatus", [
     Lib.checkAuth,
     cancelFlow
 ]);
+
+// =============================================================================
+// BulkData Export Endpoints
+// =============================================================================
+
+// Return import progress by task id generated during kick-off request
+// and provide time interval for client to wait before checking again
+router.get("/import-status/:taskId", bulkImporter.createImportStatusHandler());
+
+// Stop an import that has not completed
+router.delete("/import-status/:taskId", bulkImporter.cancelImport);
+
+// Kick-off import
+router.post("/\\$import", bulkImporter.createImportKickOffHandler());
+
+// =============================================================================
+// FHIR/Other Endpoints
+// =============================================================================
 
 // host dummy conformance statement
 router.get("/metadata", require("./fhir/metadata"));

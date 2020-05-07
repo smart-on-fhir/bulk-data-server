@@ -509,6 +509,20 @@ function requireRespondAsyncHeader(req, res, next) {
 }
 
 /**
+ * Simple Express middleware that will require the request to have "Content-Type"
+ * header set to "application/json".
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+function requireJsonContentTypeHeader(req, res, next) {
+    if (!req.is("application/json")) {
+        return require("./outcomes").requireJsonContentType(res);
+    }
+    next();
+}
+
+/**
  * Returns the absolute base URL of the given request
  * @param {object} request 
  */
@@ -559,5 +573,6 @@ module.exports = {
     makeArray,
     requireRespondAsyncHeader,
     requireFhirJsonAcceptHeader,
+    requireJsonContentTypeHeader,
     getBaseUrl
 };

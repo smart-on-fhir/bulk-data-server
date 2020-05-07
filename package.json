@@ -47,12 +47,13 @@
     "walk": "^2.3.9"
   },
   "devDependencies": {
-    "@types/mocha": "^7.0.2",
-    "@types/node": "^13.13.4",
-    "@types/uuid": "^7.0.3",
-    "walk": "^2.3.9",
     "@types/express": "^4.17.4",
+    "@types/mocha": "^7.0.2",
+    "@types/morgan": "^1.9.0",
+    "@types/node": "^13.13.4",
     "@types/sqlite3": "^3.1.6",
-    "nyc": "^15.0.1"
+    "@types/uuid": "^7.0.3",
+    "nyc": "^15.0.1",
+    "walk": "^2.3.9"
   }
 }

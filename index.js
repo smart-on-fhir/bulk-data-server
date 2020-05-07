@@ -1,18 +1,14 @@
-const express      = require("express");
-const http         = require("http");
-const bodyParser   = require("body-parser");
-const config       = require("./config");
-const Lib          = require("./lib");
-const DB           = require("./db");
-const generator    = require("./generator");
-const tokenHandler = require("./token_handler");
-const register     = require("./registration_handler");
-const bulkData     = require("./bulk_data_handler");
-const bulkImporter = require("./import/bulk_data_import_handler");
-const env          = require("./env");
-const morgan       = require("morgan");
-// const operationOutcome = require("./outcomes");
-const encodedOutcome   = require("./outcome_handler");
+const express        = require("express");
+const http           = require("http");
+const bodyParser     = require("body-parser");
+const morgan         = require("morgan");
+const config         = require("./config");
+const generator      = require("./generator");
+const tokenHandler   = require("./token_handler");
+const register       = require("./registration_handler");
+const bulkData       = require("./bulk_data_handler");
+const env            = require("./env");
+const encodedOutcome = require("./outcome_handler");
 
 const app = express();
 
@@ -53,9 +49,9 @@ app.get("/server-config.js", (req, res) => {
 
 // bulk data implementation
 app.use(["/:sim/fhir", "/fhir"], bulkData);
+
+// Generic operation outcomes
 app.use("/outcome", encodedOutcome);
-// stub for developing bulk data import capability
-app.use("/byron/fhir", bulkImporter);
 
 // static files
 app.use(express.static("static"));
@@ -66,7 +62,8 @@ app.use(function (err, req, res, next) {
     res.status(500).send('Something broke!');
 });
 
-if (!module.parent) {
+// If invoked directly start a server (otherwise let the tests do that)
+if (!("parent" in module)) {
     app.listen(config.port, function() {
         console.log("Server listening at " + config.baseUrl);
     });
