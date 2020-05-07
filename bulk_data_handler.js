@@ -13,111 +13,11 @@ const zlib         = require("zlib");
 const toNdjson     = require("./transforms/dbRowToNdjson");
 const toCSV        = require("./transforms/dbRowToCSV");
 const translator   = require("./transforms/dbRowTranslator");
+const outcomes     = require("./outcomes");
 
 
 const STATE_STARTED  = 2;
 const STATE_CANCELED = 4;
-
-// Errors as operationOutcome responses
-const outcomes = {
-    fileExpired: res => Lib.operationOutcome(
-        res,
-        "Access to the target resource is no longer available at the server " +
-        "and this condition is likely to be permanent because the file " +
-        "expired",
-        { httpCode: 410 }
-    ),
-    noContent: res => Lib.operationOutcome(
-        res,
-        "No Content - your query did not match any fhir resources",
-        { httpCode: 204 }
-    ),
-    invalidAccept: (res, accept) => Lib.operationOutcome(
-        res,
-        `Invalid Accept header "${accept}". Currently we only recognize ` +
-        `"application/fhir+ndjson" and "application/fhir+json"`,
-        { httpCode: 400 }
-    ),
-    invalidOutputFormat: (res, value) => Lib.operationOutcome(
-        res,
-        `Invalid output-format parameter "${value}". Currently we only ` +
-        `recognize "application/fhir+ndjson", "application/ndjson" and "ndjson"`,
-        { httpCode: 400 }
-    ),
-    invalidSinceParameter: (res, value) => Lib.operationOutcome(
-        res,
-        `Invalid _since parameter "${value}". It must be valid FHIR instant and ` +
-        `cannot be a date in the future"`,
-        { httpCode: 400 }
-    ),
-    requireAcceptFhirJson: res => Lib.operationOutcome(
-        res,
-        "The Accept header must be application/fhir+json",
-        { httpCode: 400 }
-    ),
-    requirePreferAsync: res => Lib.operationOutcome(
-        res,
-        "The Prefer header must be respond-async",
-        { httpCode: 400 }
-    ),
-    requireRequestStart: res => Lib.operationOutcome(
-        res,
-        "The request start time parameter (requestStart) is missing " +
-        "in the encoded params",
-        { httpCode: 400 }
-    ),
-    invalidRequestStart: (req, res) => Lib.operationOutcome(
-        res,
-        `The request start time parameter (requestStart: ${
-        req.sim.requestStart}) is invalid`,
-        { httpCode: 400 }
-    ),
-    invalidResourceType: (res, resourceType) => Lib.operationOutcome(
-        res,
-        `The requested resource type "${resourceType}" is not available on this server`,
-        { httpCode: 400 }
-    ),
-    futureRequestStart: res => Lib.operationOutcome(
-        res,
-        "The request start time parameter (requestStart) must be " +
-        "a date in the past",
-        { httpCode: 400 }
-    ),
-    fileGenerationFailed: res => Lib.operationOutcome(
-        res,
-        Lib.getErrorText("file_generation_failed")
-    ),
-    canceled: res => Lib.operationOutcome(
-        res,
-        "The procedure was canceled by the client and is no longer available",
-        { httpCode: 410 /* Gone */ }
-    ),
-    cancelAccepted: res => Lib.operationOutcome(
-        res,
-        "The procedure was canceled",
-        { severity: "information", httpCode: 202 /* Accepted */ }
-    ),
-    cancelGone: res => Lib.operationOutcome(
-        res,
-        "The procedure was already canceled by the client",
-        { httpCode: 410 /* Gone */ }
-    ),
-    cancelNotFound: res => Lib.operationOutcome(
-        res,
-        "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled",
-        { httpCode: 404 /* Not Found */ }
-    ),
-    onlyNDJsonAccept: res => Lib.operationOutcome(
-        res,
-        "Only application/fhir+ndjson is currently supported for accept headers",
-        { httpCode: 400 }
-    ),
-    exportAccepted: (res, location) => Lib.operationOutcome(
-        res,
-        `Your request have been accepted. You can check it's status at "${location}"`,
-        { httpCode: 202, severity: "information" }
-    )
-};
 
 // Start helper express middlewares --------------------------------------------
 function extractSim(req, res, next) {
@@ -125,33 +25,6 @@ function extractSim(req, res, next) {
     next();
 }
 
-/**
- * Simple Express middleware that will require the request to have "accept"
- * header set to "application/fhir+ndjson".
- * @param {Object} req
- * @param {Object} res
- * @param {Function} next
- */
-function requireFhirJsonAcceptHeader(req, res, next) {
-    if (req.headers.accept != "application/fhir+json") {
-        return outcomes.requireAcceptFhirJson(res);
-    }
-    next();
-}
-
-/**
- * Simple Express middleware that will require the request to have "prefer"
- * header set to "respond-async".
- * @param {Object} req
- * @param {Object} res
- * @param {Function} next
- */
-function requireRespondAsyncHeader(req, res, next) {
-    if (req.headers.prefer != "respond-async") {
-        return outcomes.requirePreferAsync(res);
-    }
-    next();
-}
 
 /**
  * Validates the requestStart parameter
@@ -567,11 +440,11 @@ function handleFileDownload(req, res) {
 router.get("/\\$export", [
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    requireFhirJsonAcceptHeader,
+    Lib.requireFhirJsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
-    requireRespondAsyncHeader,
+    Lib.requireRespondAsyncHeader,
 
     // Validate auth token if present
     Lib.checkAuth,
@@ -585,11 +458,11 @@ router.get("/Patient/\\$export", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    requireFhirJsonAcceptHeader,
+    Lib.requireFhirJsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
-    requireRespondAsyncHeader,
+    Lib.requireRespondAsyncHeader,
 
     // Validate auth token if present
     Lib.checkAuth,
@@ -602,11 +475,11 @@ router.get("/group/:groupId/\\$export", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    requireFhirJsonAcceptHeader,
+    Lib.requireFhirJsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
-    requireRespondAsyncHeader,
+    Lib.requireRespondAsyncHeader,
 
     // Validate auth token if present
     Lib.checkAuth,

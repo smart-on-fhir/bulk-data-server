@@ -7,19 +7,16 @@ const jwkToPem  = require("jwk-to-pem");
 const jwt       = require("jsonwebtoken");
 const express   = require("express");
 const lib       = require("./lib");
-const app       = require("../index");
+const { server } = require("../index");
 const config    = require("../config");
 
-let server;
 before(next => {
-    server = app.listen(config.port, () => next());
+    if (!server.listening)
+        server.listen(config.port, () => next());
 });
 
 after(next => {
-    if (server) {
-        server.close();
-        server = null;
-    }
+    server.close();
     next();
 });
 
@@ -949,15 +946,12 @@ describe("Progress Updates", () => {
             }),
             json: true
         })
-        .then(res => {
-            // console.log(res.body);
-            assert.deepEqual(res.body.error, []);
-        })
+        .then(res => assert.deepEqual(res.body.error, []))
         .then(() => done(), done);
     })
 
-    it ('Includes "error" entries for unknown resources', () => {
-        return lib.requestPromise({
+    it ('Includes "error" entries for unknown resources', done => {
+        lib.requestPromise({
             url: lib.buildProgressUrl({
                 requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
                 type        : "Patient,Xz,Yz",
@@ -967,7 +961,16 @@ describe("Progress Updates", () => {
         })
         .catch(({ outcome }) => {
             assert.ok(outcome.issue[0].diagnostics === 'The requested resource type "Xz" is not available on this server');
-        });
+        })
+        .then(res => {
+            // console.log(res.body.error)
+            assert.ok(res.body.error.length === 2);
+            assert.ok(res.body.error[0].type === "OperationOutcome");
+            assert.ok(res.body.error[0].url.split("/").pop() === "Xz.error.ndjson");
+            assert.ok(res.body.error[1].type === "OperationOutcome");
+            assert.ok(res.body.error[1].url.split("/").pop() === "Yz.error.ndjson");
+        })
+        .then(() => done(), done);
     })
 });
 

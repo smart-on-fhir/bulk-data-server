@@ -7,6 +7,8 @@ const config    = require("./config");
 const base64url = require("base64-url");
 const request   = require("request");
 
+
+
 const RE_GT    = />/g;
 const RE_LT    = /</g;
 const RE_AMP   = /&/g;
@@ -18,6 +20,46 @@ function bool(x) {
     return !RE_FALSE.test(String(x).trim());
 }
 
+function htmlEncode(html) {
+    return String(html)
+        .trim()
+        .replace(RE_AMP , "&amp;")
+        .replace(RE_LT  , "&lt;")
+        .replace(RE_GT  , "&gt;")
+        .replace(RE_QUOT, "&quot;");
+}
+
+function operationOutcome(res, message, options = {}) {
+    return res.status(options.httpCode || 500).json(
+        createOperationOutcome(message, options)
+    );
+}
+
+function createOperationOutcome(message, {
+        httpCode  = 500,
+        issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
+        severity  = "error"       // fatal | error | warning | information
+    } = {})
+{
+    return {
+        "resourceType": "OperationOutcome",
+        "text": {
+            "status": "generated",
+            "div": `<div xmlns="http://www.w3.org/1999/xhtml">` +
+            `<h1>Operation Outcome</h1><table border="0"><tr>` +
+            `<td style="font-weight:bold;">${severity}</td><td>[]</td>` +
+            `<td><pre>${htmlEncode(message)}</pre></td></tr></table></div>`
+        },
+        "issue": [
+            {
+                "severity"   : severity,
+                "code"       : issueCode,
+                "diagnostics": message
+            }
+        ]
+    };
+}
+
 function makeArray(x) {
     if (Array.isArray(x)) {
         return x;
@@ -26,15 +68,6 @@ function makeArray(x) {
         return x.trim().split(/\s*,\s*/);
     }
     return [x];
-}
-
-function htmlEncode(html) {
-    return String(html)
-        .trim()
-        .replace(RE_AMP , "&amp;")
-        .replace(RE_LT  , "&lt;")
-        .replace(RE_GT  , "&gt;")
-        .replace(RE_QUOT, "&quot;");
 }
 
 /**
@@ -212,37 +245,6 @@ function die(error="Unknown error")
     console.log("\n"); // in case we have something written to stdout directly
     console.error(error);
     process.exit(1);
-}
-
-function operationOutcome(res, message, options = {}) {
-    return res.status(options.httpCode || 500).json(
-        createOperationOutcome(message, options)
-    );
-}
-
-function createOperationOutcome(message, {
-        httpCode  = 500,
-        issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
-        severity  = "error"       // fatal | error | warning | information
-    } = {})
-{
-    return {
-        "resourceType": "OperationOutcome",
-        "text": {
-            "status": "generated",
-            "div": `<div xmlns="http://www.w3.org/1999/xhtml">` +
-            `<h1>Operation Outcome</h1><table border="0"><tr>` +
-            `<td style="font-weight:bold;">${severity}</td><td>[]</td>` +
-            `<td><pre>${htmlEncode(message)}</pre></td></tr></table></div>`
-        },
-        "issue": [
-            {
-                "severity"   : severity,
-                "code"       : issueCode,
-                "diagnostics": message
-            }
-        ]
-    };
 }
 
 // require a valid auth token if there is an auth token
@@ -478,6 +480,58 @@ function fetchJwks(url) {
     });
 }
 
+/**
+ * Simple Express middleware that will require the request to have "accept"
+ * header set to "application/fhir+ndjson".
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+function requireFhirJsonAcceptHeader(req, res, next) {
+    if (req.headers.accept != "application/fhir+json") {
+        return require("./outcomes").requireAcceptFhirJson(res);
+    }
+    next();
+}
+
+/**
+ * Simple Express middleware that will require the request to have "prefer"
+ * header set to "respond-async".
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+function requireRespondAsyncHeader(req, res, next) {
+    if (req.headers.prefer != "respond-async") {
+        return require("./outcomes").requirePreferAsync(res);
+    }
+    next();
+}
+
+/**
+ * Returns the absolute base URL of the given request
+ * @param {object} request 
+ */
+function getBaseUrl(request) {
+    
+    // protocol
+    let proto = request.headers["x-forwarded-proto"];
+    if (!proto) {
+        proto = request.socket.encrypted ? "https" : "http";
+    }
+
+    // host
+    let host = request.headers.host;
+    if (request.headers["x-forwarded-host"]) {
+        host = request.headers["x-forwarded-host"];
+        if (request.headers["x-forwarded-port"]) {
+            host += ":" + request.headers["x-forwarded-port"];
+        }
+    }
+
+    return proto + "://" + host;
+}
+
 module.exports = {
     htmlEncode,
     readFile,
@@ -502,5 +556,8 @@ module.exports = {
     fhirDateTime,
     createOperationOutcome,
     fetchJwks,
-    makeArray
+    makeArray,
+    requireRespondAsyncHeader,
+    requireFhirJsonAcceptHeader,
+    getBaseUrl
 };

@@ -1,4 +1,5 @@
 const express      = require("express");
+const http         = require("http");
 const bodyParser   = require("body-parser");
 const config       = require("./config");
 const Lib          = require("./lib");
@@ -7,9 +8,11 @@ const generator    = require("./generator");
 const tokenHandler = require("./token_handler");
 const register     = require("./registration_handler");
 const bulkData     = require("./bulk_data_handler");
+const bulkImporter = require("./import/bulk_data_import_handler");
 const env          = require("./env");
 const morgan       = require("morgan");
-
+// const operationOutcome = require("./outcomes");
+const encodedOutcome   = require("./outcome_handler");
 
 const app = express();
 
@@ -50,6 +53,9 @@ app.get("/server-config.js", (req, res) => {
 
 // bulk data implementation
 app.use(["/:sim/fhir", "/fhir"], bulkData);
+app.use("/outcome", encodedOutcome);
+// stub for developing bulk data import capability
+app.use("/byron/fhir", bulkImporter);
 
 // static files
 app.use(express.static("static"));
@@ -66,4 +72,7 @@ if (!module.parent) {
     });
 }
 
-module.exports = app;
+module.exports = {
+    app,
+    server: http.createServer(app)
+};
