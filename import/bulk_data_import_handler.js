@@ -4,8 +4,7 @@ const bodyParser  = require("body-parser");
 const Lib         = require("../lib");
 const outcomes    = require("../outcomes");
 const DownloadTaskCollection   = require("./DownloadTaskCollection");
-const TaskManager = require("./TaskManager");
-const pollingBaseUrl = "/byron/fhir/status/";
+const TaskManager    = require("./TaskManager");
 
 const rateLimit = () => {
 
@@ -73,9 +72,6 @@ const rateLimit = () => {
     };
 }
 
-router.get("/", (req, res) => {
-    res.send("router for handling bulk import requests");
-});
 
 // Return import progress by task id generated during kick-off request
 // and provide time interval for client to wait before checking again
@@ -135,10 +131,6 @@ router.delete("/status/:taskId", (req, res) => {
     }
 });
 
-router.get("/\\$import", (req, res) => {
-    res.send("$import endpoint should be accessed via POST request");
-});
-
 router.post("/\\$import", [
     // Prefer: respond-async (fixed value, required)
     Lib.requireRespondAsyncHeader,
@@ -159,17 +151,22 @@ router.post("/\\$import", [
             // of application/fhir+ndjson but MAY choose to support additional
             // input formats.
             inputFormat,
+
             // inputSource (url, required)
             // FHIR base URL for data source. Used by the importing system when
             // matching references to previously imported data.
             inputSource = "https",
+
             // storageDetail (object, optional)
             // Defaults to type of “https” with no parameters specified
             storageDetail,
+
             // input (json array, required)
             // array of objects containing the following fields
             input = []
+
         } = req.body;
+
         // inputFormat is required
         if (!inputFormat) {
             return Lib.operationOutcome(res, 'The “inputFormat” JSON parameter is required', { httpCode: 400 });
@@ -229,14 +226,12 @@ router.post("/\\$import", [
             return Lib.operationOutcome(res, "Another import operation is currently running. Please try again later.", { httpCode: 429 });
         }
 
-        console.log("request looks good ... kicking off import task manager")
-
         const tasks = new DownloadTaskCollection(req.body);
         TaskManager.add(tasks);
         tasks.start()
         .then(() => console.log("########################  job created with id", tasks.id));
 
-        const pollingUrl = config.baseUrl + pollingBaseUrl + tasks.id;
+        const pollingUrl = config.baseUrl + req.baseUrl + "/status/" + tasks.id;
         res.status(202);
         res.setHeader("Content-Location", pollingUrl);
         // optional body: FHIR OperationOutcome
