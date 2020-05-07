@@ -604,7 +604,7 @@
                             Preparing files. Please wait...
                         </label>
                         <div class="progress">
-                            <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
+                            <div class="progress-bar progress-bar-success active" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
                                 <span class="sr-only">0% Complete</span>
                             </div>
                         </div>
@@ -706,8 +706,9 @@
                         "input": []
                     },
                 importOperation: {
+                    highwater: null,
                     pollingUrl: null,
-                    progress: 0,
+                    progress: null,
                     response: null,
                 },
             };
@@ -758,7 +759,7 @@
                 function showResults(outcome) {
                     // successful inputs and possibly errors
                     $("#preparing-progress").addClass("hidden");
-                    setProgress(0, 0);
+                    incrementProgress(0, 0);
                     // $("output").addClass("hidden");
                     $("#success-result").removeClass("hidden");
                     $("#result-description").removeClass("alert-warning").addClass("alert-success")
@@ -805,10 +806,8 @@
                         });
                     }
                 }
-
+                
                 function setProgress(pct, dur) {
-                    pct = Math.round(pct);
-                    console.log("setting progress:", pct, "%")
                     if (dur !== undefined) {
                         $(".progress-bar").css("transitionDuration", (dur || 0) + "s");
                         setTimeout(function() {
@@ -825,10 +824,25 @@
                     }
                 }
 
+                function pauseProgress(pct) {
+                    if (!pct) {
+                        // is there an aria value that fits this situation?
+                        pct = 100;
+                    }
+                    $(".progress-bar").addClass("progress-bar-striped");
+                    setProgress(pct, 0);
+                }
+
+                function incrementProgress(pct, dur) {
+                    pct = Math.round(pct);
+                    $(".progress-bar").removeClass("progress-bar-striped");
+                    setProgress(pct, dur)
+                }
+
                 function successHandler(result) {
                     console.log("request resolved")
                     $(".preparing-progress").addClass("hidden");
-                    setProgress(0, 0);
+                    incrementProgress(0, 0);
                 }
 
                 const STEPS = {
@@ -854,7 +868,7 @@
                             waitForResult(statusUrl);
                         }
 
-                        setProgress(0, 0);
+                        incrementProgress(0, 0);
                     },
                     kickOffRejected: function(xhr) {
                         console.log("kickoff failed");
@@ -918,25 +932,35 @@
                     }).then(function(body, resultCode, xhr) {
                         if (xhr.status == 200) {
                             if (TIMER) { clearTimeout(TIMER) }
-                            setProgress(100, 0);
+                            incrementProgress(100, 0);
                             showResults(body);
                         }
                         else if (xhr.status == 202) {
                             // calculate a transition to expand the progress bar
-                            const progress = parseFloat(xhr.getResponseHeader("x-progress"));
+                            const reportedProgress = parseFloat(xhr.getResponseHeader("x-progress"));
                             const retryTime = xhr.getResponseHeader("retry-after"); // in milliseconds?
-                            if (progress < 1) {
+                            if (reportedProgress < 0) {
                                 // if reported progress is -1, server is indicating less than 10% has been imported
-                                setProgress(1, 0.5);
+                                pauseProgress();
+                                STATE.importOperation.progress = null;
                             } else {
                                 // server reporting a percentage of file(s) imported
-                                setProgress(progress, 0);
-                                if (retryTime > 20) { // otherwise not worth animating
-                                    const interval = Date.now() - TICK;
-                                    var expectedIncrement = (retryTime / interval) * progress; // in %
-                                    expectedIncrement = Math.max(0, expectedIncrement);
-                                    setProgress( progress + expectedIncrement, retryTime / 1000)
+                                if (STATE.importOperation.progress && reportedProgress <= STATE.importOperation.highwater) {
+                                    // server has stalled on import; display striped bar
+                                    console.log("stalled..... at", STATE.importOperation.highwater)
+                                    pauseProgress(STATE.importOperation.highwater)
+                                } else {
+                                    incrementProgress(reportedProgress, 0);
+                                    if (retryTime > 20 && STATE.importOperation.progress) { // otherwise not worth animating
+                                        const interval = Date.now() - TICK;
+                                        var expectedIncrement = (retryTime / interval) * reportedProgress; // in %
+                                        expectedIncrement = Math.max(0, expectedIncrement);
+                                        const highwater = reportedProgress + expectedIncrement;
+                                        STATE.importOperation.highwater = highwater;
+                                        incrementProgress( highwater, retryTime / 1000)
+                                    }
                                 }
+                                STATE.importOperation.progress = reportedProgress;
                             }
                             TIMER = setTimeout( () => waitForResult(url), retryTime );
                         }
