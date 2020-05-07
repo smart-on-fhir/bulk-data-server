@@ -63,7 +63,8 @@ app.use(function (err, req, res, next) {
 });
 
 // If invoked directly start a server (otherwise let the tests do that)
-if (!("parent" in module)) {
+// @ts-ignore
+if (!module.parent) {
     app.listen(config.port, function() {
         console.log("Server listening at " + config.baseUrl);
     });
