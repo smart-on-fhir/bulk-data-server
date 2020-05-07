@@ -959,9 +959,6 @@ describe("Progress Updates", () => {
             }),
             json: true
         })
-        .catch(({ outcome }) => {
-            assert.ok(outcome.issue[0].diagnostics === 'The requested resource type "Xz" is not available on this server');
-        })
         .then(res => {
             // console.log(res.body.error)
             assert.ok(res.body.error.length === 2);
@@ -969,6 +966,9 @@ describe("Progress Updates", () => {
             assert.ok(res.body.error[0].url.split("/").pop() === "Xz.error.ndjson");
             assert.ok(res.body.error[1].type === "OperationOutcome");
             assert.ok(res.body.error[1].url.split("/").pop() === "Yz.error.ndjson");
+        })
+        .catch(({ outcome }) => {
+            assert.ok(outcome.issue[0].diagnostics === 'The requested resource type "Xz" is not available on this server');
         })
         .then(() => done(), done);
     })
