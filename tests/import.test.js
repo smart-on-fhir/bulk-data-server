@@ -35,6 +35,32 @@ function fakeResponse(cfg) {
     mockServer.app.mock(cfg);
 }
 
+function kickOff(payload, headers = {})
+{
+    return lib.requestPromise({
+        url: lib.buildUrl(["/byron/fhir/$import"]),
+        method: "POST",
+        body: JSON.stringify({
+            inputFormat: "application/fhir+ndjson",
+            inputSource: "https://test",
+            storageDetail: {
+                type: "https",
+                ...payload.storageDetail
+            },
+            input: [
+                ...payload.input || []
+            ],
+            ...payload
+        }),
+        headers: {
+            "Accept": "application/fhir+json",
+            "Prefer": "respond-async",
+            "Content-Type": "application/json",
+            ...headers
+        }
+    })
+}
+
 
 // Begin tests =================================================================
 
@@ -218,64 +244,162 @@ describe("TaskManager", () => {
 
 describe("Import kick-off endpoint", () => {
 
-    it ("Requires Content-Type: application/json", async () => {
-
-        // Send all required headers except "Content-Type"
-        return lib.requestPromise({
-            url: lib.buildUrl(["/byron/fhir/$import"]),
-            method: "POST",
-            headers: {
-                "Accept": "application/fhir+json",
-                "Prefer": "respond-async"
-            }
-        })
-        .then(() => {
-            throw new Error("Did not fail as expected");
-        })
-        .catch(error => {
-            const outcome = JSON.parse(error.response.body);
-            assert.equal(outcome.issue[0].diagnostics, "The Content-Type header must be application/json");
-        });
+    it ("Requires Content-Type: application/json", () => {
+        return kickOff({}, { "Content-Type": undefined })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, "The Content-Type header must be application/json");
+            });
     });
 
-    it ("Requires Accept: application/fhir+json", async () => {
-
-        // Send all required headers except "Accept"
-        return lib.requestPromise({
-            url: lib.buildUrl(["/byron/fhir/$import"]),
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Prefer": "respond-async"
-            }
-        })
-        .then(() => {
-            throw new Error("Did not fail as expected");
-        })
-        .catch(error => {
-            const outcome = JSON.parse(error.response.body);
-            assert.equal(outcome.issue[0].diagnostics, "The Accept header must be application/fhir+json");
-        });
+    it ("Requires Accept: application/fhir+json", () => {
+        return kickOff({}, { Accept: undefined })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, "The Accept header must be application/fhir+json");
+            });
     });
 
-    it ("Requires Prefer: respond-async", async () => {
+    it ("Requires Prefer: respond-async", () => {
+        return kickOff({}, { Prefer: undefined })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, "The Prefer header must be respond-async");
+            });
+    });
 
-        // Send all required headers except "Prefer"
-        return lib.requestPromise({
-            url: lib.buildUrl(["/byron/fhir/$import"]),
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/fhir+json"
-            }
-        })
-        .then(() => {
-            throw new Error("Did not fail as expected");
-        })
-        .catch(error => {
-            const outcome = JSON.parse(error.response.body);
-            assert.equal(outcome.issue[0].diagnostics, "The Prefer header must be respond-async");
-        });
+    it ("validates inputFormat", async () => {
+        // inputFormat is required
+        await kickOff({ inputFormat: undefined })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, 'The "inputFormat" JSON parameter is required');
+            });
+
+        // inputFormat must be a string
+        await kickOff({ inputFormat: 777 })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, 'The "inputFormat" JSON parameter must be a string');
+            });
+
+        // inputFormat must be "application/fhir+ndjson"
+        await kickOff({ inputFormat: "whatever" })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.match(outcome.issue[0].diagnostics, /^The server did not recognize the provided inputFormat whatever\./);
+            });
+    });
+
+    it ("validates inputSource", async () => {
+        // inputSource is required
+        await kickOff({ inputSource: undefined })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, 'The "inputSource" JSON parameter is required');
+            });
+
+        // inputSource must be a string
+        await kickOff({ inputSource: 777 })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, 'The "inputSource" JSON parameter must be a string');
+            });
+
+        // inputSource must be an URL
+        await kickOff({ inputSource: "test" })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, 'The "inputSource" JSON parameter must be an URL');
+            });
+    });
+
+    it ("validates storageDetail", async () => {
+        // if set, storageDetail must be an object (it defaults to { type: "https" })
+        await kickOff({ storageDetail: "test" })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, 'The "storageDetail" JSON parameter must be an object');
+            });
+
+        // storageDetail.type must be one of "https", "aws-s3", "gcp-bucket", "azure-blob"
+        await kickOff({ storageDetail: { type: "test" } })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.match(outcome.issue[0].diagnostics, /^The "storageDetail\.type" parameter must be one of "https",.+/);
+            });
+    });
+
+    it ("validates input[]", async () => {
+        // input must be an array
+        await kickOff({ input: "test" })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, 'The input must be an array');
+            });
+
+        // input cannot be empty
+        await kickOff({ input: [] })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, 'The input array cannot be empty');
+            });
+
+        // input entries must be objects
+        await kickOff({ input: [ "test" ] })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, 'All input entries must be objects');
+            });
+
+        // input entry.type must be string
+        await kickOff({ input: [ {} ] })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, "All input entries must have 'type' string property");
+            });
+        await kickOff({ input: [ { type: 777 } ] })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, "All input entries must have 'type' string property");
+            });
+
+
+        // input entry.url must be string URL
+        await kickOff({ input: [ { type: "test" } ] })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, "All input entries must valid 'url' property");
+            });
+        await kickOff({ input: [ { type: "test", url: 777 } ] })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, "All input entries must valid 'url' property");
+            });
+        await kickOff({ input: [ { type: "test", url: "test" } ] })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, "All input entries must valid 'url' property");
+            });
     });
 });
 
