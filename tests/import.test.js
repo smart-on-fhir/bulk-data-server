@@ -8,6 +8,8 @@ const MockReadable = require("./mocks/ReadStream");
 const mockServer   = require("./mocks/mockServer");
 const lib          = require("./lib");
 const { server }   = require("../index");
+const Task         = require("../import/Task");
+const TaskManager  = require("../import/TaskManager");
 
 const MOCK_BASE_URL = "https://127.0.0.1:8443/";
 // const API_BASE = MOCK_BASE_URL + "byron/fhir";
@@ -271,7 +273,7 @@ describe("Import kick-off endpoint", () => {
             });
     });
 
-    it ("validates inputFormat", async () => {
+    it ("Validates inputFormat", async () => {
         // inputFormat is required
         await kickOff({ inputFormat: undefined })
             .then(() => { throw new Error("Did not fail as expected"); })
@@ -297,7 +299,7 @@ describe("Import kick-off endpoint", () => {
             });
     });
 
-    it ("validates inputSource", async () => {
+    it ("Validates inputSource", async () => {
         // inputSource is required
         await kickOff({ inputSource: undefined })
             .then(() => { throw new Error("Did not fail as expected"); })
@@ -323,7 +325,7 @@ describe("Import kick-off endpoint", () => {
             });
     });
 
-    it ("validates storageDetail", async () => {
+    it ("Validates storageDetail", async () => {
         // if set, storageDetail must be an object (it defaults to { type: "https" })
         await kickOff({ storageDetail: "test" })
             .then(() => { throw new Error("Did not fail as expected"); })
@@ -341,7 +343,7 @@ describe("Import kick-off endpoint", () => {
             });
     });
 
-    it ("validates input[]", async () => {
+    it ("Validates input[]", async () => {
         // input must be an array
         await kickOff({ input: "test" })
             .then(() => { throw new Error("Did not fail as expected"); })
@@ -401,8 +403,43 @@ describe("Import kick-off endpoint", () => {
                 assert.equal(outcome.issue[0].diagnostics, "All input entries must valid 'url' property");
             });
     });
+
+    it ("Replies with OperationOutcome in case of error");
+
+    it ("Replies with 202, OperationOutcome and Content-Location header");
 });
 
-describe("Import status endpoint", () => {});
+describe("Import status endpoint", () => {
+    it ("Replies with 404 and OperationOutcome for unknown task IDs");
+    it ("Replies with 200 JSON and Expires header on completed import");
+    it ("Replies with 202 and retry-after and x-progress headers on progress");
+});
 
-describe("Import cancellation endpoint", () => {});
+describe("Import cancellation endpoint", () => {
+
+    it ("Replies with 404 and OperationOutcome for unknown task IDs", () => {
+        return lib.requestPromise({
+            url: lib.buildUrl(["/byron/fhir/import-status/whatever"]),
+            method: "DELETE"
+        })
+        .then(() => { throw new Error("Did not fail as expected"); })
+        .catch(error => {
+            assert.equal(error.response.statusCode, 404);
+            const outcome = JSON.parse(error.response.body);
+            assert.equal(outcome.issue[0].diagnostics, 'Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled');
+        })
+    });
+
+    it ("Replies with 202 and OperationOutcome for canceled tasks", () => {
+        const task = new Task();
+        TaskManager.add(task);
+        return lib.requestPromise({
+            url: lib.buildUrl(["/byron/fhir/import-status/", task.id]),
+            method: "DELETE"
+        }).then(res => {
+            assert.equal(res.statusCode, 202);
+            const outcome = JSON.parse(res.body);
+            assert.equal(outcome.issue[0].diagnostics, 'The procedure was canceled');
+        })
+    });
+});
