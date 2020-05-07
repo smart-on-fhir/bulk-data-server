@@ -517,7 +517,7 @@ router.delete("/bulkstatus", [
 ]);
 
 // =============================================================================
-// BulkData Export Endpoints
+// BulkData Import Endpoints
 // =============================================================================
 
 // Return import progress by task id generated during kick-off request
