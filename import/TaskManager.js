@@ -1,3 +1,6 @@
+const config = require("../config");
+
+
 const TASKS = {};
 
 
@@ -13,7 +16,7 @@ function add(task)
     }
     TASKS[task.id] = task;
     task.once("end", () => {
-        setTimeout(() => remove(task.id), 60000).unref();
+        setTimeout(() => remove(task.id), config.dbMaintenanceMaxRecordAge * 1000).unref();
     });
 }
 

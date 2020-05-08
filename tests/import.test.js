@@ -10,6 +10,7 @@ const lib          = require("./lib");
 const { wait }     = require("../lib");
 const Task         = require("../import/Task");
 const TaskManager  = require("../import/TaskManager");
+const Queue        = require("../import/Queue");
 
 const MOCK_BASE_URL = "https://127.0.0.1:8443/";
 // const API_BASE = MOCK_BASE_URL + "byron/fhir";
@@ -267,8 +268,9 @@ describe("BulkData Import", () => {
             assert.equal(task.total, 5);
         });
 
-        it ("handles invalid file types")
-
+        it ("handles invalid file types");
+        it ("handles HTTP redirects");
+        it ("enforces HTTP redirect limits");
         it ("start() returns a stream even if the request has failed")
         it ("handles ndjson parsing errors")
         it ("emits events")
@@ -285,7 +287,51 @@ describe("BulkData Import", () => {
         it ("has");
         it ("add");
         it ("remove");
-        it ("auto-remove");
+
+        it ("auto-remove", async () => {
+            const orig = config.dbMaintenanceMaxRecordAge;
+            config.dbMaintenanceMaxRecordAge = 0;
+
+            after(next => {
+                config.dbMaintenanceMaxRecordAge = orig;
+                next();
+            });
+
+            const task = new Task();
+            TaskManager.add(task);
+            task.end();
+            await wait(10);
+            assert.equal(TaskManager.has(task.id), false);
+        });
+
+        it ("Rejects adding the same task twice", () => {
+            const task = new Task();
+            TaskManager.add(task);
+            assert.throws(() => TaskManager.add(task));
+        });
+    });
+
+    describe("Queue", () => {
+
+        it ("size()", () => {
+            let queue = new Queue([1,2,3]);
+            assert.equal(queue.size(), 3);
+
+            queue = new Queue(1,2,3,4);
+            assert.equal(queue.size(), 4);
+        });
+
+        it ("enqueue/dequeue", () => {
+            let queue = new Queue();
+            queue.enqueue(2);
+            assert.equal(queue.dequeue(), 2);
+        });
+
+        it ("setMaxSize()", () => {
+            let queue = new Queue([1,2,3]);
+            queue.setMaxSize(3);
+            assert.throws(() => queue.enqueue(4));
+        });
     });
 
     describe("Import kick-off endpoint", () => {
@@ -558,6 +604,14 @@ describe("BulkData Import", () => {
         });
 
         it ("Enforces rate limits", () => {
+            const orig = config.maxRequestsPerMinute;
+            config.maxRequestsPerMinute = 2;
+
+            after(next => {
+                config.maxRequestsPerMinute = orig;
+                next();
+            });
+
             const url = lib.buildUrl(["/byron/fhir/import-status/whatever"]);
             let i = 0;
 
