@@ -79,6 +79,10 @@ class Task extends EventEmitter
      */
     get progress()
     {
+        if (this.#endTime || this.#error) {
+            return 1;
+        }
+
         const total = this.total;
 
         // if we don't know the total size we cannot compute the progress

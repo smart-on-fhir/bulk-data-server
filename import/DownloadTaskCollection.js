@@ -171,6 +171,17 @@ class DownloadTaskCollection extends Task
     {
         return this.tasks.map(t => t.position).reduce((prev, cur) => prev + cur, 0);
     }
+
+    /**
+     * The aggregate progress for all of the included tasks
+     */
+    get progress()
+    {
+        return this.tasks.map(t => t.progress).reduce(
+            (prev, cur) => prev + Math.max(cur, 0),
+            0
+        ) / (this.tasks.length || 1);
+    }
 }
 
 module.exports = DownloadTaskCollection;

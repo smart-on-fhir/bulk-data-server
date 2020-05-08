@@ -10,14 +10,13 @@ const lib       = require("./lib");
 const { server } = require("../index");
 const config    = require("../config");
 
+
 before(next => {
-    if (!server.listening)
-        server.listen(config.port, () => next());
+    server.listen(config.port, next);
 });
 
 after(next => {
-    server.close();
-    next();
+    server.unref().close(next);
 });
 
 // added in node v10
@@ -1697,19 +1696,17 @@ describe("Error responses", () => {
         });
 
         it("returns 400 unsupported_grant_type with invalid grant_type parameter", () => {
-            it("returns invalid_grant with missing grant_type parameter", () => {
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        grant_type: "whatever"
-                    }
-                }, {
-                    error: "unsupported_grant_type",
-                    error_description: "The grant_type parameter should equal 'client_credentials'"
-                }, 400);
-            });
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : tokenUrl,
+                form  : {
+                    grant_type: "whatever"
+                }
+            }, {
+                error: "unsupported_grant_type",
+                error_description: "The grant_type parameter should equal 'client_credentials'"
+            }, 400);
         });
 
         it("returns 400 invalid_request with missing client_assertion_type param", () => {

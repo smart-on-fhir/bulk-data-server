@@ -243,7 +243,7 @@ function createImportStatusHandler()
         
             // task exists; check its progress
             const progress = Math.max(task.progress, 0);
-        
+
             // Task(s) finished
             if (progress >= 1) {
                 const firstCompletedAt = Math.min(...task.tasks.map(t => t.endTime));

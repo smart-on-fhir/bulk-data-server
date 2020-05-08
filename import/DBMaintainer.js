@@ -21,7 +21,7 @@ class DBMaintainer
                     tick(position + 1);
                 });
             }
-            setTimeout(tick, config.dbMaintenanceTickInterval);
+            setTimeout(tick, config.dbMaintenanceTickInterval).unref();
         };
 
         tick();
