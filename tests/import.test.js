@@ -14,6 +14,19 @@ const TaskManager  = require("../import/TaskManager");
 const MOCK_BASE_URL = "https://127.0.0.1:8443/";
 // const API_BASE = MOCK_BASE_URL + "byron/fhir";
 
+const validPayload = {
+    "inputFormat": "application/fhir+ndjson",
+    "inputSource": "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3",
+    "storageDetail": {
+        "type": "https"
+    },
+    "input": [
+        {
+            "type": "Patient",
+            "url": "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Patient.ndjson"
+        }
+    ]
+};
 
 
 function fakeResponse(cfg) {
@@ -61,7 +74,10 @@ async function bulkImport(payload)
         const response = await lib.requestPromise({ url: statusLocation });
 
         if (response.statusCode == 200) {
-            return JSON.parse(response.body);
+            return {
+                response,
+                body: JSON.parse(response.body)
+            };
         }
 
         if (response.statusCode == 202) {
@@ -86,6 +102,11 @@ describe("BulkData Import", () => {
         mockServer.httpsServer.unref().close(next);
     });
 
+    afterEach(next => {
+        TaskManager.endAll();
+        next();
+    });
+
     describe("NDJSONStream", () => {
 
         it ("handles empty input", (next) => {
@@ -97,7 +118,7 @@ describe("BulkData Import", () => {
             ndjsonStream.on("data", object => result.push(object));
             
             finished(ndjsonStream, error => {
-                assert.ok(!error);
+                assert.equal(error, null);
                 assert.deepEqual(result, []);
                 next();
             });
@@ -114,7 +135,7 @@ describe("BulkData Import", () => {
             ndjsonStream.on("data", object => result.push(object));
 
             finished(ndjsonStream, error => {
-                assert.ok(!error);
+                assert.equal(error, null);
                 assert.deepEqual(result, [{ "a" : 1 }, { "a": 2 }]);
                 next();
             });
@@ -131,7 +152,7 @@ describe("BulkData Import", () => {
             ndjsonStream.on("data", object => result.push(object));
 
             finished(ndjsonStream, error => {
-                assert.ok(!error);
+                assert.equal(error, null);
                 assert.deepEqual(result, [{ "a" : 1 }, { "a": 2 }]);
                 next();
             });
@@ -148,7 +169,7 @@ describe("BulkData Import", () => {
             ndjsonStream.on("data", object => result.push(object));
 
             finished(ndjsonStream, error => {
-                assert.ok(!error);
+                assert.equal(error, null);
                 assert.deepEqual(result, [{ "a" : 1 }, { "a": 2 }]);
                 next();
             });
@@ -161,7 +182,8 @@ describe("BulkData Import", () => {
             const ndjsonStream = new NDJSONStream();
 
             finished(ndjsonStream, error => {
-                assert.ok(error && error instanceof SyntaxError);
+                assert.notEqual(error, null);
+                assert.equal(error instanceof SyntaxError, true);
                 assert.equal(error.message, "Error parsing NDJSON on line 1: Unexpected end of JSON input");
                 next();
             });
@@ -174,7 +196,8 @@ describe("BulkData Import", () => {
             const ndjsonStream = new NDJSONStream();
 
             finished(ndjsonStream, error => {
-                assert.ok(error && error instanceof SyntaxError);
+                assert.notEqual(error, null);
+                assert.equal(error instanceof SyntaxError, true);
                 assert.equal(error.message, "Error parsing NDJSON on line 2: Unexpected end of JSON input");
                 next();
             });
@@ -191,7 +214,8 @@ describe("BulkData Import", () => {
 
             finished(ndjsonStream, error => {
                 config.ndjsonMaxLineLength = orig;
-                assert.ok(error && error instanceof Error);
+                assert.notEqual(error, null);
+                assert.equal(error instanceof Error, true);
                 assert.equal(error.message.indexOf("Buffer overflow"), 0);
                 next();
             });
@@ -424,21 +448,65 @@ describe("BulkData Import", () => {
                 });
         });
 
-        it ("Replies with OperationOutcome in case of error");
+        it ("Replies with 202, OperationOutcome and Content-Location header", async () => {
+            const resp = await kickOff(validPayload);
+            const json = JSON.parse(resp.body);
+            assert.equal(resp.statusCode, 202);
+            assert.equal(typeof resp.headers["content-location"], "string");
+            assert.equal(json.resourceType, "OperationOutcome");
+        });
 
-        it ("Replies with 202, OperationOutcome and Content-Location header");
+        it ("Rejects multiple imports", async () => {
+
+            // First request should succeed
+            const resp1 = await kickOff(validPayload);
+            assert.equal(resp1.statusCode, 202);
+
+            // Second request should be rejected
+            try {
+                await kickOff(validPayload);
+                throw new Error("Did not fail as expected");
+            } catch (error) {
+                assert.equal(error.response.statusCode, 429);
+            }
+        });
     });
 
     describe("Import status endpoint", () => {
-        it ("Replies with 404 and OperationOutcome for unknown task IDs");
-        it ("Replies with 200 JSON and Expires header on completed import");
-        it ("Replies with 202 and retry-after and x-progress headers on progress");
+        it ("Replies with 200 JSON and Expires header on completed import", async function() {
+            this.timeout(10000);
+            const { response } = await bulkImport(validPayload);
+            assert.equal(response.statusCode, 200);
+            assert.notEqual(response.headers["expires"], undefined);
+        });
+
+        it ("Replies with 404 and OperationOutcome for unknown task IDs", () => {
+            return lib.requestPromise({
+                url: lib.buildUrl(["/byron/fhir/import-status/whatever"])
+            })
+            .then(() => { throw new Error("Did not fail as expected"); })
+            .catch(error => {
+                assert.equal(error.response.statusCode, 404);
+                const outcome = JSON.parse(error.response.body);
+                assert.equal(outcome.issue[0].diagnostics, "Requested bulk import task not found");
+            });
+        });
+
+        it ("Replies with 202 and retry-after and x-progress headers on progress", async function() {
+            this.timeout(5000);
+            const kickOffResponse = await kickOff(validPayload);
+            const statusLocation = kickOffResponse.headers["content-location"];
+            const statusResponse = await lib.requestPromise({ url: statusLocation });
+            assert.equal(statusResponse.statusCode, 202);
+            assert.notEqual(statusResponse.headers["retry-after"], undefined);
+            assert.notEqual(statusResponse.headers["x-progress"], undefined);
+        });
 
         it ("Fails of none of the files were imported", async function() {
 
             this.timeout(5000);
 
-            return bulkImport({
+            await bulkImport({
                 "inputFormat": "application/fhir+ndjson",
                 "inputSource": "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3",
                 "storageDetail": {
@@ -463,7 +531,7 @@ describe("BulkData Import", () => {
 
             this.timeout(5000);
 
-            const result = await bulkImport({
+            const { body } = await bulkImport({
                 "inputFormat": "application/fhir+ndjson",
                 "inputSource": "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3",
                 "storageDetail": {
@@ -481,12 +549,31 @@ describe("BulkData Import", () => {
                 ]
             });
 
-            assert.deepEqual(result.error, [{
+            assert.deepEqual(body.error, [{
                 type: 'OperationOutcome',
                 inputUrl: 'https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Missing.ndjson',
                 count: 0,
                 url: 'http://localhost:9444/outcome?issueCode=exception&severity=error&message=Observation%20resources%20could%20not%20be%20imported.%20Error%3A%20404%20Not%20Found'
             }]);
+        });
+
+        it ("Enforces rate limits", () => {
+            const url = lib.buildUrl(["/byron/fhir/import-status/whatever"]);
+            let i = 0;
+
+            function ping() {
+                if (++i > 30) {
+                    throw new Error("Did not fail in 30 attempts");
+                }
+                
+                return lib.requestPromise({ url }).catch(error => {
+                    if (error.response.statusCode != 429) {
+                        return ping();
+                    }
+                });
+            }
+
+            return ping();
         });
     });
 

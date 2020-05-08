@@ -219,7 +219,7 @@ function createImportKickOffHandler()
                 const pollingUrl = config.baseUrl + req.baseUrl + "/import-status/" + tasks.id;
                 res.status(202);
                 res.setHeader("Content-Location", pollingUrl);
-                return require("../outcomes").importAccepted(res, pollingUrl)
+                return require("../outcomes").importAccepted(res, pollingUrl);
             } catch (error) {
                 next(error);
             }

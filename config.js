@@ -127,15 +127,15 @@ module.exports = {
     maxImportsPerResourceType: 50,
 
     // Run database maintenance once a minute (set in milliseconds)
-    dbMaintenanceTickInterval: ENV == "test" ? 100 : 60 * 1000,
+    dbMaintenanceTickInterval: ENV == "test" ? 10 : 60 * 1000,
 
     // Purge records older than 10 min (set in seconds)
     dbMaintenanceMaxRecordAge: ENV == "test" ? 1 : 10 * 60,
 
     // If this is exceeded reply with 429 Too many requests (works per IP)
-    maxRequestsPerMinute: 30,
+    maxRequestsPerMinute: ENV == "test" ? 20 : 30,
 
     // If a client violates the maxRequestsPerMinute restriction for more than
     // this duration (in seconds) the import session will be terminated
-    maxViolationDuration: 60
+    maxViolationDuration: ENV == "test" ? 0.1 : 60
 };

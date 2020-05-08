@@ -13,7 +13,7 @@ function add(task)
     }
     TASKS[task.id] = task;
     task.once("end", () => {
-        setTimeout(() => remove(task.id), 60000);
+        setTimeout(() => remove(task.id), 60000).unref();
     });
 }
 
@@ -51,10 +51,19 @@ function getRemainingTime()
     return Math.ceil(sum);
 }
 
+function endAll()
+{
+    for (const taskId in TASKS) {
+        TASKS[taskId].end();
+        this.remove(taskId);
+    }
+}
+
 module.exports = {
     get,
     add,
     remove,
     has,
+    endAll,
     getRemainingTime
 };
