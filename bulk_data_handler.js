@@ -12,7 +12,6 @@ const fhirStream   = require("./FhirStream");
 const toNdjson     = require("./transforms/dbRowToNdjson");
 const toCSV        = require("./transforms/dbRowToCSV");
 const translator   = require("./transforms/dbRowTranslator");
-const outcomes     = require("./outcomes");
 const bulkImporter = require("./import/bulk_data_import_handler");
 
 
@@ -40,13 +39,13 @@ function validateRequestStart(req, res, next) {
 
     // ensure requestStart param is present
     if (!requestStart) {
-        return outcomes.requireRequestStart(res);
+        return Lib.outcomes.requireRequestStart(res);
     }
 
     try {
         requestStart = Lib.fhirDateTime(requestStart);
     } catch (ex) {
-        return outcomes.invalidRequestStart(req, res);
+        return Lib.outcomes.invalidRequestStart(req, res);
     }
 
     // requestStart - ensure valid date/time note that  using try does not
@@ -54,12 +53,12 @@ function validateRequestStart(req, res, next) {
     // the first time
     try { requestStart = moment(requestStart); } catch (ex) {  }
     if (!requestStart.isValid()) {
-        return outcomes.invalidRequestStart(req, res);
+        return Lib.outcomes.invalidRequestStart(req, res);
     }
 
     // requestStart - ensure start param is valid moment in time
     if (requestStart.isSameOrAfter(moment())) {
-        return outcomes.futureRequestStart(res);
+        return Lib.outcomes.futureRequestStart(res);
     }
 
     next();
@@ -106,7 +105,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     }
     if (accept != "application/fhir+ndjson" &&
         accept != "application/fhir+json") {
-        return outcomes.invalidAccept(res, accept);
+        return Lib.outcomes.invalidAccept(res, accept);
     }
 
     let ext = "ndjson";
@@ -116,7 +115,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     if (outputFormat) {
         ext = supportedFormats[outputFormat];
         if (!ext) {
-            return outcomes.invalidOutputFormat(res, outputFormat);
+            return Lib.outcomes.invalidOutputFormat(res, outputFormat);
         }
     }
 
@@ -126,7 +125,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
             Lib.fhirDateTime(req.query._since, true);
         } catch (ex) {
             console.error(ex);
-            return outcomes.invalidSinceParameter(res, req.query._since);
+            return Lib.outcomes.invalidSinceParameter(res, req.query._since);
         }
     }
 
@@ -134,7 +133,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     const requestedTypes = Lib.makeArray(req.query._type || "").map(t => String(t || "").trim()).filter(Boolean);
     const badParam = requestedTypes.find(type => config.availableResources.indexOf(type) == -1);
     if (badParam) {
-        return outcomes.invalidResourceType(res, badParam);
+        return Lib.outcomes.invalidResourceType(res, badParam);
     }
 
     // Now we need to count all the requested resources in the database.
@@ -178,7 +177,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
 
     // Simulate file_generation_failed error if requested
     if (args.err == "file_generation_failed") {
-        return outcomes.fileGenerationFailed(res);
+        return Lib.outcomes.fileGenerationFailed(res);
     }
 
     // Prepare the status URL
@@ -195,7 +194,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     // client can use to access the response.
     // HTTP/1.1 202 Accepted
     res.set("Content-Location", url);
-    return outcomes.exportAccepted(res, url);
+    return Lib.outcomes.exportAccepted(res, url);
     
 };
 
@@ -227,14 +226,14 @@ function handleGroup(req, res) {
 function cancelFlow(req, res) {
     if (JOBS[req.sim.id] === STATE_STARTED) {
         JOBS[req.sim.id] = STATE_CANCELED;
-        return outcomes.cancelAccepted(res);
+        return Lib.outcomes.cancelAccepted(res);
     }
     
     if (JOBS[req.sim.id] === STATE_CANCELED) {
-        return outcomes.cancelGone(res);
+        return Lib.outcomes.cancelGone(res);
     }
 
-    return outcomes.cancelNotFound(res);
+    return Lib.outcomes.cancelNotFound(res);
 }
 
 async function handleStatus(req, res) {
@@ -242,7 +241,7 @@ async function handleStatus(req, res) {
     let sim = req.sim;
     
     if (JOBS[sim.id] === STATE_CANCELED) {
-        return outcomes.canceled(res);
+        return Lib.outcomes.canceled(res);
     }
 
     // ensure requestStart param is present
@@ -277,7 +276,7 @@ async function handleStatus(req, res) {
     const requestedTypes = Lib.makeArray(sim.type || "").map(t => String(t || "").trim()).filter(Boolean);
     const badParam = requestedTypes.find(type => config.availableResources.indexOf(type) == -1);
     if (badParam) {
-        return outcomes.invalidResourceType(res, badParam);
+        return Lib.outcomes.invalidResourceType(res, badParam);
     }
 
     // Count all the requested resources in the database.
@@ -381,12 +380,12 @@ function handleFileDownload(req, res) {
 
     // Only "application/fhir+ndjson" is supported for accept headers
     // if (accept && accept.indexOf("application/fhir+ndjson") !== 0) {
-    //     return outcomes.onlyNDJsonAccept(res);
+    //     return Lib.outcomes.onlyNDJsonAccept(res);
     // }
 
     // early exit in case simulated errors
     if (args.err == "file_expired") {
-        return outcomes.fileExpired(res);
+        return Lib.outcomes.fileExpired(res);
     }
 
     const acceptEncoding = req.headers["accept-encoding"] || "";

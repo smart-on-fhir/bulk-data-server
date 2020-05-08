@@ -184,9 +184,9 @@ function cancelImport(req, res)
 {
     const taskId = req.params.taskId;
     if (TaskManager.remove(taskId)) {
-        return require("../outcomes").cancelAccepted(res);
+        return Lib.outcomes.cancelAccepted(res);
     }
-    return require("../outcomes").cancelNotFound(res);
+    return Lib.outcomes.cancelNotFound(res);
 }
 
 function createImportKickOffHandler()
@@ -219,7 +219,7 @@ function createImportKickOffHandler()
                 const pollingUrl = config.baseUrl + req.baseUrl + "/import-status/" + tasks.id;
                 res.status(202);
                 res.setHeader("Content-Location", pollingUrl);
-                return require("../outcomes").importAccepted(res, pollingUrl);
+                return Lib.outcomes.importAccepted(res, pollingUrl);
             } catch (error) {
                 next(error);
             }
