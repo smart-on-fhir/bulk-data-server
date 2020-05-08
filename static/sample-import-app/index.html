@@ -68,7 +68,7 @@
                 height: 14em;
                 overflow-y: scroll;
             }
-            /* #fhir-version {
+            #fhir-version {
                 font-size: 50%;
                 color: #FFF;
                 background: #888;
@@ -76,7 +76,7 @@
                 margin-left: 1em;
                 padding: 1px 8px 2px;
                 vertical-align: top;
-            } */
+            }
             .bump-right { margin-left: 2.5rem; }
             .table > tbody > tr > td {
                 vertical-align: middle;
@@ -677,12 +677,35 @@
         </script>
         <script src="../vendor/jquery-1.12.3.min.js"></script>
         <script src="../vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
-        <!-- <script src="../lib.js"></script> -->
-        <script>
-            const uploadUrl = "/byron/fhir/$import";
+        <script src="../lib.js"></script>
+        <script>            
             var TIMER;
             var TICK;
 
+            function getHiddenParams(url) {
+                var code;
+                try {
+                    var match = url.match(/\/([^/]+)\/fhir/);
+                    if (match && match[1]) {
+                        code = JSON.parse(Lib.base64UrlDecode(match[1]));
+                    }
+                } catch (ex) {
+                    code = null
+                }
+                finally {
+                    if (!code || typeof code != "object") {
+                        code = {}
+                    }
+                }
+                return code;
+            }
+
+            const CONFIG = {
+                uploadUrl: Lib.getUrlQuery({ camelCaseKeys: true }).server  + "/$import",
+                // uploadServer,
+                // params,
+                params: getHiddenParams(this.uploadUrl),
+            }
             const STATE = {
                 ui: {
                     activeTab: "form", // form | results
@@ -878,6 +901,11 @@
                 // incomplete form => valid data => ubmit request => receive request response 
                 // => polling status url partial progress => progress complete => outcome received
 
+                $("#fhir-version").html({
+                    2: "FHIR DSTU2",
+                    3: "FHIR STU3",
+                    4: "FHIR R4"
+                }[CONFIG.params.stu]); // default? || 3 || 4?
                 const rowTemplate = $("#rowInput").html();
                 const formInputFiles = $('#uploads tbody');
                 const synchronizeButtons = () => {
@@ -1095,7 +1123,7 @@
                     // at which point we hand off to confirmation function...
                     hideError();
                     $.ajax({
-                        url: uploadUrl,
+                        url: CONFIG.uploadUrl,
                         type: "POST",
                         dataType: "application/fhir+json",
                         headers: {
