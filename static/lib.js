@@ -75,6 +75,33 @@
         return atob(base64UrlUnescape(str));
     }
 
+    function equals(a, b)
+    {
+        if (Array.isArray(a)) {
+            if (!Array.isArray(b) || a.length !== b.length) {
+                return false;
+            }
+            return a.every((aX, i) => aX === b[i]);
+        }
+
+        if (a && typeof b == "object") {
+            if (!b || typeof b != "object") {
+                return false;
+            }
+            if (!equals(Object.keys(a), Object.keys(b))) {
+                return false;
+            }
+            for (const keyA in a) {
+                if (!equals(a[keyA], b.keyA)) {
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        return a === b;
+    }
+
     /**
      * Class Event
      * This is for firing custom events
@@ -188,7 +215,7 @@
         this.set = function(name, value) {
             var oldValue = _data[name];
             
-            if (oldValue === value) {
+            if (equals(oldValue, value)) {
                 return false;
             }
 
@@ -259,6 +286,7 @@
         base64UrlDecode  : base64UrlDecode,
         bool             : bool,
         copyElement      : copyElement,
+        equals           : equals,
 
         // Classes
         Event     : Event,
