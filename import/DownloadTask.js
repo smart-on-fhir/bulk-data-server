@@ -131,6 +131,10 @@ class DownloadTask extends Task
             this._count = transformer.count;
         });
 
+        pipeline.once("error", error => {
+            this.end(error);
+        });
+
         return pipeline;
     }
 }
