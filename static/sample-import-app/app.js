@@ -6,21 +6,23 @@ jQuery(function($) {
         2: "DSTU2"
     };
 
-    // STATE (Models) -----------------------------------------------------------
+    let TIMER;
+
+    // STATE (Models) ----------------------------------------------------------
     const STATE = new Lib.Model({
-        // inputSource: undefined,
-        // storageDetail: undefined,
-        // files: [],
-        // codePreviewType: "none",
-        // fhirVersion: undefined,
-        // backendUrl: undefined,
-        // progress: undefined,
-        // progressDuration: 0,
-        // result: undefined,
-        // activeTab: "form" // "form" or "results"
+        inputSource: undefined,
+        storageDetail: undefined,
+        files: undefined,
+        codePreviewType: "none",
+        fhirVersion: undefined,
+        backendUrl: undefined,
+        progress: undefined,
+        progressDuration: 0,
+        result: undefined,
+        activeTab: "form" // "form" or "results"
     });
 
-    const ERROR_STATE = new Lib.Model();
+    const VALIDATION = new Lib.Model({ files: [] });
 
     // Rendering functions (Views) ---------------------------------------------
     const DOM = {
@@ -35,12 +37,19 @@ jQuery(function($) {
         uploadButton      : $("#upload-button"),
         form              : $("form"),
         fhirSelector      : $("#fhir-selector"),
-        goBackButton      : $(".go-back")
+        goBackButton      : $(".go-back"),
+        tabs              : $('a[data-toggle="tab"]'),
+        errorCloseBtn     : $("#global-error .close"),
+        cancelBtn         : $("#cancel-btn")
     };
 
     function renderFiles() {
-        const rows  = DOM.formInputFiles.find("tr");
+        const rows  = DOM.formInputFiles.find("tr.import-file");
         const files = STATE.get("files");
+
+        if (!files.length) {
+            return DOM.formInputFiles.html(`<tr><th class="text-center text-danger bg-warning" colspan="4">No files selected</th></tr>`);
+        }
 
         // Full re-render on add/remove
         if (files.length != rows.length) {
@@ -82,7 +91,7 @@ jQuery(function($) {
     }
 
     function renderFileErrors() {
-        const errors = ERROR_STATE.get("files") || [];
+        const errors = VALIDATION.get("files") || [];
 
         errors.forEach((e, i) => {
             let input1 = DOM.formInputFiles.find("tr").eq(i).find("input:first");
@@ -100,12 +109,13 @@ jQuery(function($) {
             .parent().toggleClass("has-error", !!e.data.newValue);
     }
 
-    function renderImportErrors() {
-        console.error(arguments)
-    }
-
     function renderResults() {
         const outcome = STATE.get("result");
+
+        // Show tabs after the first import attempt
+        if (outcome !== undefined) {
+            $('.nav-tabs').removeClass("hidden");
+        }
 
         if (!outcome) {
             $("#success-result").hide();
@@ -130,34 +140,41 @@ jQuery(function($) {
             `);
         });
 
-        if (outcome.error && outcome.error.length) {
-            $("#success-result .panel").addClass("panel-warning").removeClass("panel-success");
-            $("#result-description b").text("Problems encountered importing some files")
-            outcome.error.forEach(file => {
-                const matchingInput = files.find(i => i.url === file.inputUrl);
-                const resourceType = matchingInput ? matchingInput.type : "-";
-                $(".file-list tbody").append(`
-                    <tr class="text-danger error-item">
-                        <td class="text-center"><i class="fa fa-times-circle text-danger"></i></td>
-                        <td><span title="${file.inputUrl}">${truncateUrl(file.inputUrl)}</span></td>
-                        <td>${resourceType}</td>
-                        <td>${file.count}</td>
-                        <td><a class="text-warning" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
-                    </tr>
-                `);
-                const errorMsg = extractParam(file.url, "message") || "Unknown problem";
-                $(".file-list tbody").append(`
-                    <tr class="text-danger error-detail">
-                        <td></td>
-                        <td colspan="5" class="text-danger small"><em>${errorMsg}</em></td>
-                    </tr>`
-                );
-            });
-        } else {
-            $("#result-description b").text("All files successfully imported");
-            $("#success-result .panel").removeClass("panel-warning").addClass("panel-success");
-        }
+        outcome.error.forEach(file => {
+            const matchingInput = files.find(i => i.url === file.inputUrl);
+            const resourceType = matchingInput ? matchingInput.type : "-";
+            $(".file-list tbody").append(`
+                <tr class="text-danger error-item">
+                    <td class="text-center"><i class="fa fa-times-circle text-danger"></i></td>
+                    <td><span title="${file.inputUrl}">${truncateUrl(file.inputUrl)}</span></td>
+                    <td>${resourceType}</td>
+                    <td>${file.count}</td>
+                    <td><a class="text-warning" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
+                </tr>
+            `);
+            const errorMsg = extractParam(file.url, "message") || "Unknown problem";
+            $(".file-list tbody").append(`
+                <tr class="text-danger error-detail">
+                    <td></td>
+                    <td colspan="5" class="text-danger small"><em>${errorMsg}</em></td>
+                </tr>`
+            );
+        });
+
+        $("#success-result .panel")
+            .toggleClass("panel-warning", !!(outcome.error.length && outcome.output.length ))
+            .toggleClass("panel-danger" , !!(outcome.error.length && !outcome.output.length))
+            .toggleClass("panel-success", !!(!outcome.error.length && outcome.output.length));
+        
+        $("#result-description b").text(
+            outcome.error.length ?
+                outcome.output.length ?
+                    "Problems encountered importing some files" :
+                    "No files were imported" :
+                "All files successfully imported"
+            );
     }
+
 
     // Event handlers ----------------------------------------------------------
     function onFileInputChange(e) {
@@ -194,7 +211,7 @@ jQuery(function($) {
         e.preventDefault();
         const $a = $(e.target).closest("a");
         const value = $a.data("value");
-        STATE.set("fhirVersion", value);
+        STATE.set("fhirVersion", value + "");
     }
 
     function onFhirVersionChanged(e) {
@@ -224,52 +241,64 @@ jQuery(function($) {
             return;
         }
 
-        $('.nav-tabs').removeClass("hidden")
-        // $("#results-tab").tab("show");
-        $("#success-result").removeClass("hidden");
-        $("#preparing-progress").removeClass("hidden");
-        STATE.set("progressDuration", 0);
-        STATE.set("progress", 0);
-        STATE.set("result", null);
-        
         $.ajax({
             url: STATE.get("backendFullUrl"),
             type: "POST",
-            dataType: "application/fhir+json",
+            dataType: "json",
             headers: {
                 Accept: "application/fhir+json",
                 Prefer: "respond-async",
             },
             data: JSON.stringify(generateRequestPayload()),
-            contentType: "application/json",
+            contentType: "application/json"
         })
-        .always(xhr => {
+        .done((data, textStatus, xhr) => {
             if (xhr.status == 202 || xhr.status == 200) {
                 onImportAccepted(xhr);
             }
             else {
-                onImportRejected(xhr);
+                STATE.set("error", getErrorText(xhr));
             }
+        })
+        .fail(xhr => {
+            STATE.set("error", getErrorText(xhr));
         });
     }
 
     function onImportAccepted(xhr) {
-        STATE.set("activeTab", "results");
-        STATE.set("progressDuration", 0);
-        STATE.set("progress", 0);
-        STATE.set("result", null);
-        pollForStatus(xhr.getResponseHeader("content-location"));
-    }
-
-    function onImportRejected(xhr) {
-        // show error somehow
+        STATE.set({
+            progressDuration: 0,
+            progress: 0,
+            result: null,
+            activeTab: "results",
+            statusUrl: xhr.getResponseHeader("content-location"),
+            error: null
+        });
+        pollForStatus();
     }
 
     function onProgress(e) {
         const progress = e.data.newValue;
         $("#preparing-progress")[progress > 0 && progress < 100 ? "show" : "hide"]();
         $(".progress-bar").css("width", progress + "%");
-        $("#cancel-btn").prop("disabled", progress <= 0 || progress >= 100);
+        DOM.cancelBtn.prop("disabled", progress <= 0 || progress >= 100);
+    }
+
+    function onValidationToggle(e) {
+        if (e.data.newValue) {
+            STATE.on("change:storageDetail change:inputSource change:files change:fhirVersion change:codePreviewType", validate);
+        } else {
+            STATE.off("change:storageDetail change:inputSource change:files change:fhirVersion change:codePreviewType", validate);
+        }
+    }
+
+    function onError() {
+        const error = STATE.get("error");
+        $("#global-error").toggleClass("hidden", !error).find("> .message").text(error || "");
+    }
+
+    function onTabChanged(e) {
+        STATE.set("activeTab", e.target.getAttribute("href").replace("#", ""));
     }
 
     // Other Functions ---------------------------------------------------------
@@ -313,13 +342,13 @@ jQuery(function($) {
     {
         const inputSource = STATE.get("inputSource");
         if (!inputSource) {
-            ERROR_STATE.set("inputSource", "The data origin is required");
+            VALIDATION.set("inputSource", "The data origin is required");
         }
         else if (!inputSource.match(/^https?\:\/\/.+/)) {
-            ERROR_STATE.set("inputSource", "The data origin must be url");
+            VALIDATION.set("inputSource", "The data origin must be url");
         }
         else {
-            ERROR_STATE.set("inputSource", null);
+            VALIDATION.set("inputSource", null);
         }
 
         const files = STATE.get("files");
@@ -331,47 +360,60 @@ jQuery(function($) {
             else if (!f.url.match(/^https?\:\/\/.+/)) {
                 fileErrors[i].url = "File url must be an URL";
             }
-            else {
-                fileErrors[i].url = null;
-            }
 
             if (!f.type) {
                 fileErrors[i].type = "File type is required";
             }
-            else {
-                fileErrors[i].type = null;
-            }
         });
-        ERROR_STATE.set("files", fileErrors);
+        VALIDATION.set("files", fileErrors);
     }
 
     function isValid() {
-        return ERROR_STATE.get("inputSource") === null &&
-        (ERROR_STATE.get("files") || []).every(f => {
+        const files = VALIDATION.get("files");
+
+        if (!files || !files.length) {
+            return false;
+        }
+
+        return VALIDATION.get("inputSource") === null && files.every(f => {
             return !f.url && !f.type;
         });
     }
 
-    function pollForStatus(url) {
+    function pollForStatus() {
+        const url = STATE.get("statusUrl");
+        if (!url) {
+            return STATE.set("error", "No status URL");
+        }
+
         $.ajax({
             url: url,
             headers: {
                 Accept: "application/json"
             }
-        }).then(function(body, resultCode, xhr) {
+        }).done(function(body, resultCode, xhr) {
             if (xhr.status == 200) {
-                STATE.set("progressDuration", 0);
-                STATE.set("progress", 100);
-                STATE.set("result", body);
+                STATE.set({
+                    progressDuration: 0,
+                    progress: 100,
+                    result: body
+                });
             }
             else if (xhr.status == 202) {
                 const progress  = parseFloat(xhr.getResponseHeader("x-progress"));
                 const retryTime = xhr.getResponseHeader("retry-after");
-                STATE.set("progressDuration", +retryTime || 200);
-                STATE.set("progress", progress);
-                setTimeout(() => pollForStatus(url), +retryTime || 200);
+                STATE.set({
+                    progressDuration: +retryTime || 200,
+                    progress
+                });
+                TIMER = setTimeout(pollForStatus, +retryTime || 200);
             }
-        }, renderImportErrors);
+            else {
+                STATE.set("error", getErrorText(xhr));
+            }
+        }).fail(xhr => {
+            STATE.set("error", getErrorText(xhr));
+        });
     }
 
     function extractParam(url, param) {
@@ -385,50 +427,117 @@ jQuery(function($) {
         return url;
     }
 
+    function getErrorText(error) {
+        var txt = "Unknown error";
+        if (error instanceof Error) {
+            txt = String(error);
+        }
+        else if (error.responseJSON) { // XHR with JSON response
+            if (error.responseJSON.resourceType === "OperationOutcome") {
+                txt = error.responseJSON.issue.map(i => (
+                    `${i.code} ${i.severity}: ${i.diagnostics}`
+                )).join("\n");
+            }
+            else {
+                txt = JSON.stringify(error.responseJSON, null, 4);
+            }
+        }
+        else if (error && typeof error == "object") { // XHR with JSON response
+            if (error.resourceType === "OperationOutcome") {
+                txt = error.issue.map(i => (
+                    `${i.code} ${i.severity}: ${i.diagnostics}`
+                )).join("\n");
+            }
+            else {
+                txt = JSON.stringify(error, null, 4);
+            }
+        }
+        else if (error.status && error.statusText) { // XHR error
+            txt = error.status + ": " + error.statusText;
+        }
+        else {
+            console.log(txt + ": ", arguments);
+        }
+        return txt;
+    }
+
+    function cancelImport() {
+        if (TIMER) {
+            clearTimeout(TIMER);
+        }
+        const url = STATE.get("statusUrl");
+        if (url) {
+            $.ajax({ url, type: 'DELETE' })
+            .done((body, resultCode, xhr) => {
+                STATE.set({
+                    error: getErrorText(xhr),
+                    progress: 0,
+                    activeTab: "form",
+                    statusUrl: null
+                });
+            })
+            .fail(xhr => {
+                STATE.set("error", getErrorText(xhr));
+            });
+        }
+    }
+
     
     // -------------------------------------------------------------------------
     // Bindings
     // -------------------------------------------------------------------------
 
-    // Debug events?
+    // Debug events? Do this first if needed
     if (Lib.bool(extractParam(location.href, "debug"))) {
-        STATE.on("change",       e => console.log("      STATE:", e.type, e.data));
-        ERROR_STATE.on("change", e => console.log("ERROR_STATE:", e.type, e.data));
+        STATE.on("change",      e => console.log("     STATE:", e.type, e.data));
+        VALIDATION.on("change", e => console.log("VALIDATION:", e.type, e.data));
     }
 
     // Update UI based on data changes
     STATE.on("change:files", renderFiles);
+    STATE.on("change:fhirVersion", onFhirVersionChanged);
     STATE.on("change:storageDetail change:inputSource change:files change:fhirVersion change:codePreviewType", renderCodePreviews);
     STATE.on("change:codePreviewType", toggleCodePreviews);
     STATE.on("change:storageDetail", e => DOM.storageDetail.val(e.data.newValue));
     STATE.on("change:inputSource", e => DOM.inputSource.val(e.data.newValue));
-    STATE.on("change:storageDetail change:inputSource change:files change:fhirVersion change:codePreviewType", validate);
-    STATE.on("change:fhirVersion", onFhirVersionChanged);
     STATE.on("change:progress", onProgress);
     STATE.on("change:progressDuration", e => $(".progress-bar").css("transitionDuration", e.data.newValue + "ms"));
     STATE.on("change:result", renderResults);
     STATE.on("change:activeTab", e => $("#" + e.data.newValue + "-tab").tab("show"));
-    ERROR_STATE.on("change:inputSource", renderInputSourceErrors);
-    ERROR_STATE.on("change:files", renderFileErrors);
-    ERROR_STATE.on("change", () => DOM.uploadButton.prop("disabled", !isValid()));
+    STATE.on("change:validation", onValidationToggle);
+    STATE.on("change:error", onError);
+    VALIDATION.on("change:inputSource", renderInputSourceErrors);
+    VALIDATION.on("change:files", renderFileErrors);
+    VALIDATION.on("change", () => DOM.uploadButton.prop("disabled", !isValid()));
 
     // Update models based on user interactions
-    DOM.formInputFiles.on("change input", "input", onFileInputChange);
+    DOM.formInputFiles.on("input", "input", onFileInputChange);
     DOM.formInputFiles.on("click", ".btn-remove", onFileRemove);
     DOM.appendButton.on("click", onFileAdd);
     DOM.codePreviewButtons.on('click', onCodePreviewClick);
     DOM.storageDetail.on("change", e => STATE.set("storageDetail", e.target.value));
-    DOM.inputSource.on("change input", e => STATE.set("inputSource", e.target.value));
+    DOM.inputSource.on("input", e => STATE.set("inputSource", e.target.value));
     DOM.form.on("submit", onSubmit);
     DOM.fhirSelector.on("click", "a", onFhirVersionSelect);
     DOM.goBackButton.on("click", () => STATE.set("activeTab", "form"));
+    DOM.tabs.on('shown.bs.tab', onTabChanged);
+    DOM.errorCloseBtn.on("click", () => STATE.set("error", null));
+    DOM.cancelBtn.on("click", cancelImport);
 
     // -------------------------------------------------------------------------
     // Init
     // -------------------------------------------------------------------------
-    STATE.set("files", [{ url: "", type: ""}]); // Add one empty row
-    STATE.set("storageDetail", "https"); // Default to https
-    STATE.set("inputSource", ""); // Clear autofill (if any)
-    STATE.set("fhirVersion", extractParam(location.href, "stu") || 4);
+    STATE.set({
+        files: [
+            // { url: "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Observation.ndjson", type: "Observation" },
+            // { url: "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Patient.ndjson"    , type: "Patient" },
+            // { url: "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Immunization.ndjson"    , type: "Immunization" },
+            // { url: "https://storage.googleapis.com/sandbox_bulk_data_r3/Condition.ndjson", type: "Immunization" }
+        ],
+        storageDetail: "https", // Default to https
+        inputSource  : "", // Clear autofill (if any)
+        fhirVersion  : extractParam(location.href, "stu") || "4",
+        validation   : true
+    });
     $('[data-toggle="tooltip"]').tooltip({ container: "body", placement: "auto bottom" });
 });

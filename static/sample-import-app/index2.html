@@ -63,10 +63,26 @@
                 padding: 0 0 2rem;
                 margin-bottom: 3.5rem;
             }
+            #generated-request {
+                position: relative;
+            }
+            #generated-request .btn {
+                position: absolute;
+                z-index: 2;
+                top: 12px;
+                right: 20px;
+                opacity: 0;
+                transition: opacity 0.4s;
+            }
+            #generated-request:hover .btn {
+                opacity: 1;
+            }
             #request-curl pre,
             #request-http pre {
-                height: 14em;
+                height: 16em;
+                min-height: 50px;
                 overflow-y: scroll;
+                resize: vertical;
             }
             /* #fhir-version {
                 font-size: 50%;
@@ -96,11 +112,36 @@
                 padding-top: 0;
                 border-top : 0;
             }
+            .files-table {
+                border-collapse: separate;
+            }
             .files-table > tbody > tr > td {
                 border: 0;
+                padding: 1px;
+            }
+            .files-table > tbody > tr:first-child > td {
+                border-top: 6px solid #FFF;
+            }
+            .files-table > tbody > tr:last-child > td {
+                border-bottom: 6px solid #FFF;
             }
             .files-table > thead > tr > th {
                 background: #f6f6f6;
+                border-bottom: 1px solid #DDD;
+                padding: 5px 12px;
+                text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+            }
+            .files-table > tbody > tr > td input {
+                border-color: transparent;
+                box-shadow: none;
+                background: transparent;
+                font-weight: 600;
+            }
+            .files-table > tbody > tr > td input:focus {
+                background: #FFF;
+            }
+            .files-table > tbody > tr > td .btn {
+                background: transparent;
             }
             /* .nav .nav-tabs {
                 margin-top: ;
@@ -518,9 +559,15 @@
                 FHIR Bulk Data <span style="color: #d09e27;">Uploader</span><span id="fhir-version"></span>
                 <small>sample app</small>
             </h1>
+            <div id="global-error" class="alert alert-danger hidden">
+                <button type="button" class="close" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <div class="message" style="font-family: monospace; white-space: pre-wrap;"></div>
+            </div>
             <ul class="nav nav-tabs hidden" id="steps" role="tablist">
                 <li class="nav-item" role="presentation" class="active">
-                    <a id="form-tab" class="nav-link" href="#form" role="tab" data-toggle="tab"aria-controls="form" aria-selected="true">Import Settings</a>
+                    <a id="form-tab" class="nav-link" href="#form" role="tab" data-toggle="tab" aria-controls="form" aria-selected="true">Import Settings</a>
                 </li>
                 <li class="nav-item" role="presentation">
                     <a id="results-tab" class="nav-link" href="#results" role="tab" data-toggle="tab" aria-controls="steps" aria-selected="false">Operation Results</a>
@@ -544,7 +591,7 @@
                                         title="URI to indicate provenance of data to be imported. May be used for tracking this set of imported data throughout its lifecycle. May be a FHIR endpoint that the importing system could use when matching references to previously imported data"></i></label>
                                 </p>
                             </div>
-                            <div class="col-xs-12 col-md-4">
+                            <div class="col-xs-12 col-md-5">
                                 <input name="source" type="url" aria-describedby="sourceFieldDescription" class="form-control" required />
                             </div>
                             <div class="col-xs-12 col-md-2">
@@ -555,10 +602,10 @@
                                     <label>Storage detail <i class="fa fa-info-circle text-muted" data-toggle="tooltip" title="Default storage source is simply 'https' with vendor-specific implementations possible"></i></label>
                                 </p>
                             </div>
-                            <div class="col-xs-12 col-md-4">
+                            <div class="col-xs-12 col-md-3">
                                 <select name="storage-protocol" id="storage-protocol" class="form-control">
                                     <option value="https">https</option>
-                                    <option value="s3">Amazon Web Services: S3 bucket</option>
+                                    <option value="aws-s3">Amazon Web Services: S3 bucket</option>
                                     <option value="gcp-bucket">Google cloud storage</option>
                                     <option disabled value="azure-blob">Azure cloud storage</option>
                                 </select>
@@ -570,7 +617,7 @@
                                 <i class="fa fa-file-text-o text-success"></i> <span class="text-success">Resources to Import</span>
                             </h4>
                             <div class="panel panel-default">
-                                <table class="table table-condensed files-table">
+                                <table class="table table-condensed table-hover files-table">
                                     <thead>
                                         <tr>
                                             <th style="width: 2.5rem"></th>
@@ -579,7 +626,7 @@
                                             <th style="width: 4rem"></th>
                                         </tr>
                                     </thead>
-                                    <tbody><!-- dynamically generated input fields --></tbody>
+                                    <tbody></tbody>
                                 </table>
                                 <div class="panel-footer text-center">
                                     <button type="button" id="append-button" class="btn btn-default">
@@ -605,11 +652,11 @@
                             <div class="col-xs-12">
                                 <output id="generated-request">    
                                     <div id="request-curl" style="display: none">
-                                        <!-- <i class="close fa fa-clipboard"></i> -->
+                                        <button type="button" class="btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
                                         <pre># not enough form data to generate curl command</pre>
                                     </div>
                                     <div id="request-http" style="display: none">
-                                        <!-- <i class=" fa fa-clipboard"></i> -->
+                                        <button type="button" class="btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
                                         <pre># not enough form data to generate http headers</pre>
                                     </div>
                                 </output>
@@ -638,7 +685,7 @@
                     </div>
 
                     <div id="success-result">
-                        <div class="panel panel-default">
+                        <div class="panel">
                             <div id="result-description" class="panel-heading">
                                 <b>Bulk import operation completed</b>
                                 <i class="fa fa-upload pull-right"></i>
@@ -695,7 +742,7 @@
 
         <script id="rowInput" type="text/template">
             <tr class="import-file">
-                <td><i class="validity fa text-center"></i></td>
+                <td class="text-right"><i class="validity fa text-center"></i></td>
                 <td><input class="form-control input-sm" name="url" type="url" required /></td>
                 <td><input class="form-control input-sm file-type" type="text" list="fhir-resource-types-r4" required /></td>
                 <td>
