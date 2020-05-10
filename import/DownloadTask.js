@@ -50,7 +50,7 @@ class DownloadTask extends Task
             return new Promise((resolve, reject) => {
                 try {
                     const req = https.request(url, {
-                        timeout: 0,
+                        timeout: 1000 * 60 * 5, // 5 min per file
                         rejectUnauthorized: process.env.NODE_ENV !== "test"
                     });
     

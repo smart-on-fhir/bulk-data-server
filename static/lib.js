@@ -81,7 +81,7 @@
             if (!Array.isArray(b) || a.length !== b.length) {
                 return false;
             }
-            return a.every((aX, i) => aX === b[i]);
+            return a.every((x, i) => equals(x, b[i]));
         }
 
         if (a && typeof b == "object") {
@@ -91,12 +91,7 @@
             if (!equals(Object.keys(a), Object.keys(b))) {
                 return false;
             }
-            for (const keyA in a) {
-                if (!equals(a[keyA], b.keyA)) {
-                    return false;
-                }
-                return true;
-            }
+            return Object.keys(a).every(key => equals(a[key], b[key]));
         }
 
         return a === b;
@@ -177,10 +172,21 @@
 
         /**
          * Removes event listener
-         * @param {String} type 
+         * @param {string|string[]} type 
          * @param {function} handler 
          */
         this.off = function(type, handler) {
+
+            if (Array.isArray(type)) {
+                return type.forEach(t => this.off(t, handler));
+            }
+
+            type = String(type).trim();
+
+            if (type.indexOf(" ") > -1) {
+                return this.off(type.split(/\s+/), handler)
+            }
+
             if (!type) {
                 this._listeners = {};
             }
@@ -213,6 +219,11 @@
         };
 
         this.set = function(name, value) {
+
+            if (name && typeof name == "object") {
+                return Object.keys(name).forEach(key => this.set(key, name[key]));
+            }
+
             var oldValue = _data[name];
             
             if (equals(oldValue, value)) {
