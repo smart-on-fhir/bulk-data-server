@@ -246,7 +246,6 @@ class Task extends EventEmitter
     {
         if (!this.#endTime) {
             this.#endTime = Date.now();
-            this.#position = 1;
             if (error) {
                 this.#error = String(error);
             }
