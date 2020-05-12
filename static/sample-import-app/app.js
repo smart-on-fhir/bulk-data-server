@@ -279,7 +279,18 @@ jQuery(function($) {
 
     function onProgress(e) {
         const progress = e.data.newValue;
-        $("#preparing-progress")[progress > 0 && progress < 100 ? "show" : "hide"]();
+        if (progress < 0) {
+            $("#preparing-progress").hide();
+        }
+        else if (progress >= 100) {
+            setTimeout(
+                () => { $("#preparing-progress").hide(); },
+                200
+            );
+        }
+        else {
+            $("#preparing-progress").show();
+        }
         $(".progress-bar").css("width", progress + "%");
         DOM.cancelBtn.prop("disabled", progress <= 0 || progress >= 100);
     }
@@ -394,10 +405,12 @@ jQuery(function($) {
         }).done(function(body, resultCode, xhr) {
             if (xhr.status == 200) {
                 STATE.set({
-                    progressDuration: 0,
+                    progressDuration: 200,
                     progress: 100,
-                    result: body
                 });
+                TIMER = setTimeout(() => {
+                    STATE.set("result", body)
+                }, 200)
             }
             else if (xhr.status == 202) {
                 const progress  = parseFloat(xhr.getResponseHeader("x-progress"));
