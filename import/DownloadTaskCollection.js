@@ -169,7 +169,8 @@ class DownloadTaskCollection extends Task
      */
     get position()
     {
-        return this.tasks.map(t => t.position).reduce((prev, cur) => prev + cur, 0);
+        const tasks = this.tasks.filter(t => !t.error);
+        return tasks.map(t => t.position).reduce((prev, cur) => prev + cur, 0);
     }
 
     /**
@@ -177,10 +178,24 @@ class DownloadTaskCollection extends Task
      */
     get progress()
     {
-        return this.tasks.map(t => t.progress).reduce(
-            (prev, cur) => prev + Math.max(cur, 0),
-            0
-        ) / (this.tasks.length || 1);
+        const tasks = this.tasks.filter(t => !t.error);
+        if (!tasks.length) {
+            return 1;
+        }
+
+        let position = 0;
+        let total = 0;
+
+        tasks.forEach(t => {
+            position += Math.max(t.position, 0);
+            total    += Math.max(t.total, 0);
+        });
+
+        if (!total || !position) {
+            return 0;
+        }
+
+        return position / total;
     }
 }
 

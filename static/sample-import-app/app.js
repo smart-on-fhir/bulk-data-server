@@ -81,7 +81,7 @@ jQuery(function($) {
         DOM.curlCode.text(generateCurlCommand());
     }
 
-    function toggleCodePreviews(e) {
+    function toggleCodePreviews() {
         const cur = STATE.get("codePreviewType");
         DOM.codePreviewButtons.each((i, b) => {
             const val = $(b).data("value");
@@ -297,9 +297,9 @@ jQuery(function($) {
 
     function onValidationToggle(e) {
         if (e.data.newValue) {
-            STATE.on("change:storageDetail change:inputSource change:files change:fhirVersion change:codePreviewType", validate);
+            STATE.on("change:storageDetail change:inputSource change:files change:fhirVersion", validate);
         } else {
-            STATE.off("change:storageDetail change:inputSource change:files change:fhirVersion change:codePreviewType", validate);
+            STATE.off("change:storageDetail change:inputSource change:files change:fhirVersion", validate);
         }
     }
 
@@ -425,7 +425,15 @@ jQuery(function($) {
                 STATE.set("error", getErrorText(xhr));
             }
         }).fail(xhr => {
-            STATE.set("error", getErrorText(xhr));
+            if (xhr.responseJSON) {
+                STATE.set({
+                    progressDuration: 0,
+                    progress: 100,
+                    result: xhr.responseJSON
+                });
+            } else {
+                STATE.set("error", getErrorText(xhr));
+            }
         });
     }
 

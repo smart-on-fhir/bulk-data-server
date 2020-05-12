@@ -247,9 +247,10 @@ function createImportStatusHandler()
             // Task(s) finished
             if (progress >= 1) {
                 const firstCompletedAt = Math.min(...task.tasks.map(t => t.endTime));
+                const json = task.toJSON();
                 res.setHeader("Expires", new Date(firstCompletedAt + config.dbMaintenanceMaxRecordAge * 1000).toUTCString());
-                res.status(200);
-                res.json(task.toJSON());
+                res.status(!json.output.length && json.error.length ? 500 : 200);
+                res.json(json);
                 res.end();
                 return;
             }

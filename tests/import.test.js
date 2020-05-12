@@ -548,11 +548,11 @@ describe("BulkData Import", () => {
             assert.notEqual(statusResponse.headers["x-progress"], undefined);
         });
 
-        it ("Fails of none of the files were imported", async function() {
+        it ("Fails of none of the files were imported", function(next) {
 
             this.timeout(5000);
 
-            await bulkImport({
+            bulkImport({
                 "inputFormat": "application/fhir+ndjson",
                 "inputSource": "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3",
                 "storageDetail": {
@@ -568,7 +568,10 @@ describe("BulkData Import", () => {
                         "url": "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Missing.ndjson"
                     }
                 ]
-            });
+            }).then(
+                () => next("Did not fail as expected"),
+                () => next()
+            );
 
             
         });

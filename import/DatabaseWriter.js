@@ -63,7 +63,7 @@ class DatabaseWriter extends Writable
     _write(chunk, encoding, callback)
     {
         if (this.#writtenCount > config.maxImportsPerResourceType) {
-            return callback();
+            return (++this.#writtenCount % Math.round(50 + Math.random() * 200)) ? callback() : setTimeout(callback, 20);
         }
         this.init().then(() => this.writeChunk(chunk)).then(callback, callback);
     }
