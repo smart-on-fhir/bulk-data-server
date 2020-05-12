@@ -77,22 +77,14 @@
             #generated-request:hover .btn {
                 opacity: 1;
             }
-            #request-curl pre,
-            #request-http pre {
+            #request-curl textarea,
+            #request-http textarea {
                 height: 16em;
                 min-height: 50px;
                 overflow-y: scroll;
                 resize: vertical;
+                width: 100%;
             }
-            /* #fhir-version {
-                font-size: 50%;
-                color: #FFF;
-                background: #888;
-                border-radius: 4px;
-                margin-left: 1em;
-                padding: 1px 8px 2px;
-                vertical-align: top;
-            } */
             .bump-right { margin-left: 2.5rem; }
             .table > tbody > tr > td {
                 vertical-align: middle;
@@ -652,12 +644,12 @@
                             <div class="col-xs-12">
                                 <output id="generated-request">    
                                     <div id="request-curl" style="display: none">
-                                        <button type="button" class="btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
-                                        <pre># not enough form data to generate curl command</pre>
+                                        <button type="button" class="copy-to-clipboard btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
+                                        <textarea readonly># not enough form data to generate curl command</textarea>
                                     </div>
                                     <div id="request-http" style="display: none">
-                                        <button type="button" class="btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
-                                        <pre># not enough form data to generate http headers</pre>
+                                        <button type="button" class="copy-to-clipboard btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
+                                        <textarea readonly># not enough form data to generate http headers</textarea>
                                     </div>
                                 </output>
                             </div>
