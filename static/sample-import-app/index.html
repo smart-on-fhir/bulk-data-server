@@ -38,6 +38,9 @@
                 position: absolute;
                 right: 100%;
             }
+            #append-button {
+                margin-left: 12px;
+            }
             label > input[type="checkbox"] {
                 margin-right: 4px;
             }
@@ -54,14 +57,6 @@
             }
             .btn-remove:not([disabled]) {
                 color: #a33;
-            }
-            .form-bottom {
-
-                border-radius: 13px;
-                border-bottom: #d5d5d5 1px solid;
-                box-shadow: 0px 20px 16px -10px #ececec;
-                padding: 0 0 2rem;
-                margin-bottom: 3.5rem;
             }
             #generated-request {
                 position: relative;
@@ -85,12 +80,8 @@
                 resize: vertical;
                 width: 100%;
             }
-            .bump-right { margin-left: 2.5rem; }
             .table > tbody > tr > td {
                 vertical-align: middle;
-            }
-            .error-item {
-                cursor: pointer;
             }
             #fhir-selector b {
                 display: inline-block;
@@ -120,8 +111,11 @@
             .files-table > thead > tr > th {
                 background: #f6f6f6;
                 border-bottom: 1px solid #DDD;
-                padding: 5px 12px;
                 text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+            }
+            .files-table > thead > tr > th,
+            .files-table > tbody > tr > th { /* applies inside both <thead> and <tbody> */
+                padding: 5px 12px;
             }
             .files-table > tbody > tr > td input {
                 border-color: transparent;
@@ -620,17 +614,17 @@
                                     </thead>
                                     <tbody></tbody>
                                 </table>
-                                <div class="panel-footer text-center">
+                                <div class="panel-footer">
                                     <button type="button" id="append-button" class="btn btn-default">
-                                        <span class="text-success"><i class="fa fa-plus"></i> Add additional data source</span>
+                                        <span class="text-success"><i class="fa fa-plus"></i> Add data source</span>
                                     </button>
+                                    <button id="upload-button" class="btn btn-success pull-right" disabled>Start Import <i class="fa fa-chevron-right"></i></button>
                                 </div>
                             </div>
                         </div>
 
                         <div class="row">
                             <div class="col-xs-12">
-                                <button id="upload-button" class="btn btn-success pull-right" disabled>Start Import <i class="fa fa-chevron-right"></i></button>
                                 <div class="form-group">
                                     <span class="form-control-static">View generated request as: </span>
                                     <div class="btn-group" id="code-preview">
@@ -727,7 +721,7 @@
                 <i class="fa fa-info-circle pull-left" style="font-size: 2rem"></i>
                 This app demonstrates a basic bulk import of FHIR resources, based on the
                 <a href="https://github.com/smart-on-fhir/bulk-import" target="_blank" rel="noopener noreferrer">$import operation proposal</a>. 
-                Command-line equivalents of the generated request are made available at the bottom of the page for reference.
+                Command-line equivalents of the generated request are provided below the form for reference.
             </div>
             <br/>
         </div>

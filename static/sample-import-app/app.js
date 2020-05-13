@@ -49,7 +49,7 @@ jQuery(function($) {
         const files = STATE.get("files");
 
         if (!files.length) {
-            return DOM.formInputFiles.html(`<tr><th class="text-center text-danger bg-warning" colspan="4">No files selected</th></tr>`);
+            return DOM.formInputFiles.html(`<tr><th class="bg-warning"></th><th class="text-warning bg-warning" style="font-style:italic;font-weight:normal" colspan="3">No data sources added yet</th></tr>`);
         }
 
         // Full re-render on add/remove
