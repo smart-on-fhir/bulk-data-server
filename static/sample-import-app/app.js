@@ -29,8 +29,9 @@ jQuery(function($) {
         rowTemplate       : $("#rowInput"),
         formInputFiles    : $('#uploads tbody'),
         appendButton      : $("#append-button"),
-        httpCode          : $('#request-http pre'),
-        curlCode          : $('#request-curl pre'),
+        httpCode          : $('#request-http textarea'),
+        curlCode          : $('#request-curl textarea'),
+        copyButton        : $('.copy-to-clipboard'),
         inputSource       : $("input[name='source']"),
         codePreviewButtons: $('#code-preview .btn'),
         storageDetail     : $("select[name='storage-protocol']"),
@@ -88,6 +89,12 @@ jQuery(function($) {
             $(b).toggleClass("active", val === cur);
             $('#request-' + val).toggle(val === cur);
         })
+    }
+
+    function copyToClipboard(e) {
+        var code = $(e.delegateTarget).siblings("textarea")[0];
+        code.select();
+        document.execCommand('copy');
     }
 
     function renderFileErrors() {
@@ -279,7 +286,18 @@ jQuery(function($) {
 
     function onProgress(e) {
         const progress = e.data.newValue;
-        $("#preparing-progress")[progress > 0 && progress < 100 ? "show" : "hide"]();
+        if (progress < 0) {
+            $("#preparing-progress").hide();
+        }
+        else if (progress >= 100) {
+            setTimeout(
+                () => { $("#preparing-progress").hide(); },
+                200
+            );
+        }
+        else {
+            $("#preparing-progress").show();
+        }
         $(".progress-bar").css("width", progress + "%");
         DOM.cancelBtn.prop("disabled", progress <= 0 || progress >= 100);
     }
@@ -394,10 +412,12 @@ jQuery(function($) {
         }).done(function(body, resultCode, xhr) {
             if (xhr.status == 200) {
                 STATE.set({
-                    progressDuration: 0,
+                    progressDuration: 200,
                     progress: 100,
-                    result: body
                 });
+                TIMER = setTimeout(() => {
+                    STATE.set("result", body)
+                }, 200)
             }
             else if (xhr.status == 202) {
                 const progress  = parseFloat(xhr.getResponseHeader("x-progress"));
@@ -523,6 +543,7 @@ jQuery(function($) {
     DOM.formInputFiles.on("click", ".btn-remove", onFileRemove);
     DOM.appendButton.on("click", onFileAdd);
     DOM.codePreviewButtons.on('click', onCodePreviewClick);
+    DOM.copyButton.on("click", copyToClipboard);
     DOM.storageDetail.on("change", e => STATE.set("storageDetail", e.target.value));
     DOM.inputSource.on("input", e => STATE.set("inputSource", e.target.value));
     DOM.form.on("submit", onSubmit);

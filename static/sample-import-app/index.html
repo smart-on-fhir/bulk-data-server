@@ -18,7 +18,7 @@
                 background: url(logo.png) left -2px no-repeat;
                 background-size: 64px;
                 padding-left: 71px;
-                line-height: 34px;
+                line-height: 37px;
                 font-size: 32px;
             }
             h1.page-header small {
@@ -44,6 +44,7 @@
             .btn-group .btn-default {
                 font-weight: bold;
                 color: #666;
+                min-width: 5em;
             }
             .btn-group .btn-default.active {
                 color: #333;
@@ -54,28 +55,35 @@
             .btn-remove:not([disabled]) {
                 color: #a33;
             }
-            output#generated-request {}
             .form-bottom {
 
                 border-radius: 13px;
                 border-bottom: #d5d5d5 1px solid;
                 box-shadow: 0px 20px 16px -10px #ececec;
-                padding: 0 0 5rem;
+                padding: 0 0 2rem;
                 margin-bottom: 3.5rem;
             }
-            #request-curl pre,
-            #request-http pre {
-                height: 14em;
-                overflow-y: scroll;
+            #generated-request {
+                position: relative;
             }
-            #fhir-version {
-                font-size: 50%;
-                color: #FFF;
-                background: #888;
-                border-radius: 4px;
-                margin-left: 1em;
-                padding: 1px 8px 2px;
-                vertical-align: top;
+            #generated-request .btn {
+                position: absolute;
+                z-index: 2;
+                top: 12px;
+                right: 20px;
+                opacity: 0;
+                transition: opacity 0.4s;
+            }
+            #generated-request:hover .btn {
+                opacity: 1;
+            }
+            #request-curl textarea,
+            #request-http textarea {
+                height: 16em;
+                min-height: 50px;
+                overflow-y: scroll;
+                resize: vertical;
+                width: 100%;
             }
             .bump-right { margin-left: 2.5rem; }
             .table > tbody > tr > td {
@@ -83,6 +91,56 @@
             }
             .error-item {
                 cursor: pointer;
+            }
+            #fhir-selector b {
+                display: inline-block;
+                min-width: 4em;
+                text-align: left;
+            }
+            #fhir-selector .dropdown-menu {
+                min-width: 100%;
+            }
+            .table > tbody > tr.error-detail > td {
+                padding-top: 0;
+                border-top : 0;
+            }
+            .files-table {
+                border-collapse: separate;
+            }
+            .files-table > tbody > tr > td {
+                border: 0;
+                padding: 1px;
+            }
+            .files-table > tbody > tr:first-child > td {
+                border-top: 6px solid #FFF;
+            }
+            .files-table > tbody > tr:last-child > td {
+                border-bottom: 6px solid #FFF;
+            }
+            .files-table > thead > tr > th {
+                background: #f6f6f6;
+                border-bottom: 1px solid #DDD;
+                padding: 5px 12px;
+                text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+            }
+            .files-table > tbody > tr > td input {
+                border-color: transparent;
+                box-shadow: none;
+                background: transparent;
+                font-weight: 600;
+            }
+            .files-table > tbody > tr > td input:focus {
+                background: #FFF;
+            }
+            .files-table > tbody > tr > td .btn {
+                background: transparent;
+            }
+            /* .nav .nav-tabs {
+                margin-top: ;
+            } */
+            .btn:disabled {
+                filter: grayscale(1);
+                opacity: 0.5;
             }
         </style>
     </head>
@@ -210,7 +268,7 @@
             <option value="CompartmentDefinition">CompartmentDefinition</option>
             <option value="Composition">Composition</option>
             <option value="ConceptMap">ConceptMap</option>
-            <option value="Condition (aka Problem)">Condition (aka Problem)</option>
+            <option value="Condition">Condition (aka Problem)</option>
             <option value="Consent">Consent</option>
             <option value="Contract">Contract</option>
             <option value="Coverage">Coverage</option>
@@ -357,7 +415,7 @@
             <option value="CompartmentDefinition">CompartmentDefinition</option>
             <option value="Composition">Composition</option>
             <option value="ConceptMap">ConceptMap</option>
-            <option value="Condition (aka Problem)">Condition (aka Problem)</option>
+            <option value="Condition">Condition (aka Problem)</option>
             <option value="Consent">Consent</option>
             <option value="Contract">Contract</option>
             <option value="Coverage">Coverage</option>
@@ -478,99 +536,101 @@
         </datalist>
 
         <div class="container">
+            <div class="dropdown pull-right" style="margin-top: 43px;" id="fhir-selector">
+                <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    <span class="text-muted">FHIR Version: </span><b>R4</b>
+                    <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+                    <li><a data-value="4" href="#">R4</a></li>
+                    <li><a data-value="3" href="#">STU3</a></li>
+                    <li><a data-value="2" href="#">DSTU2</a></li>
+                </ul>
+            </div>
             <h1 class="page-header">
                 FHIR Bulk Data <span style="color: #d09e27;">Uploader</span><span id="fhir-version"></span>
                 <small>sample app</small>
             </h1>
-
+            <div id="global-error" class="alert alert-danger hidden">
+                <button type="button" class="close" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <div class="message" style="font-family: monospace; white-space: pre-wrap;"></div>
+            </div>
             <ul class="nav nav-tabs hidden" id="steps" role="tablist">
                 <li class="nav-item" role="presentation" class="active">
-                    <a id="form-tab" class="nav-link" href="#form" role="tab" data-toggle="tab"aria-controls="form" aria-selected="true">Import Settings</a>
+                    <a id="form-tab" class="nav-link" href="#form" role="tab" data-toggle="tab" aria-controls="form" aria-selected="true">Import Settings</a>
                 </li>
                 <li class="nav-item" role="presentation">
                     <a id="results-tab" class="nav-link" href="#results" role="tab" data-toggle="tab" aria-controls="steps" aria-selected="false">Operation Results</a>
                 </li>
             </ul>
-
-            <br/>
-
             <div class="tab-content">
                 <div role="tabpanel" id="form" class="tab-pane active">
-                    <div class="panel panel-info">
-                        <div class="panel-heading">About</div>
-                        <p class="panel-body">
-                            This app demonstrates a basic bulk import of FHIR resources, based on the
-                            <a href="https://github.com/smart-on-fhir/bulk-import" target="_blank" rel="noopener noreferrer">$import operation proposal</a>. 
-                            Command-line equivalents of the generated request are made available at the bottom of the page for reference.
-                        </p>
-                    </div>
+                    
                     <form>
                         <h4 class="page-header">
-                            <i class="fa fa-globe text-muted"></i> <span class="text-success">Metadata for Import Operation</span>
+                            <i class="fa fa-globe text-success"></i> <span class="text-success">Metadata for Import Operation</span>
                         </h4>
                         <div class="row">
-                            <div class="col-sm-2 col-lg-2">
-                                <p class="form-control-static hidden-xs bump-right" for="source"><label>Data origin</label></p>
-                                <p class="form-control-static visible-xs-block" for="source"><label>Data origin</label></p>
-                            </div>
-                            <div class="col-sm-4 col-lg-6">
-                                <input name="source" type="url" aria-describedby="sourceFieldDescription" class="form-control" required />
-                                <p id="sourceFieldDescription" class="form-text text-muted small">
-                                    URI to indicate provenance of data to be imported. May be used for 
-                                    tracking this set of imported data throughout its lifecycle.
-                                    May be a FHIR endpoint that the importing system could use
-                                    when matching references to previously imported data
+                            <div class="col-xs-12 col-md-2">
+                                <p class="form-control-static visible-md visible-lg text-right" for="source">
+                                    <label>Data origin <i class="fa fa-info-circle text-muted" data-toggle="tooltip"
+                                        title="URI to indicate provenance of data to be imported. May be used for tracking this set of imported data throughout its lifecycle. May be a FHIR endpoint that the importing system could use when matching references to previously imported data"></i></label>
+                                </p>
+                                <p class="form-control-static hidden-md hidden-lg" for="source">
+                                    <label>Data origin <i class="fa fa-info-circle text-muted" data-toggle="tooltip"
+                                        title="URI to indicate provenance of data to be imported. May be used for tracking this set of imported data throughout its lifecycle. May be a FHIR endpoint that the importing system could use when matching references to previously imported data"></i></label>
                                 </p>
                             </div>
-                            <div class="col-sm-2 col-lg-2">
-                                <p class="form-control-static hidden-xs text-right"><label>Storage detail</label></p>
-                                <p class="form-control-static visible-xs-block"><label>Storage detail</label></p>
+                            <div class="col-xs-12 col-md-5">
+                                <input name="source" type="url" aria-describedby="sourceFieldDescription" class="form-control" required />
                             </div>
-                            <div class="col-sm-4 col-lg-2">
+                            <div class="col-xs-12 col-md-2">
+                                <p class="form-control-static visible-md visible-lg text-right">
+                                    <label>Storage detail <i class="fa fa-info-circle text-muted" data-toggle="tooltip" title="Default storage source is simply 'https' with vendor-specific implementations possible"></i></label>
+                                </p>
+                                <p class="form-control-static hidden-md hidden-lg">
+                                    <label>Storage detail <i class="fa fa-info-circle text-muted" data-toggle="tooltip" title="Default storage source is simply 'https' with vendor-specific implementations possible"></i></label>
+                                </p>
+                            </div>
+                            <div class="col-xs-12 col-md-3">
                                 <select name="storage-protocol" id="storage-protocol" class="form-control">
                                     <option value="https">https</option>
-                                    <option disabled value="s3">Amazon Web Services: S3 bucket</option>
-                                    <option disabled value="gcp-bucket">Google cloud storage</option>
+                                    <option value="aws-s3">Amazon Web Services: S3 bucket</option>
+                                    <option value="gcp-bucket">Google cloud storage</option>
                                     <option disabled value="azure-blob">Azure cloud storage</option>
                                 </select>
-                                <p class="form-text text-muted small">
-                                    Default storage source is simply "https" with vendor-specific implementations possible.
-                                </p>
                             </div>
                         </div>
-
+                        <br/>
                         <div id="uploads">
-                            <h4 class="page-header">
-                                <i class="glyphicon glyphicon-file text-muted"></i> <span class="text-success">Resources to Import</span>
+                            <h4 style="margin-bottom: 1ex">
+                                <i class="fa fa-file-text-o text-success"></i> <span class="text-success">Resources to Import</span>
                             </h4>
-                            <table class="table table-condensed table-striped">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 2.5rem"></th>
-                                        <th>URL of bulk data file</th>
-                                        <th style="width: 20rem">FHIR resource type</th>
-                                        <th style="width: 4rem"></th>
-                                    </tr>
-                                </thead>
-                                <tbody><!-- dynamically generated input fields --></tbody>
-                            </table>
-                        </div>
-                        
-                        <div class="row form-bottom">
-                            <div class="col-sm-12 text-center">
-                                <button type="button" id="append-button" class="btn btn-warning"><i class="fa fa-plus"></i> Add additional data source</button>
+                            <div class="panel panel-default">
+                                <table class="table table-condensed table-hover files-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 2.5rem"></th>
+                                            <th>URL of bulk data file</th>
+                                            <th style="width: 20rem">FHIR resource type</th>
+                                            <th style="width: 4rem"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                                <div class="panel-footer text-center">
+                                    <button type="button" id="append-button" class="btn btn-default">
+                                        <span class="text-success"><i class="fa fa-plus"></i> Add additional data source</span>
+                                    </button>
+                                </div>
                             </div>
-                                        </td>
-                                    </tr>
-                                </thead>
-                            </table>
                         </div>
 
                         <div class="row">
-                            <div class="pull-right">
-                                <button id="upload-button" class="btn btn-lg btn-success" disabled>Start Import <i class="fa fa-chevron-right"></i></button>
-                            </div>
-                            <output id="generated-request">
+                            <div class="col-xs-12">
+                                <button id="upload-button" class="btn btn-success pull-right" disabled>Start Import <i class="fa fa-chevron-right"></i></button>
                                 <div class="form-group">
                                     <span class="form-control-static">View generated request as: </span>
                                     <div class="btn-group" id="code-preview">
@@ -578,33 +638,34 @@
                                         <label class="btn btn-default" data-value="curl">curl</label>
                                     </div>
                                 </div>
-                                <div class="row">
-                                    <div class="col-xs-12" id="request-curl" style="display: none">
-                                        <!-- <i class="close fa fa-clipboard"></i> -->
-                                        <br/>
-                                        <pre class="well"># not enough form data to generate curl command</pre>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-xs-12">
+                                <output id="generated-request">    
+                                    <div id="request-curl" style="display: none">
+                                        <button type="button" class="copy-to-clipboard btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
+                                        <textarea readonly># not enough form data to generate curl command</textarea>
                                     </div>
-                                    <div class="col-xs-12" id="request-http" style="display: none">
-                                        <!-- <i class=" fa fa-clipboard"></i> -->
-                                        <br/>
-                                        <pre class="well"># not enough form data to generate http headers</pre>
+                                    <div id="request-http" style="display: none">
+                                        <button type="button" class="copy-to-clipboard btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
+                                        <textarea readonly># not enough form data to generate http headers</textarea>
                                     </div>
-                                </div>
-                            </output>
-    
+                                </output>
+                            </div>
                         </div>
                     </form>
 
                 </div>
 
                 <div role="tabpanel" id="results" class="tab-pane">
-
-                    <div id="preparing-progress" class="panel preparing-progress hidden">
+                    <br/>
+                    <div id="preparing-progress">
                         <label class="text-success">
                             Preparing files. Please wait...
                         </label>
                         <div class="progress">
-                            <div class="progress-bar progress-bar-success active" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
+                            <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
                                 <span class="sr-only">0% Complete</span>
                             </div>
                         </div>
@@ -615,10 +676,10 @@
                         </div>
                     </div>
 
-                    <div id="success-result" class="hidden">
-                        <div class="panel panel-success">
-                            <div id="result-description" class="alert ">
-                                <span>Bulk import operation completed</span>
+                    <div id="success-result">
+                        <div class="panel">
+                            <div id="result-description" class="panel-heading">
+                                <b>Bulk import operation completed</b>
                                 <i class="fa fa-upload pull-right"></i>
                             </div>
                             <table class="table file-list">
@@ -661,13 +722,21 @@
                     </div>
                 </div>
             </div>
+            <br/>
+            <div class="text-muted panel-footer" style="font-size: small;line-height: normal;">
+                <i class="fa fa-info-circle pull-left" style="font-size: 2rem"></i>
+                This app demonstrates a basic bulk import of FHIR resources, based on the
+                <a href="https://github.com/smart-on-fhir/bulk-import" target="_blank" rel="noopener noreferrer">$import operation proposal</a>. 
+                Command-line equivalents of the generated request are made available at the bottom of the page for reference.
+            </div>
+            <br/>
         </div>
 
         <script id="rowInput" type="text/template">
             <tr class="import-file">
-                <td><i class="validity fa text-center"></i></td>
+                <td class="text-right"><i class="validity fa text-center"></i></td>
                 <td><input class="form-control input-sm" name="url" type="url" required /></td>
-                <td><input class="form-control input-sm" type="text" list="fhir-resource-types-r4" required /></td>
+                <td><input class="form-control input-sm file-type" type="text" list="fhir-resource-types-r4" required /></td>
                 <td>
                     <button type="button" class="btn btn-sm btn-block btn-remove" title="Remove">
                         <i class="fa fa-trash-o"></i>
@@ -678,474 +747,6 @@
         <script src="../vendor/jquery-1.12.3.min.js"></script>
         <script src="../vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
         <script src="../lib.js"></script>
-        <script>            
-            var TIMER;
-            var TICK;
-
-            function getHiddenParams(url) {
-                var code;
-                try {
-                    var match = url.match(/\/([^/]+)\/fhir/);
-                    if (match && match[1]) {
-                        code = JSON.parse(Lib.base64UrlDecode(match[1]));
-                    }
-                } catch (ex) {
-                    code = null
-                }
-                finally {
-                    if (!code || typeof code != "object") {
-                        code = {}
-                    }
-                }
-                return code;
-            }
-
-            const CONFIG = {
-                uploadUrl: Lib.getUrlQuery({ camelCaseKeys: true }).server  + "/$import",
-                // uploadServer,
-                // params,
-                params: getHiddenParams(this.uploadUrl),
-            }
-            const STATE = {
-                ui: {
-                    activeTab: "form", // form | results
-                    formView: {
-                        codePreview: "none", // none | http | curl,
-                        rowDeleteEnabled: false,
-                        validRequest: false,
-                    },
-                    // results tab
-                    resultsView: {
-                        progressBarVisible: false,
-                        outcomePanelVisible: false,
-                        errorPanelVisible: false
-                    }
-                },
-                requestBody: {
-                        // only supported inputFormat is "application/fhir+ndjson"
-                        "inputFormat": "application/fhir+ndjson",
-                        "inputSource": null,
-                        "storageDetail": null,
-                        "input": []
-                    },
-                importOperation: {
-                    highwater: null,
-                    pollingUrl: null,
-                    progress: null,
-                    response: null,
-                },
-            };
-
-            const util = {
-                extractParam: function(urlString, param) {
-                    console.log("extract param", param)
-                    if (typeof urlString === "string") {
-                        const errorUrl = new URL(urlString);
-                        const errorMsg = errorUrl.searchParams.get(param);
-                        console.log("error msg", errorMsg)
-                        return errorMsg || null;
-                    }
-                    return null;
-                },
-                truncateUrl: function(url) {
-                    if (url.length > 50) {
-                        return url.substr(0,25) + "...." + url.substr(-20);
-                    }
-                    return url;
-                }
-            }
-
-            jQuery(function($) {
-                const VIEWS = {
-                    hideTabs: function() {
-                        $('.nav-tabs').addClass("hidden")
-                    },
-                    showTabs: function() {
-                        $('.nav-tabs').removeClass("hidden")
-                    },
-                    hideResults: function() {
-                        $("#success-result").addClass("hidden");
-                        $(".file-list tbody").empty();
-                    },
-                    switchToForm: function() {
-                        VIEWS.hideResults();
-                        $("#form-tab").tab("show");
-                    },
-                    switchToResults: function() {
-                        $("#results-tab").tab("show");
-                    }
-                }
-
-
-                // if the server was able to import at least one file 
-                // it will give us a success result
-                function showResults(outcome) {
-                    // successful inputs and possibly errors
-                    $("#preparing-progress").addClass("hidden");
-                    incrementProgress(0, 0);
-                    // $("output").addClass("hidden");
-                    $("#success-result").removeClass("hidden");
-                    $("#result-description").removeClass("alert-warning").addClass("alert-success")
-                    outcome.output.forEach(file => {
-                        $("#result-description span").text("All files successfully imported")
-                        const matchingInput = STATE.requestBody.input.find(i => i.url === file.inputUrl);
-                        const resourceType = matchingInput ? matchingInput.type : "-";
-                        // if file.inputUrl is long, truncate it
-                        $(".file-list tbody").append(`
-                            <tr>
-                                <td><i class="fa fa-check-circle text-success"></i></td>
-                                <td><span title="${file.inputUrl}">${util.truncateUrl(file.inputUrl)}</span></td>
-                                <td>${resourceType}</td>
-                                <td>${file.count}</td>
-                                <td><a href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
-                            </tr>
-                        `);
-                    });
-                    if (outcome.error && outcome.error.length) {
-                        $("#result-description").addClass("alert-warning").removeClass("alert-success");
-                        $("#result-description span").text("Problems encountered importing some files")
-                        outcome.error.forEach(file => {
-                            const matchingInput = STATE.requestBody.input.find(i => i.url === file.inputUrl);
-                            const resourceType = matchingInput ? matchingInput.type : "-";
-                            $(".file-list tbody").append(`
-                                <tr class="bg-danger error-item">
-                                    <td><i class="fa fa-times-circle text-danger"></i></td>
-                                    <td><span title="${file.inputUrl}">${util.truncateUrl(file.inputUrl)}</span></td>
-                                    <td>${resourceType}</td>
-                                    <td>${file.count}</td>
-                                    <td><a class="text-warning" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
-                                </tr>
-                            `);
-                            const errorMsg = util.extractParam(file.url, "message") || "Unknown problem";
-                            if (errorMsg) {
-                                $(".file-list tbody").append(`
-                                    <tr class="bg-danger error-detail hidden">
-                                        <td style="background:#8884"></td>
-                                        <td colspan="5" style="background:#8882"><em>${errorMsg}</em></td>
-                                    </tr>
-                                `);
-
-                            }
-                        });
-                    }
-                }
-                
-                function setProgress(pct, dur) {
-                    if (dur !== undefined) {
-                        $(".progress-bar").css("transitionDuration", (dur || 0) + "s");
-                        setTimeout(function() {
-                            $(".progress-bar")
-                                .attr("aria-valuenow", pct)
-                                .css("width", pct + "%")
-                                .find(".sr-only").text(pct + "% Complete");
-                        }, 20);
-                    } else {
-                        $(".progress-bar")
-                            .attr("aria-valuenow", n)
-                            .css("width", pct + "%")
-                            .find(".sr-only").text(pct + "% Complete");
-                    }
-                }
-
-                function pauseProgress(pct) {
-                    if (!pct) {
-                        // is there an aria value that fits this situation?
-                        pct = 100;
-                    }
-                    $(".progress-bar").addClass("progress-bar-striped");
-                    setProgress(pct, 0);
-                }
-
-                function incrementProgress(pct, dur) {
-                    pct = Math.round(pct);
-                    $(".progress-bar").removeClass("progress-bar-striped");
-                    setProgress(pct, dur)
-                }
-
-                function successHandler(result) {
-                    console.log("request resolved")
-                    $(".preparing-progress").addClass("hidden");
-                    incrementProgress(0, 0);
-                }
-
-                const STEPS = {
-                    kickOffComplete: function(xhr) {
-                        console.log("kickoff complete");
-                        $("#preparing-progress").removeClass("hidden");
-                        VIEWS.hideResults();
-                        VIEWS.showTabs();
-                        $("#results-tab").tab("show");
-                        const statusUrl = xhr.getResponseHeader("content-location");
-                        if (statusUrl) {
-                            $("#preparing-progress").removeClass("hidden");
-                            console.log("found response header to location to query", statusUrl);
-                            // enable immediately,
-                            // but don't post DELETE unless we've heard back?
-                            $("#cancel-btn")
-                                .removeAttr("disabled")
-                                .on('click', function() {
-                                    $("#cancel-btn").attr({"disabled": true});
-                                    cancelImport(statusUrl);
-                                });
-                            TICK = Date.now();
-                            waitForResult(statusUrl);
-                        }
-
-                        incrementProgress(0, 0);
-                    },
-                    kickOffRejected: function(xhr) {
-                        console.log("kickoff failed");
-                    }
-                }
-                // operation process events
-                // incomplete form => valid data => ubmit request => receive request response 
-                // => polling status url partial progress => progress complete => outcome received
-
-                $("#fhir-version").html({
-                    2: "FHIR DSTU2",
-                    3: "FHIR STU3",
-                    4: "FHIR R4"
-                }[CONFIG.params.stu]); // default? || 3 || 4?
-                const rowTemplate = $("#rowInput").html();
-                const formInputFiles = $('#uploads tbody');
-                const synchronizeButtons = () => {
-                    const rows = formInputFiles.find('.import-file');
-                    const rowCount = rows.length;
-                    rows.first().find("button").prop("disabled", rowCount < 2  )
-                }
-                const appendRow = () => {
-                    formInputFiles.append(rowTemplate);
-                    synchronizeButtons();
-                }
-                appendRow(); // form starts with input row for a single file
-
-                function showError(error) {
-                    $("#preparing-progress").addClass("hidden");
-                    
-                    var txt = "Unknown error";
-                    if (error instanceof Error) {
-                        txt = String(error);
-                    }
-                    else if (error.resourceType && error.resourceType === "OperationOutcome") {
-                        console.log(error.issue[0].diagnostics)
-                        txt = error.issue.map(i => i.diagnostics).join("\n");
-                    }
-                    else if (error.responseJSON) { // XHR with JSON response
-                        txt = JSON.stringify(error.responseJSON, null, 4);
-                    }
-                    else if (error.status && error.statusText) { // XHR error
-                        txt = error.status + ": " + error.statusText;
-                    }
-                    else {
-                        console.log(txt + ": ", arguments);
-                    }
-
-                    $("#error").text(txt);
-                    $("#error-result").removeClass("hidden");
-                }
-
-                function hideError() {
-                    $("#error").empty();
-                    // $("#error").closest(".panel").addClass("hidden");
-                    $("#error-result").addClass("hidden")
-                }
-
-                
-                function waitForResult(url) {
-                    $.ajax({
-                        url: url,
-                        headers: {
-                            Accept: "application/json"
-                        }
-                    }).then(function(body, resultCode, xhr) {
-                        if (xhr.status == 200) {
-                            if (TIMER) { clearTimeout(TIMER) }
-                            incrementProgress(100, 0);
-                            showResults(body);
-                        }
-                        else if (xhr.status == 202) {
-                            // calculate a transition to expand the progress bar
-                            const reportedProgress = parseFloat(xhr.getResponseHeader("x-progress"));
-                            const retryTime = xhr.getResponseHeader("retry-after"); // in milliseconds?
-                            if (reportedProgress < 0) {
-                                // if reported progress is -1, server is indicating less than 10% has been imported
-                                pauseProgress();
-                                STATE.importOperation.progress = null;
-                            } else {
-                                // server reporting a percentage of file(s) imported
-                                if (STATE.importOperation.progress && reportedProgress <= STATE.importOperation.highwater) {
-                                    // server has stalled on import; display striped bar
-                                    console.log("stalled..... at", STATE.importOperation.highwater)
-                                    pauseProgress(STATE.importOperation.highwater)
-                                } else {
-                                    incrementProgress(reportedProgress, 0);
-                                    if (retryTime > 20 && STATE.importOperation.progress) { // otherwise not worth animating
-                                        const interval = Date.now() - TICK;
-                                        var expectedIncrement = (retryTime / interval) * reportedProgress; // in %
-                                        expectedIncrement = Math.max(0, expectedIncrement);
-                                        const highwater = reportedProgress + expectedIncrement;
-                                        STATE.importOperation.highwater = highwater;
-                                        incrementProgress( highwater, retryTime / 1000)
-                                    }
-                                }
-                                STATE.importOperation.progress = reportedProgress;
-                            }
-                            TIMER = setTimeout( () => waitForResult(url), retryTime );
-                        }
-                    }, showError);
-                }
-
-                function cancelImport(statusUrl) {
-                    if (TIMER) { clearTimeout(TIMER) }
-                    console.log("cancellation requested");
-                    $.ajax({
-                        url: statusUrl,
-                        type: 'DELETE'
-                    })
-                    .then((body, resultCode, xhr) => {
-                        console.log("cancellation completed");
-                        console.log(body);
-                        if (xhr.status == 200 || xhr.status == 202) {
-                            // show success, or at least msg
-                            showError(body);
-                        } else {
-                            // show error
-                            showError(body);
-                        }
-                    })
-                    // restore upload button
-                }
-
-
-                function generateCodes() {
-                    const inputSource = $("input[name='source']").val();
-                    const storageDetail = { "type": $("select[name='storage-protocol']").val() }
-                    const input = [];
-                    formInputFiles.find('.import-file').each(function() {
-                        const url = $(this).find("input[type='url']:valid")[0];
-                        const type = $(this).find("input[type='text']:valid")[0];
-                        if (url && type) {
-                            $(this).find('.validity').addClass('fa-check-circle text-success')
-                            input.push({
-                                type: type.value,
-                                url: url.value
-                            });
-                            $("#upload-button").removeAttr("disabled");
-                        } else {
-                            $(this).find('.validity').removeClass('fa-check-circle');
-                        }
-                    });
-                    STATE.requestBody = { "inputFormat": "application/fhir+ndjson", inputSource, storageDetail, input };
-                }
-
-                function generateCurlCommand() {
-                    // `curl options url(s)`
-                    var command = ["curl"];
-                    var options = [
-                        "-X POST",
-                        "-H 'Content-Type: application/json'",
-                        "-H 'Accept: application/fhir+json'",
-                        "-H 'Prefer: respond-async'",
-                    ];
-                    var data = `-d '${JSON.stringify(STATE.requestBody, null, 4)}'`;
-                    command.push(options.join(" "));
-                    command.push(data);
-                    command.push("https://example.net/fhirserver");
-                    return command.join(" ");
-                }
-
-                function updateRequests() {
-                    generateCodes();
-                    $('#request-http pre').text(
-                        "POST /\n" +
-                        "Host: r4.smarthealthit.org\n" +
-                        "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\n" +
-                        "Accept-Language: en-US,en;q=0.5\n" +
-                        "Accept-Encoding: gzip, deflate, br\n" +
-                        "Cache-Control: no-cache\n\n" +
-                        JSON.stringify(STATE.requestBody, null, 4)
-                    );
-                    $('#request-curl pre').text(generateCurlCommand());
-                    //     "curl -x POST url \\\n" +
-                    //     "--header 'Content-Type: application/json'\\\n" +
-                    //     "--data '" + JSON.stringify(requestBody, null, 4) + "'"
-                    // );
-                }
-
-                formInputFiles.on('click', 'button.btn-remove', function(event) {
-                    $(event.target).closest(".import-file").remove();
-                    updateRequests();
-                    synchronizeButtons();
-                })                
-
-                $("form").on('change', () => {
-                    updateRequests();
-                    // $("#upload-button").attr("disabled", true);
-                    // if validate
-                    $("#upload-button").removeAttr("disabled");
-                });
-                $(".file-list").on("click",".error-item", (e) => {
-                    $(".error-detail").toggleClass("hidden")
-                })
-
-                $("#append-button").on('click', appendRow);
-                $(".go-back").on("click", VIEWS.switchToForm);
-
-                // Toggle which request output is displayed
-                $("form").on('click', '#code-preview .btn', e => {
-                    // const $input = $(input);
-                    const btn = $(e.target).closest(".btn");
-                    const value = btn.data("value");
-                    if (btn.is(".active")) {
-                        btn.removeClass("active");
-                        $('#request-' + value).hide();
-                    }
-                    else {
-                        $('#code-preview .btn').each((i, b) => {
-                            if (b === btn[0]) {
-                                $(b).addClass("active");
-                                $('#request-' + $(b).data("value")).show();
-                            } else {
-                                $(b).removeClass("active");
-                                $('#request-' + $(b).data("value")).hide();
-                            }
-                        })
-                    }
-                })
-
-                $("form").on("submit", function(e) {
-                    e.preventDefault();
-                    console.log("making upload post request");
-                    STATE.requestBody.inputSource = $("input[name='source']").val();
-                    // if the import request is properly formed the server
-                    // should accept it (202) and return a URL to poll
-                    // as a 'Content-Location' header
-                    // at which point we hand off to confirmation function...
-                    hideError();
-                    $.ajax({
-                        url: CONFIG.uploadUrl,
-                        type: "POST",
-                        dataType: "application/fhir+json",
-                        headers: {
-                            Accept: "application/fhir+json",
-                            Prefer: "respond-async",
-                        },
-                        data: JSON.stringify(STATE.requestBody),
-                        contentType: "application/json",
-                    })
-                    .always((xhr, textStatus, error) => {
-                        if (xhr.status == 202 || xhr.status == 200) {
-                            // set state: positive result
-                            STEPS.kickOffComplete(xhr);
-                        }
-                        else {
-                            // set state: error
-                            STEPS.kickOffRejected(xhr);
-                        }
-                    })
-                    // .catch();
-                })
-            });
-        </script>
+        <script src="app.js"></script>
     </body>
 </html>
