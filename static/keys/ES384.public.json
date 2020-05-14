@@ -1,0 +1,16 @@
+{
+    "keys": [
+        {
+            "kty": "EC",
+            "crv": "P-384",
+            "x": "3K1Lw7Qkjj5LWSk5NnIwWmkb5Yo2GkcwVtnM8xhhGdM0bI3B632QMZmqtRHQ5APJ",
+            "y": "CBqiq5QwE8EyUxw2_oDJzVHrY5j22ny9KbRCK5vABppaGO4x8MxnTWfQMtGIbVQN",
+            "key_ops": [
+                "verify"
+            ],
+            "ext": true,
+            "kid": "b37fcf0b5801fde3af48bd55fd95117e",
+            "alg": "ES384"
+        }
+    ]
+}
