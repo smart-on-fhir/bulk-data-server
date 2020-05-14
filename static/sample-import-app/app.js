@@ -29,8 +29,8 @@ jQuery(function($) {
         rowTemplate       : $("#rowInput"),
         formInputFiles    : $('#uploads tbody'),
         appendButton      : $("#append-button"),
-        httpCode          : $('#request-http textarea'),
-        curlCode          : $('#request-curl textarea'),
+        httpCode          : $('#request-http pre'),
+        curlCode          : $('#request-curl pre'),
         copyButton        : $('.copy-to-clipboard'),
         inputSource       : $("input[name='source']"),
         codePreviewButtons: $('#code-preview .btn'),
@@ -92,9 +92,14 @@ jQuery(function($) {
     }
 
     function copyToClipboard(e) {
-        var code = $(e.delegateTarget).siblings("textarea")[0];
-        code.select();
+        var code = $(e.delegateTarget).siblings("pre")[0];
+        const selection = window.getSelection();
+        const range = document.createRange();
+        selection.removeAllRanges();
+        range.selectNodeContents(code);
+        selection.addRange(range);
         document.execCommand('copy');
+        selection.removeAllRanges();
     }
 
     function renderFileErrors() {
