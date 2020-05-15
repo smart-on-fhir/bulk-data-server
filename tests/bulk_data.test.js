@@ -1339,6 +1339,57 @@ describe("File Downloading", function() {
         ]);
 
     });
+
+    it("Retrieval of referenced files on an open endpoint", async () => {
+
+        // Export DocumentReference resources without authentication
+        const url = lib.buildDownloadUrl("1.DocumentReference.ndjson");
+        const resp = await lib.requestPromise({ url });
+        
+        // Find those that contain absolute URLs
+        const resources = String(resp.body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
+            return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
+        });
+        
+        // Try to download referenced files
+        for (const resource of resources) {
+            const attachment = resource.content[0].attachment;
+            await lib.requestPromise({ url: attachment.url });
+        }
+    });
+    
+    it("Retrieval of referenced files on protected endpoint", async () => {
+    
+        // Authorize
+        const tokenResponse = await lib.authorize();
+    
+        // Export DocumentReference resources with authentication
+        const url = lib.buildDownloadUrl("1.DocumentReference.ndjson");
+
+        const { body } = await lib.requestPromise({
+            url,
+            headers: {
+                authorization: "Bearer " + tokenResponse.access_token
+            }
+        });
+
+        // Find those that contain absolute URLs
+        const resources = String(body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
+            return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
+        });
+        
+        // Try to download referenced files
+        for (const resource of resources) {
+            const attachment = resource.content[0].attachment;
+            await lib.requestPromise({
+                url: attachment.url,
+                headers: {
+                    authorization: "Bearer " + tokenResponse.access_token
+                }
+            });
+        }
+    });
+    
 });
 
 describe("References", () => {

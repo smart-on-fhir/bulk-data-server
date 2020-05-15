@@ -648,7 +648,7 @@ router.get("/\\$get-resource-counts", require("./fhir/get-resource-counts"));
 router.use("/OperationDefinition", OpDef);
 
 // router.get("/files/", Lib.checkAuth, express.static(__dirname + "/attachments"));
-router.use('/attachments', express.static(__dirname + "/attachments"));
+router.use('/attachments', Lib.checkAuth, express.static(__dirname + "/attachments"));
 
 
 
