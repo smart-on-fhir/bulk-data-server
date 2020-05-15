@@ -29,8 +29,8 @@ jQuery(function($) {
         rowTemplate       : $("#rowInput"),
         formInputFiles    : $('#uploads tbody'),
         appendButton      : $("#append-button"),
-        httpCode          : $('#request-http pre'),
-        curlCode          : $('#request-curl pre'),
+        httpCode          : $('#http-code'),
+        curlCode          : $('#curl-code'),
         copyButton        : $('.copy-to-clipboard'),
         inputSource       : $("input[name='source']"),
         codePreviewButtons: $('#code-preview .btn'),
@@ -80,6 +80,7 @@ jQuery(function($) {
     function renderCodePreviews() {
         DOM.httpCode.text(generateHTTPCode());
         DOM.curlCode.text(generateCurlCommand());
+        Prism.highlightAll();
     }
 
     function toggleCodePreviews() {

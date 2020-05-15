@@ -67,7 +67,7 @@
             #generated-request .btn {
                 position: absolute;
                 z-index: 2;
-                top: 12px;
+                top: 28px;
                 right: 20px;
                 opacity: 0;
                 transition: opacity 0.4s;
@@ -156,6 +156,7 @@
                 opacity: 0.5;
             }
         </style>
+        <link href="../vendor/prism.css" rel="stylesheet" />
     </head>
     <body>
         <datalist id="fhir-resource-types-r2">
@@ -657,11 +658,11 @@
                                 <output id="generated-request">
                                     <div id="request-curl" style="display: none">
                                         <button type="button" class="copy-to-clipboard btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
-                                        <pre readonly># not enough form data to generate curl command</pre>
+                                        <pre><code id="curl-code" class="language-shell"># problem generating curl command</code></pre>
                                     </div>
                                     <div id="request-http" style="display: none">
                                         <button type="button" class="copy-to-clipboard btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
-                                        <pre readonly># not enough form data to generate http headers</pre>
+                                        <pre><code id="http-code" class="language-http"># problem generating http headers</code></pre>
                                     </div>
                                 </output>
                             </div>
@@ -762,6 +763,7 @@
         </script>
         <script src="../vendor/jquery-1.12.3.min.js"></script>
         <script src="../vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
+        <script src="../vendor/prism.js"></script>
         <script src="../lib.js"></script>
         <script src="app.js"></script>
     </body>
