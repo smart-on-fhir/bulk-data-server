@@ -98,6 +98,22 @@
                 padding-top: 0;
                 border-top : 0;
             }
+            /* omit characters from middle of long lines that do not wrap, e.g. URLs */
+            .truncated::before, .truncated::after {
+                display: inline-block;
+                max-width: 50%;
+                overflow: hidden;
+                white-space: pre;
+            }
+            .truncated::before {
+                content: attr(data-content-start);
+                text-overflow: ellipsis;
+            }
+            .truncated::after {
+                content: attr(data-content-end);
+                direction: rtl;
+                text-overflow: ellipsis;
+            }
             .files-table {
                 border-collapse: separate;
             }
@@ -697,6 +713,8 @@
                         <div class="row">
                             <div class="text-center col-sm-12">
                                 <button type="button" class="go-back btn btn-warning"><i class="fa fa-chevron-left"></i> Return to form</button>
+                                <br/>
+                                <br/>
                             </div>
                         </div>
                     </div>
@@ -713,6 +731,8 @@
                         <div class="row">
                             <div class="text-center col-sm-12">
                                 <button type="button" class="go-back btn btn-warning"><i class="fa fa-chevron-left"></i> Return to form</button>
+                                <br/>
+                                <br/>
                             </div>
                         </div>
                     </div>

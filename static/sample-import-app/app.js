@@ -144,7 +144,7 @@ jQuery(function($) {
             $(".file-list tbody").append(`
                 <tr>
                     <td class="text-center"><i class="fa fa-check-circle text-success"></i></td>
-                    <td><span title="${file.inputUrl}">${truncateUrl(file.inputUrl)}</span></td>
+                    <td>${truncateUrl(file.inputUrl)}</td>
                     <td>${resourceType}</td>
                     <td>${file.count}</td>
                     <td><a href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
@@ -158,7 +158,7 @@ jQuery(function($) {
             $(".file-list tbody").append(`
                 <tr class="text-danger error-item">
                     <td class="text-center"><i class="fa fa-times-circle text-danger"></i></td>
-                    <td><span title="${file.inputUrl}">${truncateUrl(file.inputUrl)}</span></td>
+                    <td>${truncateUrl(file.inputUrl)}</td>
                     <td>${resourceType}</td>
                     <td>${file.count}</td>
                     <td><a class="text-warning" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
@@ -454,10 +454,16 @@ jQuery(function($) {
     }
 
     function truncateUrl(url) {
-        if (url.length > 50) {
-            return url.substr(0,25) + "...." + url.substr(-20);
+        if (url.length < 2) {
+            return `<span title="${url}>${url}</span>`;
         }
-        return url;
+        let middle = Math.floor(url.length / 2);
+        return (`
+            <span class=truncated title=${url}
+                  data-content-start=${url.substr(0,middle)}
+                  data-content-end=${url.substr(middle)}
+            ></span>
+        `);
     }
 
     function getErrorText(error) {
