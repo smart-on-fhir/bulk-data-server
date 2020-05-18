@@ -53,6 +53,12 @@ function purgeOldDatabaseRecords(next)
             if (error && error.code === "SQLITE_BUSY") {
                 return next();
             }
+
+            // Ignore empty database
+            if (error && error.message === "SQLITE_ERROR: no such table: data") {
+                return next();
+            }
+
             next(error);
         }
     );
