@@ -36,7 +36,6 @@ function operationOutcome(res, message, options = {}) {
 }
 
 function createOperationOutcome(message, {
-        httpCode  = 500,
         issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
         severity  = "error"       // fatal | error | warning | information
     } = {})

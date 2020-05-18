@@ -162,7 +162,7 @@ jQuery(function($) {
                     <td>${truncateUrl(file.inputUrl)}</td>
                     <td>${resourceType}</td>
                     <td>${file.count}</td>
-                    <td><a class="text-warning" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
+                    <td><a class="text-danger" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
                 </tr>
             `);
             const errorMsg = extractParam(file.url, "message") || "Unknown problem";
