@@ -568,6 +568,7 @@ jQuery(function($) {
     // -------------------------------------------------------------------------
     // Init
     // -------------------------------------------------------------------------
+    var stuFromUrl = extractParam(location.href, "stu");
     STATE.set({
         files: [
             // { url: "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Observation.ndjson", type: "Observation" },
@@ -577,7 +578,7 @@ jQuery(function($) {
         ],
         storageDetail: "https", // Default to https
         inputSource  : "", // Clear autofill (if any)
-        fhirVersion  : extractParam(location.href, "stu") || "4",
+        fhirVersion  : fhirVersionLabels[stuFromUrl] ? stuFromUrl : "4",
         validation   : true
     });
     $('[data-toggle="tooltip"]').tooltip({ container: "body", placement: "auto bottom" });
