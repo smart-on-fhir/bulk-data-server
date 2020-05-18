@@ -49,7 +49,7 @@ jQuery(function($) {
         const files = STATE.get("files");
 
         if (!files.length) {
-            return DOM.formInputFiles.html(`<tr><th class="bg-warning"></th><th class="text-warning bg-warning" style="font-style:italic;font-weight:normal" colspan="3">No data sources added yet</th></tr>`);
+            return DOM.formInputFiles.html(`<tr><th class="bg-warning"></th><th class="text-warning bg-warning" style="font-style:italic;font-weight:normal" colspan="3">No data sources specified</th></tr>`);
         }
 
         // Full re-render on add/remove
@@ -62,6 +62,10 @@ jQuery(function($) {
                 row.find(".btn-remove").prop("disabled", all.length < 2);
                 DOM.formInputFiles.append(row);
             });
+            // If a row was added, focus its url field
+            if (files.length > rows.length) {
+                DOM.formInputFiles.find("tr.import-file").last().find("input").first().focus();
+            }
         }
 
         // Just update values otherwise. This is not even needed because those
