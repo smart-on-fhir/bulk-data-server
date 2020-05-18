@@ -53,7 +53,7 @@ class DownloadTaskCollection extends Task
                 type: "OperationOutcome", // these correspond to the `t.options.type` input file,
                 inputUrl: t.options.url,
                 count: t.count,
-                url: `${config.baseUrl}/outcome?issueCode=processing&severity=information&message=` +
+                url: `${config.baseUrl}/outcome?httpCode=200&issueCode=processing&severity=information&message=` +
                     encodeURIComponent(`${t.count} ${t.options.type} resources imported successfully`)
             })),
 
@@ -62,7 +62,7 @@ class DownloadTaskCollection extends Task
                 type: "OperationOutcome",
                 inputUrl: t.options.url,
                 count: t.count,
-                url: `${config.baseUrl}/outcome?issueCode=exception&severity=error&message=` +
+                url: `${config.baseUrl}/outcome?httpCode=500&issueCode=exception&severity=error&message=` +
                     encodeURIComponent(`${t.options.type} resources could not be imported. ${t.error}`)
             }))
         };

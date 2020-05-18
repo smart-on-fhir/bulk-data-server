@@ -1,20 +1,15 @@
 const router                = require("express").Router({ mergeParams: true });
 const { operationOutcome }  = require("./lib");
 
-// DownloadTaskCollection provides result containing URL 
-// for each attempted file import at this endpoint
-// that should generate the result as FHIR OperationOutcome
+// Results of DownloadTaskCollection contain encoded URL 
+// for each attempted file import at this "/outcome" endpoint:
+// respond to request with a FHIR OperationOutcome in JSON format
 router.get("/", (req, res) => {
     const message = req.query.message || "No details available";
-    return operationOutcome(
-        res,
-        message,
-        {
-            httpCode: 200,
-            issueCode: req.query.issueCode,
-            severity: req.query.severity
-        }
-    );
+    const httpCode = req.query.httpCode || 500;
+    const issueCode = req.query.issueCode;
+    const severity = req.query.severity || "error";
+    return operationOutcome(res, message, { httpCode, issueCode, severity });
 })
 
 module.exports = router;

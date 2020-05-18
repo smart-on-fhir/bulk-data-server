@@ -49,7 +49,7 @@ jQuery(function($) {
         const files = STATE.get("files");
 
         if (!files.length) {
-            return DOM.formInputFiles.html(`<tr><th class="bg-warning"></th><th class="text-warning bg-warning" style="font-style:italic;font-weight:normal" colspan="3">No data sources added yet</th></tr>`);
+            return DOM.formInputFiles.html(`<tr><th class="bg-warning"></th><th class="text-warning bg-warning" style="font-style:italic;font-weight:normal" colspan="3">No data sources specified</th></tr>`);
         }
 
         // Full re-render on add/remove
@@ -62,6 +62,10 @@ jQuery(function($) {
                 row.find(".btn-remove").prop("disabled", all.length < 2);
                 DOM.formInputFiles.append(row);
             });
+            // If a row was added, focus its url field
+            if (files.length > rows.length) {
+                DOM.formInputFiles.find("tr.import-file").last().find("input").first().focus();
+            }
         }
 
         // Just update values otherwise. This is not even needed because those
@@ -162,7 +166,7 @@ jQuery(function($) {
                     <td>${truncateUrl(file.inputUrl)}</td>
                     <td>${resourceType}</td>
                     <td>${file.count}</td>
-                    <td><a class="text-warning" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
+                    <td><a class="text-danger" href="${file.url}" target="_blank" rel="noopener noreferrer">Outcome details</a></td>
                 </tr>
             `);
             const errorMsg = extractParam(file.url, "message") || "Unknown problem";
@@ -568,6 +572,7 @@ jQuery(function($) {
     // -------------------------------------------------------------------------
     // Init
     // -------------------------------------------------------------------------
+    var stuFromUrl = extractParam(location.href, "stu");
     STATE.set({
         files: [
             // { url: "https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Observation.ndjson", type: "Observation" },
@@ -577,7 +582,7 @@ jQuery(function($) {
         ],
         storageDetail: "https", // Default to https
         inputSource  : "", // Clear autofill (if any)
-        fhirVersion  : extractParam(location.href, "stu") || "4",
+        fhirVersion  : fhirVersionLabels[stuFromUrl] ? stuFromUrl : "4",
         validation   : true
     });
     $('[data-toggle="tooltip"]').tooltip({ container: "body", placement: "auto bottom" });
