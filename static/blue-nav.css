@@ -6,7 +6,7 @@
 }
 
 .navbar-custom .logo {
-  margin: 10px 10px 10px 0;
+  margin: 12px 10px 12px 0;
 }
 
 .navbar-custom .navbar-brand,
@@ -73,7 +73,7 @@
     width: auto;
   }
   .navbar-custom .logo {
-    margin: 10px 0 10px 15px;
+    margin: 12px 0 12px 15px;
   }
 }
 
