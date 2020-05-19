@@ -29,7 +29,8 @@ jQuery(function($) {
         rowTemplate       : $("#rowInput"),
         formInputFiles    : $('#uploads tbody'),
         appendButton      : $("#append-button"),
-        httpCode          : $('#http-code'),
+        httpHeaders       : $('#http-headers'),
+        httpBody          : $('#http-body'),
         curlCode          : $('#curl-code'),
         copyButton        : $('.copy-to-clipboard'),
         inputSource       : $("input[name='source']"),
@@ -82,7 +83,8 @@ jQuery(function($) {
     }
 
     function renderCodePreviews() {
-        DOM.httpCode.text(generateHTTPCode());
+        DOM.httpHeaders.text(generateHTTPHeaders());
+        DOM.httpBody.text(generateHTTPBody());
         DOM.curlCode.text(generateCurlCommand());
         Prism.highlightAll();
     }
@@ -341,15 +343,18 @@ jQuery(function($) {
         };
     }
 
-    function generateHTTPCode() {
+    function generateHTTPHeaders() {
         return (
             "POST " + STATE.get("backendUrl") + "\n" +
             "Host: " + location.host + "\n" +
             "Content-Type: application/json\n" +
             "Accept: application/fhir+json\n" +
-            "Prefer: respond-async\n\n" +
-            JSON.stringify(generateRequestPayload(), null, 4)
+            "Prefer: respond-async\n"
         );
+    }
+
+    function generateHTTPBody() {
+        return JSON.stringify(generateRequestPayload(), null, 4);
     }
 
     function generateCurlCommand() {
