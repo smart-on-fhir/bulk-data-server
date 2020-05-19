@@ -304,7 +304,7 @@ jQuery(function($) {
         else if (progress >= 100) {
             setTimeout(
                 () => { $("#preparing-progress").hide(); },
-                200
+                400
             );
         }
         else {
@@ -426,22 +426,25 @@ jQuery(function($) {
             }
         }).done(function(body, resultCode, xhr) {
             if (xhr.status == 200) {
-                STATE.set({
-                    progressDuration: 200,
-                    progress: 100,
-                });
-                TIMER = setTimeout(() => {
-                    STATE.set("result", body)
-                }, 200)
+                STATE.set("progressDuration", 400);
+                requestAnimationFrame(() => {
+                    STATE.set("progress", 100);
+                    TIMER = setTimeout(() => {
+                        STATE.set("result", body);
+                    }, 500)
+                })
             }
             else if (xhr.status == 202) {
                 const progress  = parseFloat(xhr.getResponseHeader("x-progress"));
                 const retryTime = xhr.getResponseHeader("retry-after");
-                STATE.set({
-                    progressDuration: +retryTime || 200,
-                    progress
-                });
-                TIMER = setTimeout(pollForStatus, +retryTime || 200);
+                const progressDuration = Math.max(+retryTime || 200, 0);
+                const retryAfter = Math.max(progressDuration - 20, 0);
+                
+                STATE.set({ progressDuration });
+                requestAnimationFrame(() => {
+                    STATE.set({ progress });
+                    TIMER = setTimeout(pollForStatus, retryAfter);
+                })
             }
             else {
                 STATE.set("error", getErrorText(xhr));
