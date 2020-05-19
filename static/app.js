@@ -258,11 +258,6 @@
                 "/sample-app/index.html?server=" +
                 encodeURIComponent(e.data.newValue)
             );
-            $("#import-app-link").attr(
-                "href",
-                "/sample-import-app/index.html?server=" +
-                encodeURIComponent(e.data.newValue)
-            );
         });
 
 
