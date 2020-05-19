@@ -67,8 +67,8 @@
             #generated-request .btn {
                 position: absolute;
                 z-index: 2;
-                top: 28px;
-                right: 20px;
+                top: 8px;
+                right: 8px;
                 opacity: 0;
                 transition: opacity 0.4s;
             }
@@ -550,7 +550,7 @@
         </datalist>
 
         <div class="container">
-            <div class="dropdown pull-right" style="margin-top: 43px;" id="fhir-selector">
+            <div class="dropdown pull-right" style="margin-top: 30px;" id="fhir-selector">
                 <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
                     <span class="text-muted">FHIR Version: </span><b>R4</b>
                     <span class="caret"></span>
@@ -655,14 +655,16 @@
                         </div>
                         <div class="row">
                             <div class="col-xs-12">
-                                <output id="generated-request">
+                                <div id="generated-request">
                                     <div id="request-curl" style="display: none">
-                                        <button type="button" class="copy-to-clipboard btn btn-sm btn-success"><i class="fa fa-clipboard"></i> Copy</button>
+                                        <button type="button" class="copy-to-clipboard btn btn-sm btn-info"><i class="fa fa-clipboard"></i> Copy</button>
                                         <pre><code id="curl-code" class="language-shell"># problem generating curl command</code></pre>
                                     </div>
                                     <div id="request-http" style="display: none">
+                                        <button type="button" class="copy-to-clipboard btn btn-sm btn-info"><i class="fa fa-clipboard"></i> Copy</button>
                                         <pre><code id="http-headers" class="language-http"># problem generating http headers</code><br/><code id="http-body" class="language-json"></code></pre>
-                                </output>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </form>
