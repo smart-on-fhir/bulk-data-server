@@ -75,6 +75,28 @@
         return atob(base64UrlUnescape(str));
     }
 
+    function equals(a, b)
+    {
+        if (Array.isArray(a)) {
+            if (!Array.isArray(b) || a.length !== b.length) {
+                return false;
+            }
+            return a.every((x, i) => equals(x, b[i]));
+        }
+
+        if (a && typeof b == "object") {
+            if (!b || typeof b != "object") {
+                return false;
+            }
+            if (!equals(Object.keys(a), Object.keys(b))) {
+                return false;
+            }
+            return Object.keys(a).every(key => equals(a[key], b[key]));
+        }
+
+        return a === b;
+    }
+
     /**
      * Class Event
      * This is for firing custom events
@@ -150,10 +172,21 @@
 
         /**
          * Removes event listener
-         * @param {String} type 
+         * @param {string|string[]} type 
          * @param {function} handler 
          */
         this.off = function(type, handler) {
+
+            if (Array.isArray(type)) {
+                return type.forEach(t => this.off(t, handler));
+            }
+
+            type = String(type).trim();
+
+            if (type.indexOf(" ") > -1) {
+                return this.off(type.split(/\s+/), handler)
+            }
+
             if (!type) {
                 this._listeners = {};
             }
@@ -186,9 +219,14 @@
         };
 
         this.set = function(name, value) {
+
+            if (name && typeof name == "object") {
+                return Object.keys(name).forEach(key => this.set(key, name[key]));
+            }
+
             var oldValue = _data[name];
             
-            if (oldValue === value) {
+            if (equals(oldValue, value)) {
                 return false;
             }
 
@@ -259,6 +297,7 @@
         base64UrlDecode  : base64UrlDecode,
         bool             : bool,
         copyElement      : copyElement,
+        equals           : equals,
 
         // Classes
         Event     : Event,

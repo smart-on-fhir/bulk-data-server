@@ -7,20 +7,16 @@ const jwkToPem  = require("jwk-to-pem");
 const jwt       = require("jsonwebtoken");
 const express   = require("express");
 const lib       = require("./lib");
-const app       = require("../index");
+const { server } = require("../index");
 const config    = require("../config");
 
-let server;
+
 before(next => {
-    server = app.listen(config.port, () => next());
+    server.listen(config.port, next);
 });
 
 after(next => {
-    if (server) {
-        server.close();
-        server = null;
-    }
-    next();
+    server.unref().close(next);
 });
 
 // added in node v10
@@ -949,15 +945,12 @@ describe("Progress Updates", () => {
             }),
             json: true
         })
-        .then(res => {
-            // console.log(res.body);
-            assert.deepEqual(res.body.error, []);
-        })
+        .then(res => assert.deepEqual(res.body.error, []))
         .then(() => done(), done);
     })
 
-    it ('Includes "error" entries for unknown resources', () => {
-        return lib.requestPromise({
+    it ('Includes "error" entries for unknown resources', done => {
+        lib.requestPromise({
             url: lib.buildProgressUrl({
                 requestStart: moment().format("YYYY-MM-DD HH:mm:ss"),
                 type        : "Patient,Xz,Yz",
@@ -965,9 +958,18 @@ describe("Progress Updates", () => {
             }),
             json: true
         })
+        .then(res => {
+            // console.log(res.body.error)
+            assert.ok(res.body.error.length === 2);
+            assert.ok(res.body.error[0].type === "OperationOutcome");
+            assert.ok(res.body.error[0].url.split("/").pop() === "Xz.error.ndjson");
+            assert.ok(res.body.error[1].type === "OperationOutcome");
+            assert.ok(res.body.error[1].url.split("/").pop() === "Yz.error.ndjson");
+        })
         .catch(({ outcome }) => {
             assert.ok(outcome.issue[0].diagnostics === 'The requested resource type "Xz" is not available on this server');
-        });
+        })
+        .then(() => done(), done);
     })
 });
 
@@ -1392,6 +1394,58 @@ describe("File Downloading", function() {
     
 });
 
+it("Retrieval of referenced files on an open endpoint", async () => {
+
+    // Export DocumentReference resources without authentication
+    const url = lib.buildDownloadUrl("1.DocumentReference.ndjson");
+    const resp = await lib.requestPromise({ url });
+    
+    // Find those that contain absolute URLs
+    const resources = String(resp.body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
+        return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
+    });
+    
+    // Try to download referenced files
+    for (const resource of resources) {
+        const attachment = resource.content[0].attachment;
+        await lib.requestPromise({ url: attachment.url });
+    }
+});
+
+// it("Retrieval of referenced files on protected endpoint", async () => {
+
+//     // Authorize
+//     const tokenResponse = lib.authorize();
+
+//     // Export DocumentReference resources with authentication
+//     const url = lib.buildDownloadUrl("1.DocumentReference.ndjson", { secure: true });
+
+//     try {
+//         const { response, error } = await lib.requestPromise({
+//             url,
+//             headers: {
+//                 authorization: "Bearer " + tokenResponse.access_token
+//             }
+//         });
+//         console.log(error, response)
+//     } catch (ex) {
+//         console.log("ERROR:", String(ex))
+//     }
+
+//     // 
+    
+//     // Find those that contain absolute URLs
+//     // const resources = String(response.body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
+//     //     return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
+//     // });
+    
+//     // // Try to download referenced files
+//     // for (const resource of resources) {
+//     //     const attachment = resource.content[0].attachment;
+//     //     await lib.requestPromise({ url: attachment.url });
+//     // }
+});
+
 describe("References", () => {
 
 });
@@ -1745,19 +1799,17 @@ describe("Error responses", () => {
         });
 
         it("returns 400 unsupported_grant_type with invalid grant_type parameter", () => {
-            it("returns invalid_grant with missing grant_type parameter", () => {
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        grant_type: "whatever"
-                    }
-                }, {
-                    error: "unsupported_grant_type",
-                    error_description: "The grant_type parameter should equal 'client_credentials'"
-                }, 400);
-            });
+            return assertError({
+                method: "POST",
+                json  : true,
+                url   : tokenUrl,
+                form  : {
+                    grant_type: "whatever"
+                }
+            }, {
+                error: "unsupported_grant_type",
+                error_description: "The grant_type parameter should equal 'client_credentials'"
+            }, 400);
         });
 
         it("returns 400 invalid_request with missing client_assertion_type param", () => {

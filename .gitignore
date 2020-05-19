@@ -59,3 +59,4 @@ typings/
 
 .vscode
 
+import/database.*.imports.db

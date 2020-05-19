@@ -2,122 +2,24 @@ const base64url    = require("base64-url");
 const moment       = require("moment");
 const crypto       = require("crypto");
 const express      = require("express")
-const router       = express.Router({ mergeParams: true });
+const zlib         = require("zlib");
 const config       = require("./config");
 const Lib          = require("./lib");
 const getDB        = require("./db");
 const QueryBuilder = require("./QueryBuilder");
 const OpDef        = require("./fhir/OperationDefinition/index");
 const fhirStream   = require("./FhirStream");
-const zlib         = require("zlib");
 const toNdjson     = require("./transforms/dbRowToNdjson");
 const toCSV        = require("./transforms/dbRowToCSV");
 const translator   = require("./transforms/dbRowTranslator");
+const bulkImporter = require("./import/bulk_data_import_handler");
+
+
+const router = express.Router({ mergeParams: true });
 
 
 const STATE_STARTED  = 2;
 const STATE_CANCELED = 4;
-
-// Errors as operationOutcome responses
-const outcomes = {
-    fileExpired: res => Lib.operationOutcome(
-        res,
-        "Access to the target resource is no longer available at the server " +
-        "and this condition is likely to be permanent because the file " +
-        "expired",
-        { httpCode: 410 }
-    ),
-    noContent: res => Lib.operationOutcome(
-        res,
-        "No Content - your query did not match any fhir resources",
-        { httpCode: 204 }
-    ),
-    invalidAccept: (res, accept) => Lib.operationOutcome(
-        res,
-        `Invalid Accept header "${accept}". Currently we only recognize ` +
-        `"application/fhir+ndjson" and "application/fhir+json"`,
-        { httpCode: 400 }
-    ),
-    invalidOutputFormat: (res, value) => Lib.operationOutcome(
-        res,
-        `Invalid output-format parameter "${value}". Currently we only ` +
-        `recognize "application/fhir+ndjson", "application/ndjson" and "ndjson"`,
-        { httpCode: 400 }
-    ),
-    invalidSinceParameter: (res, value) => Lib.operationOutcome(
-        res,
-        `Invalid _since parameter "${value}". It must be valid FHIR instant and ` +
-        `cannot be a date in the future"`,
-        { httpCode: 400 }
-    ),
-    requireAcceptFhirJson: res => Lib.operationOutcome(
-        res,
-        "The Accept header must be application/fhir+json",
-        { httpCode: 400 }
-    ),
-    requirePreferAsync: res => Lib.operationOutcome(
-        res,
-        "The Prefer header must be respond-async",
-        { httpCode: 400 }
-    ),
-    requireRequestStart: res => Lib.operationOutcome(
-        res,
-        "The request start time parameter (requestStart) is missing " +
-        "in the encoded params",
-        { httpCode: 400 }
-    ),
-    invalidRequestStart: (req, res) => Lib.operationOutcome(
-        res,
-        `The request start time parameter (requestStart: ${
-        req.sim.requestStart}) is invalid`,
-        { httpCode: 400 }
-    ),
-    invalidResourceType: (res, resourceType) => Lib.operationOutcome(
-        res,
-        `The requested resource type "${resourceType}" is not available on this server`,
-        { httpCode: 400 }
-    ),
-    futureRequestStart: res => Lib.operationOutcome(
-        res,
-        "The request start time parameter (requestStart) must be " +
-        "a date in the past",
-        { httpCode: 400 }
-    ),
-    fileGenerationFailed: res => Lib.operationOutcome(
-        res,
-        Lib.getErrorText("file_generation_failed")
-    ),
-    canceled: res => Lib.operationOutcome(
-        res,
-        "The procedure was canceled by the client and is no longer available",
-        { httpCode: 410 /* Gone */ }
-    ),
-    cancelAccepted: res => Lib.operationOutcome(
-        res,
-        "The procedure was canceled",
-        { severity: "information", httpCode: 202 /* Accepted */ }
-    ),
-    cancelGone: res => Lib.operationOutcome(
-        res,
-        "The procedure was already canceled by the client",
-        { httpCode: 410 /* Gone */ }
-    ),
-    cancelNotFound: res => Lib.operationOutcome(
-        res,
-        "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled",
-        { httpCode: 404 /* Not Found */ }
-    ),
-    onlyNDJsonAccept: res => Lib.operationOutcome(
-        res,
-        "Only application/fhir+ndjson is currently supported for accept headers",
-        { httpCode: 400 }
-    ),
-    exportAccepted: (res, location) => Lib.operationOutcome(
-        res,
-        `Your request have been accepted. You can check it's status at "${location}"`,
-        { httpCode: 202, severity: "information" }
-    )
-};
 
 // Start helper express middlewares --------------------------------------------
 function extractSim(req, res, next) {
@@ -125,33 +27,6 @@ function extractSim(req, res, next) {
     next();
 }
 
-/**
- * Simple Express middleware that will require the request to have "accept"
- * header set to "application/fhir+ndjson".
- * @param {Object} req
- * @param {Object} res
- * @param {Function} next
- */
-function requireFhirJsonAcceptHeader(req, res, next) {
-    if (req.headers.accept != "application/fhir+json") {
-        return outcomes.requireAcceptFhirJson(res);
-    }
-    next();
-}
-
-/**
- * Simple Express middleware that will require the request to have "prefer"
- * header set to "respond-async".
- * @param {Object} req
- * @param {Object} res
- * @param {Function} next
- */
-function requireRespondAsyncHeader(req, res, next) {
-    if (req.headers.prefer != "respond-async") {
-        return outcomes.requirePreferAsync(res);
-    }
-    next();
-}
 
 /**
  * Validates the requestStart parameter
@@ -164,13 +39,13 @@ function validateRequestStart(req, res, next) {
 
     // ensure requestStart param is present
     if (!requestStart) {
-        return outcomes.requireRequestStart(res);
+        return Lib.outcomes.requireRequestStart(res);
     }
 
     try {
         requestStart = Lib.fhirDateTime(requestStart);
     } catch (ex) {
-        return outcomes.invalidRequestStart(req, res);
+        return Lib.outcomes.invalidRequestStart(req, res);
     }
 
     // requestStart - ensure valid date/time note that  using try does not
@@ -178,12 +53,12 @@ function validateRequestStart(req, res, next) {
     // the first time
     try { requestStart = moment(requestStart); } catch (ex) {  }
     if (!requestStart.isValid()) {
-        return outcomes.invalidRequestStart(req, res);
+        return Lib.outcomes.invalidRequestStart(req, res);
     }
 
     // requestStart - ensure start param is valid moment in time
     if (requestStart.isSameOrAfter(moment())) {
-        return outcomes.futureRequestStart(res);
+        return Lib.outcomes.futureRequestStart(res);
     }
 
     next();
@@ -230,7 +105,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     }
     if (accept != "application/fhir+ndjson" &&
         accept != "application/fhir+json") {
-        return outcomes.invalidAccept(res, accept);
+        return Lib.outcomes.invalidAccept(res, accept);
     }
 
     let ext = "ndjson";
@@ -240,7 +115,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     if (outputFormat) {
         ext = supportedFormats[outputFormat];
         if (!ext) {
-            return outcomes.invalidOutputFormat(res, outputFormat);
+            return Lib.outcomes.invalidOutputFormat(res, outputFormat);
         }
     }
 
@@ -250,7 +125,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
             Lib.fhirDateTime(req.query._since, true);
         } catch (ex) {
             console.error(ex);
-            return outcomes.invalidSinceParameter(res, req.query._since);
+            return Lib.outcomes.invalidSinceParameter(res, req.query._since);
         }
     }
 
@@ -258,7 +133,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     const requestedTypes = Lib.makeArray(req.query._type || "").map(t => String(t || "").trim()).filter(Boolean);
     const badParam = requestedTypes.find(type => config.availableResources.indexOf(type) == -1);
     if (badParam) {
-        return outcomes.invalidResourceType(res, badParam);
+        return Lib.outcomes.invalidResourceType(res, badParam);
     }
 
     // Now we need to count all the requested resources in the database.
@@ -302,7 +177,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
 
     // Simulate file_generation_failed error if requested
     if (args.err == "file_generation_failed") {
-        return outcomes.fileGenerationFailed(res);
+        return Lib.outcomes.fileGenerationFailed(res);
     }
 
     // Prepare the status URL
@@ -319,7 +194,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     // client can use to access the response.
     // HTTP/1.1 202 Accepted
     res.set("Content-Location", url);
-    return outcomes.exportAccepted(res, url);
+    return Lib.outcomes.exportAccepted(res, url);
     
 };
 
@@ -351,14 +226,14 @@ function handleGroup(req, res) {
 function cancelFlow(req, res) {
     if (JOBS[req.sim.id] === STATE_STARTED) {
         JOBS[req.sim.id] = STATE_CANCELED;
-        return outcomes.cancelAccepted(res);
+        return Lib.outcomes.cancelAccepted(res);
     }
     
     if (JOBS[req.sim.id] === STATE_CANCELED) {
-        return outcomes.cancelGone(res);
+        return Lib.outcomes.cancelGone(res);
     }
 
-    return outcomes.cancelNotFound(res);
+    return Lib.outcomes.cancelNotFound(res);
 }
 
 async function handleStatus(req, res) {
@@ -366,7 +241,7 @@ async function handleStatus(req, res) {
     let sim = req.sim;
     
     if (JOBS[sim.id] === STATE_CANCELED) {
-        return outcomes.canceled(res);
+        return Lib.outcomes.canceled(res);
     }
 
     // ensure requestStart param is present
@@ -379,7 +254,7 @@ async function handleStatus(req, res) {
 
     // If waiting - show progress and exit
     if (endTime.isAfter(now, "second")) {
-        let diff = (now - requestStart)/1000;
+        let diff = (+now - +requestStart)/1000;
         let pct = Math.round((diff / generationTime) * 100);
         return res.set({
             "X-Progress" : pct + "%",
@@ -401,7 +276,7 @@ async function handleStatus(req, res) {
     const requestedTypes = Lib.makeArray(sim.type || "").map(t => String(t || "").trim()).filter(Boolean);
     const badParam = requestedTypes.find(type => config.availableResources.indexOf(type) == -1);
     if (badParam) {
-        return outcomes.invalidResourceType(res, badParam);
+        return Lib.outcomes.invalidResourceType(res, badParam);
     }
 
     // Count all the requested resources in the database.
@@ -500,17 +375,17 @@ async function handleStatus(req, res) {
 
 function handleFileDownload(req, res) {
     const args         = req.sim;
-    const accept       = String(req.headers.accept || "");
+    // const accept       = String(req.headers.accept || "");
     const outputFormat = args.outputFormat || "ndjson";
 
     // Only "application/fhir+ndjson" is supported for accept headers
     // if (accept && accept.indexOf("application/fhir+ndjson") !== 0) {
-    //     return outcomes.onlyNDJsonAccept(res);
+    //     return Lib.outcomes.onlyNDJsonAccept(res);
     // }
 
     // early exit in case simulated errors
     if (args.err == "file_expired") {
-        return outcomes.fileExpired(res);
+        return Lib.outcomes.fileExpired(res);
     }
 
     const acceptEncoding = req.headers["accept-encoding"] || "";
@@ -543,22 +418,27 @@ function handleFileDownload(req, res) {
     });
 
     input.init().then(() => {
-        input = input.pipe(translator(req.sim));
+        let pipeline = input.pipe(translator(req.sim));
 
         const transform = exportTypes[outputFormat].transform;
         if (transform) {
-            input = input.pipe(transform());
+            pipeline = pipeline.pipe(transform());
         }
 
         if (shouldDeflate) {
-            input = input.pipe(zlib.createDeflate())
+            pipeline = pipeline.pipe(zlib.createDeflate())
         }
         else if (shouldGzip) {
-            input = input.pipe(zlib.createGzip())
+            pipeline = pipeline.pipe(zlib.createGzip())
         }
-        input.pipe(res)
+
+        pipeline.pipe(res);
     });
 }
+
+// =============================================================================
+// BulkData Export Endpoints
+// =============================================================================
 
 // System Level Export
 // Export data from a FHIR server whether or not it is associated with a patient.
@@ -567,11 +447,11 @@ function handleFileDownload(req, res) {
 router.get("/\\$export", [
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    requireFhirJsonAcceptHeader,
+    Lib.requireFhirJsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
-    requireRespondAsyncHeader,
+    Lib.requireRespondAsyncHeader,
 
     // Validate auth token if present
     Lib.checkAuth,
@@ -585,11 +465,11 @@ router.get("/Patient/\\$export", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    requireFhirJsonAcceptHeader,
+    Lib.requireFhirJsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
-    requireRespondAsyncHeader,
+    Lib.requireRespondAsyncHeader,
 
     // Validate auth token if present
     Lib.checkAuth,
@@ -602,11 +482,11 @@ router.get("/group/:groupId/\\$export", [
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
-    requireFhirJsonAcceptHeader,
+    Lib.requireFhirJsonAcceptHeader,
 
     // The "Prefer" header must be "respond-async". Currently we don't know
     // how to handle anything else
-    requireRespondAsyncHeader,
+    Lib.requireRespondAsyncHeader,
 
     // Validate auth token if present
     Lib.checkAuth,
@@ -634,6 +514,24 @@ router.delete("/bulkstatus", [
     Lib.checkAuth,
     cancelFlow
 ]);
+
+// =============================================================================
+// BulkData Import Endpoints
+// =============================================================================
+
+// Return import progress by task id generated during kick-off request
+// and provide time interval for client to wait before checking again
+router.get("/import-status/:taskId", bulkImporter.createImportStatusHandler());
+
+// Stop an import that has not completed
+router.delete("/import-status/:taskId", bulkImporter.cancelImport);
+
+// Kick-off import
+router.post("/\\$import", bulkImporter.createImportKickOffHandler());
+
+// =============================================================================
+// FHIR/Other Endpoints
+// =============================================================================
 
 // host dummy conformance statement
 router.get("/metadata", require("./fhir/metadata"));

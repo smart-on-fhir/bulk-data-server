@@ -1,15 +1,14 @@
-const express      = require("express");
-const bodyParser   = require("body-parser");
-const config       = require("./config");
-const Lib          = require("./lib");
-const DB           = require("./db");
-const generator    = require("./generator");
-const tokenHandler = require("./token_handler");
-const register     = require("./registration_handler");
-const bulkData     = require("./bulk_data_handler");
-const env          = require("./env");
-const morgan       = require("morgan");
-
+const express        = require("express");
+const http           = require("http");
+const bodyParser     = require("body-parser");
+const morgan         = require("morgan");
+const config         = require("./config");
+const generator      = require("./generator");
+const tokenHandler   = require("./token_handler");
+const register       = require("./registration_handler");
+const bulkData       = require("./bulk_data_handler");
+const env            = require("./env");
+const encodedOutcome = require("./outcome_handler");
 
 const app = express();
 
@@ -51,6 +50,9 @@ app.get("/server-config.js", (req, res) => {
 // bulk data implementation
 app.use(["/:sim/fhir", "/fhir"], bulkData);
 
+// Generic operation outcomes
+app.use("/outcome", encodedOutcome);
+
 // static files
 app.use(express.static("static"));
 
@@ -60,10 +62,15 @@ app.use(function (err, req, res, next) {
     res.status(500).send('Something broke!');
 });
 
+// If invoked directly start a server (otherwise let the tests do that)
+// @ts-ignore
 if (!module.parent) {
     app.listen(config.port, function() {
         console.log("Server listening at " + config.baseUrl);
     });
 }
 
-module.exports = app;
+module.exports = {
+    app,
+    server: http.createServer(app)
+};

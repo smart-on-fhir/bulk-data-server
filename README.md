@@ -35,11 +35,12 @@ Note that changing options may also change some of these settings (the fields th
 
 ## Adding your own data
 
-1. Use the <a href="https://synthetichealth.github.io/synthea/" target="_blank">Synthea Patient Generator</a> to generate  STU3 patients.
+1. Use the <a href="https://synthetichealth.github.io/synthea/" target="_blank">Synthea Patient Generator</a> to generate patients.
 2.  Import these patients into the server's database:
    ```sh
-   node import -d /path/to/my/patients/
+   node data/import -d /path/to/my/patients/ -f 3
    ```
+Note that `-f` is for FHIR version and is required. Use `4` for `R4`, `3` for `STU3` or `2` for `DSTU2`.
 
 ## Configuration
 

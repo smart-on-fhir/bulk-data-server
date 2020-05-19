@@ -1,4 +1,6 @@
-const PORT = process.env.PORT || (process.env.NODE_ENV == "test" ? 9444 : 9443);
+const ENV  = process.env.NODE_ENV || "production";
+const PORT = process.env.PORT || (ENV == "test" ? 9444 : 9443);
+
 module.exports = {
 
     baseUrl: process.env.BASE_URL || `http://localhost:${PORT}`,
@@ -109,6 +111,32 @@ module.exports = {
         "Patient",
         "Procedure",
         "Binary",
-        "DocumentReference"
-    ]
+        "DocumentReference",
+        "Procedure"
+    ],
+
+    // IMPORT ------------------------------------------------------------------
+
+    // Maximum NDJSON file line length (as number of characters)
+    ndjsonMaxLineLength: 5000000,
+    
+    // How many downloads to run in parallel
+    maxParallelDownloads: 3,
+
+    // Only store the first 50 resources from each downloaded file
+    maxImportsPerResourceType: 50,
+
+    // Run database maintenance once a minute (set in milliseconds)
+    dbMaintenanceTickInterval: ENV == "test" ? 10 : 60 * 1000,
+
+    // Purge records older than 10 min (set in seconds). Also, any finished tasks
+    // will be kept for this duration and can be checked for status or canceled.
+    dbMaintenanceMaxRecordAge: ENV == "test" ? 1 : 10 * 60,
+
+    // If this is exceeded reply with 429 Too many requests (works per IP)
+    maxRequestsPerMinute: 30,
+
+    // If a client violates the maxRequestsPerMinute restriction for more than
+    // this duration (in seconds) the import session will be terminated
+    maxViolationDuration: ENV == "test" ? 0.1 : 60
 };

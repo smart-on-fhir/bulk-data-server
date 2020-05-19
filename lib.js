@@ -7,6 +7,8 @@ const config    = require("./config");
 const base64url = require("base64-url");
 const request   = require("request");
 
+
+
 const RE_GT    = />/g;
 const RE_LT    = /</g;
 const RE_AMP   = /&/g;
@@ -18,6 +20,45 @@ function bool(x) {
     return !RE_FALSE.test(String(x).trim());
 }
 
+function htmlEncode(html) {
+    return String(html)
+        .trim()
+        .replace(RE_AMP , "&amp;")
+        .replace(RE_LT  , "&lt;")
+        .replace(RE_GT  , "&gt;")
+        .replace(RE_QUOT, "&quot;");
+}
+
+function operationOutcome(res, message, options = {}) {
+    return res.status(options.httpCode || 500).json(
+        createOperationOutcome(message, options)
+    );
+}
+
+function createOperationOutcome(message, {
+        issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
+        severity  = "error"       // fatal | error | warning | information
+    } = {})
+{
+    return {
+        "resourceType": "OperationOutcome",
+        "text": {
+            "status": "generated",
+            "div": `<div xmlns="http://www.w3.org/1999/xhtml">` +
+            `<h1>Operation Outcome</h1><table border="0"><tr>` +
+            `<td style="font-weight:bold;">${severity}</td><td>[]</td>` +
+            `<td><pre>${htmlEncode(message)}</pre></td></tr></table></div>`
+        },
+        "issue": [
+            {
+                "severity"   : severity,
+                "code"       : issueCode,
+                "diagnostics": message
+            }
+        ]
+    };
+}
+
 function makeArray(x) {
     if (Array.isArray(x)) {
         return x;
@@ -26,15 +67,6 @@ function makeArray(x) {
         return x.trim().split(/\s*,\s*/);
     }
     return [x];
-}
-
-function htmlEncode(html) {
-    return String(html)
-        .trim()
-        .replace(RE_AMP , "&amp;")
-        .replace(RE_LT  , "&lt;")
-        .replace(RE_GT  , "&gt;")
-        .replace(RE_QUOT, "&quot;");
 }
 
 /**
@@ -212,37 +244,6 @@ function die(error="Unknown error")
     console.log("\n"); // in case we have something written to stdout directly
     console.error(error);
     process.exit(1);
-}
-
-function operationOutcome(res, message, options = {}) {
-    return res.status(options.httpCode || 500).json(
-        createOperationOutcome(message, options)
-    );
-}
-
-function createOperationOutcome(message, {
-        httpCode  = 500,
-        issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
-        severity  = "error"       // fatal | error | warning | information
-    } = {})
-{
-    return {
-        "resourceType": "OperationOutcome",
-        "text": {
-            "status": "generated",
-            "div": `<div xmlns="http://www.w3.org/1999/xhtml">` +
-            `<h1>Operation Outcome</h1><table border="0"><tr>` +
-            `<td style="font-weight:bold;">${severity}</td><td>[]</td>` +
-            `<td><pre>${htmlEncode(message)}</pre></td></tr></table></div>`
-        },
-        "issue": [
-            {
-                "severity"   : severity,
-                "code"       : issueCode,
-                "diagnostics": message
-            }
-        ]
-    };
 }
 
 // require a valid auth token if there is an auth token
@@ -478,6 +479,183 @@ function fetchJwks(url) {
     });
 }
 
+/**
+ * Simple Express middleware that will require the request to have "accept"
+ * header set to "application/fhir+ndjson".
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+function requireFhirJsonAcceptHeader(req, res, next) {
+    if (req.headers.accept != "application/fhir+json") {
+        return outcomes.requireAcceptFhirJson(res);
+    }
+    next();
+}
+
+/**
+ * Simple Express middleware that will require the request to have "prefer"
+ * header set to "respond-async".
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+function requireRespondAsyncHeader(req, res, next) {
+    if (req.headers.prefer != "respond-async") {
+        return outcomes.requirePreferAsync(res);
+    }
+    next();
+}
+
+/**
+ * Simple Express middleware that will require the request to have "Content-Type"
+ * header set to "application/json".
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+function requireJsonContentTypeHeader(req, res, next) {
+    if (!req.is("application/json")) {
+        return outcomes.requireJsonContentType(res);
+    }
+    next();
+}
+
+/**
+ * Returns the absolute base URL of the given request
+ * @param {object} request 
+ */
+function getBaseUrl(request) {
+    
+    // protocol
+    let proto = request.headers["x-forwarded-proto"];
+    if (!proto) {
+        proto = request.socket.encrypted ? "https" : "http";
+    }
+
+    // host
+    let host = request.headers.host;
+    if (request.headers["x-forwarded-host"]) {
+        host = request.headers["x-forwarded-host"];
+        if (request.headers["x-forwarded-port"]) {
+            host += ":" + request.headers["x-forwarded-port"];
+        }
+    }
+
+    return proto + "://" + host;
+}
+
+// Errors as operationOutcome responses
+const outcomes = {
+    fileExpired: res => operationOutcome(
+        res,
+        "Access to the target resource is no longer available at the server " +
+        "and this condition is likely to be permanent because the file " +
+        "expired",
+        { httpCode: 410 }
+    ),
+    noContent: res => operationOutcome(
+        res,
+        "No Content - your query did not match any fhir resources",
+        { httpCode: 204 }
+    ),
+    invalidAccept: (res, accept) => operationOutcome(
+        res,
+        `Invalid Accept header "${accept}". Currently we only recognize ` +
+        `"application/fhir+ndjson" and "application/fhir+json"`,
+        { httpCode: 400 }
+    ),
+    invalidOutputFormat: (res, value) => operationOutcome(
+        res,
+        `Invalid output-format parameter "${value}". Currently we only ` +
+        `recognize "application/fhir+ndjson", "application/ndjson" and "ndjson"`,
+        { httpCode: 400 }
+    ),
+    invalidSinceParameter: (res, value) => operationOutcome(
+        res,
+        `Invalid _since parameter "${value}". It must be valid FHIR instant and ` +
+        `cannot be a date in the future"`,
+        { httpCode: 400 }
+    ),
+    requireJsonContentType: res => operationOutcome(
+        res,
+        "The Content-Type header must be application/json",
+        { httpCode: 400 }
+    ),
+    requireAcceptFhirJson: res => operationOutcome(
+        res,
+        "The Accept header must be application/fhir+json",
+        { httpCode: 400 }
+    ),
+    requirePreferAsync: res => operationOutcome(
+        res,
+        "The Prefer header must be respond-async",
+        { httpCode: 400 }
+    ),
+    requireRequestStart: res => operationOutcome(
+        res,
+        "The request start time parameter (requestStart) is missing " +
+        "in the encoded params",
+        { httpCode: 400 }
+    ),
+    invalidRequestStart: (req, res) => operationOutcome(
+        res,
+        `The request start time parameter (requestStart: ${
+        req.sim.requestStart}) is invalid`,
+        { httpCode: 400 }
+    ),
+    invalidResourceType: (res, resourceType) => operationOutcome(
+        res,
+        `The requested resource type "${resourceType}" is not available on this server`,
+        { httpCode: 400 }
+    ),
+    futureRequestStart: res => operationOutcome(
+        res,
+        "The request start time parameter (requestStart) must be " +
+        "a date in the past",
+        { httpCode: 400 }
+    ),
+    fileGenerationFailed: res => operationOutcome(
+        res,
+        getErrorText("file_generation_failed")
+    ),
+    canceled: res => operationOutcome(
+        res,
+        "The procedure was canceled by the client and is no longer available",
+        { httpCode: 410 /* Gone */ }
+    ),
+    cancelAccepted: res => operationOutcome(
+        res,
+        "The procedure was canceled",
+        { severity: "information", httpCode: 202 /* Accepted */ }
+    ),
+    cancelGone: res => operationOutcome(
+        res,
+        "The procedure was already canceled by the client",
+        { httpCode: 410 /* Gone */ }
+    ),
+    cancelNotFound: res => operationOutcome(
+        res,
+        "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled",
+        { httpCode: 404 /* Not Found */ }
+    ),
+    onlyNDJsonAccept: res => operationOutcome(
+        res,
+        "Only application/fhir+ndjson is currently supported for accept headers",
+        { httpCode: 400 }
+    ),
+    importAccepted: (res, location) => operationOutcome(
+        res,
+        `Your request has been accepted. You can check it's status at "${location}"`,
+        { httpCode: 202, severity: "information" }
+    ),
+    exportAccepted: (res, location) => operationOutcome(
+        res,
+        `Your request has been accepted. You can check it's status at "${location}"`,
+        { httpCode: 202, severity: "information" }
+    )
+};
+
 module.exports = {
     htmlEncode,
     readFile,
@@ -502,5 +680,10 @@ module.exports = {
     fhirDateTime,
     createOperationOutcome,
     fetchJwks,
-    makeArray
+    makeArray,
+    outcomes,
+    requireRespondAsyncHeader,
+    requireFhirJsonAcceptHeader,
+    requireJsonContentTypeHeader,
+    getBaseUrl
 };
