@@ -602,7 +602,7 @@ describe("BulkData Import", () => {
                 type: 'OperationOutcome',
                 inputUrl: 'https://raw.githubusercontent.com/smart-on-fhir/flat-fhir-files/master/r3/Missing.ndjson',
                 count: 0,
-                url: 'http://localhost:9444/outcome?issueCode=exception&severity=error&message=Observation%20resources%20could%20not%20be%20imported.%20Error%3A%20404%20Not%20Found'
+                url: 'http://localhost:9444/outcome?httpCode=500&issueCode=exception&severity=error&message=Observation%20resources%20could%20not%20be%20imported.%20Error%3A%20404%20Not%20Found'
             }]);
         });
 

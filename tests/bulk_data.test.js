@@ -1399,12 +1399,12 @@ it("Retrieval of referenced files on an open endpoint", async () => {
     // Export DocumentReference resources without authentication
     const url = lib.buildDownloadUrl("1.DocumentReference.ndjson");
     const resp = await lib.requestPromise({ url });
-    
+
     // Find those that contain absolute URLs
     const resources = String(resp.body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
         return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
     });
-    
+
     // Try to download referenced files
     for (const resource of resources) {
         const attachment = resource.content[0].attachment;
@@ -1412,38 +1412,36 @@ it("Retrieval of referenced files on an open endpoint", async () => {
     }
 });
 
-// it("Retrieval of referenced files on protected endpoint", async () => {
+it("Retrieval of referenced files on protected endpoint", async () => {
 
-//     // Authorize
-//     const tokenResponse = lib.authorize();
+    // Authorize
+    const tokenResponse = await lib.authorize();
 
-//     // Export DocumentReference resources with authentication
-//     const url = lib.buildDownloadUrl("1.DocumentReference.ndjson", { secure: true });
+    // Export DocumentReference resources with authentication
+    const url = lib.buildDownloadUrl("1.DocumentReference.ndjson");
 
-//     try {
-//         const { response, error } = await lib.requestPromise({
-//             url,
-//             headers: {
-//                 authorization: "Bearer " + tokenResponse.access_token
-//             }
-//         });
-//         console.log(error, response)
-//     } catch (ex) {
-//         console.log("ERROR:", String(ex))
-//     }
+    const { body } = await lib.requestPromise({
+        url,
+        headers: {
+            authorization: "Bearer " + tokenResponse.access_token
+        }
+    });
 
-//     // 
-    
-//     // Find those that contain absolute URLs
-//     // const resources = String(response.body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
-//     //     return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
-//     // });
-    
-//     // // Try to download referenced files
-//     // for (const resource of resources) {
-//     //     const attachment = resource.content[0].attachment;
-//     //     await lib.requestPromise({ url: attachment.url });
-//     // }
+    // Find those that contain absolute URLs
+    const resources = String(body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
+        return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
+    });
+
+    // Try to download referenced files
+    for (const resource of resources) {
+        const attachment = resource.content[0].attachment;
+        await lib.requestPromise({
+            url: attachment.url,
+            headers: {
+                authorization: "Bearer " + tokenResponse.access_token
+            }
+        });
+    }
 });
 
 describe("References", () => {
