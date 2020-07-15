@@ -26,7 +26,7 @@ class ScopeSet
 
     /**
      * Checks if there is a scope that matches by RegExp the given string
-     * @param {RegExp} scope The pattern to look for
+     * @param {RegExp} scopeRegExp The pattern to look for
      * @returns {Boolean} 
      */
     matches(scopeRegExp) {
@@ -93,9 +93,10 @@ class ScopeSet
             return config.errors.missing_scope;
         }
 
-        scopes = scopes.split(/\s+/);
-        const re = new RegExp("^system/(\\*|" + config.availableResources.join("|") + ")(\\.(read|write|\\*))?$");
-        return scopes.find(s => !(re.test(s))) || "";
+        const scopesArray = scopes.split(/\s+/);
+        // const re = new RegExp("^system/(\\*|" + config.availableResources.join("|") + ")(\\.(read|write|\\*))?$");
+        const re = new RegExp("^system/(\\*|[A-Z][A-Za-z0-9]+)(\\.(read|write|\\*))?$");
+        return scopesArray.find(s => !(re.test(s))) || "";
     }
 }
 

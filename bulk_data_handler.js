@@ -131,7 +131,9 @@ async function handleRequest(req, res, groupId = null, system=false) {
 
     // Validate the _type parameter;
     const requestedTypes = Lib.makeArray(req.query._type || "").map(t => String(t || "").trim()).filter(Boolean);
-    const badParam = requestedTypes.find(type => config.availableResources.indexOf(type) == -1);
+    const fhirVersion = +(req.sim.stu || 3);
+    const availableTypes = await getAvailableResourceTypes(fhirVersion);
+    const badParam = requestedTypes.find(type => availableTypes.indexOf(type) == -1);
     if (badParam) {
         return Lib.outcomes.invalidResourceType(res, badParam);
     }
@@ -236,6 +238,18 @@ function cancelFlow(req, res) {
     return Lib.outcomes.cancelNotFound(res);
 }
 
+/**
+ * Get a list of all the resource types present in the database
+ * @param {number} fhirVersion 
+ * @returns {Promise<string[]>}
+ */
+function getAvailableResourceTypes(fhirVersion)
+{
+    const DB = getDB(fhirVersion);
+    return DB.promise("all", 'SELECT DISTINCT "fhir_type" FROM "data"')
+        .then(rows => rows.map(row => row.fhir_type));
+}
+
 async function handleStatus(req, res) {
     
     let sim = req.sim;
@@ -272,9 +286,12 @@ async function handleStatus(req, res) {
         multiplier = 1;
     }
 
+    const fhirVersion = +(sim.stu || 3);
+
     // Validate the _type parameter;
     const requestedTypes = Lib.makeArray(sim.type || "").map(t => String(t || "").trim()).filter(Boolean);
-    const badParam = requestedTypes.find(type => config.availableResources.indexOf(type) == -1);
+    const availableTypes = await getAvailableResourceTypes(fhirVersion);
+    const badParam = requestedTypes.find(type => availableTypes.indexOf(type) == -1);
     if (badParam) {
         return Lib.outcomes.invalidResourceType(res, badParam);
     }
@@ -282,7 +299,7 @@ async function handleStatus(req, res) {
     // Count all the requested resources in the database.
     let builder = new QueryBuilder(sim);
     let { sql, params } = builder.compileCount("cnt");
-    const DB = getDB(+(sim.stu || 3));
+    const DB = getDB(fhirVersion);
     DB.promise("all", sql, params).then(rows => {
         
         // Finally generate those download links
@@ -445,6 +462,9 @@ function handleFileDownload(req, res) {
 // This supports use cases like backing up a server or exporting terminology
 // data by restricting the resources returned using the _type parameter.
 router.get("/\\$export", [
+
+    extractSim,
+
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
     Lib.requireFhirJsonAcceptHeader,
@@ -463,6 +483,8 @@ router.get("/\\$export", [
 // /$export - does the same on this server because we don't
 router.get("/Patient/\\$export", [
 
+    extractSim,
+
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.
     Lib.requireFhirJsonAcceptHeader,
@@ -479,6 +501,8 @@ router.get("/Patient/\\$export", [
 
 // Provides access to all data on all patients in the nominated group
 router.get("/group/:groupId/\\$export", [
+
+    extractSim,
 
     // The "Accept" header must be "application/fhir+ndjson". Currently we
     // don't know how to handle anything else.

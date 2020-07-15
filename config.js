@@ -94,27 +94,6 @@ module.exports = {
         "invalid_scope": "Invalid scope"
     },
 
-    availableResources: [
-        "AllergyIntolerance",
-        "CarePlan",
-        "Claim",
-        "Condition",
-        "DiagnosticReport",
-        "Encounter",
-        "Goal",
-        "Group",
-        "ImagingStudy",
-        "Immunization",
-        "MedicationRequest",
-        "Observation",
-        "Organization",
-        "Patient",
-        "Procedure",
-        "Binary",
-        "DocumentReference",
-        "Procedure"
-    ],
-
     // IMPORT ------------------------------------------------------------------
 
     // Maximum NDJSON file line length (as number of characters)
