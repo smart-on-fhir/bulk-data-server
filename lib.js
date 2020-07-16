@@ -6,6 +6,7 @@ const moment    = require("moment");
 const config    = require("./config");
 const base64url = require("base64-url");
 const request   = require("request");
+const getDB     = require("./db");
 
 
 
@@ -545,6 +546,17 @@ function getBaseUrl(request) {
     return proto + "://" + host;
 }
 
+/**
+ * Get a list of all the resource types present in the database
+ * @param {number} fhirVersion 
+ * @returns {Promise<string[]>}
+ */
+function getAvailableResourceTypes(fhirVersion) {
+    const DB = getDB(fhirVersion);
+    return DB.promise("all", 'SELECT DISTINCT "fhir_type" FROM "data"')
+        .then(rows => rows.map(row => row.fhir_type));
+}
+
 // Errors as operationOutcome responses
 const outcomes = {
     fileExpired: res => operationOutcome(
@@ -685,5 +697,6 @@ module.exports = {
     requireRespondAsyncHeader,
     requireFhirJsonAcceptHeader,
     requireJsonContentTypeHeader,
-    getBaseUrl
+    getBaseUrl,
+    getAvailableResourceTypes
 };

@@ -1,4 +1,5 @@
 const config = require("./config");
+const lib    = require("./lib");
 
 /**
  * This class tries to make it easier and cleaner to work with scopes (mostly by
@@ -83,10 +84,14 @@ class ScopeSet
      * Checks if the given scopes string is valid for use by backend services.
      * This will only accept system scopes and will also reject empty scope.
      * @param {String} scopes The scopes to check
-     * @returns {String} The invalid scope or empty string on success
+     * @param {number} [fhirVersion] The FHIR version that this scope should be
+     * validated against. If provided, the scope should match one of the resource
+     * types available in the database for that version (or *). Otherwise no
+     * check is performed.
+     * @returns {Promise<string>} The invalid scope or empty string on success
      * @static
      */
-    static getInvalidSystemScopes(scopes) {
+    static async getInvalidSystemScopes(scopes, fhirVersion) {
         scopes = String(scopes || "").trim();
 
         if (!scopes) {
@@ -94,8 +99,17 @@ class ScopeSet
         }
 
         const scopesArray = scopes.split(/\s+/);
-        // const re = new RegExp("^system/(\\*|" + config.availableResources.join("|") + ")(\\.(read|write|\\*))?$");
-        const re = new RegExp("^system/(\\*|[A-Z][A-Za-z0-9]+)(\\.(read|write|\\*))?$");
+
+        // If no FHIR version is specified accept anything that looks like a
+        // resource
+        let availableResources = "[A-Z][A-Za-z0-9]+";
+
+        // Otherwise check the DB to see what types of resources we have
+        if (fhirVersion) {
+            availableResources = (await lib.getAvailableResourceTypes(fhirVersion)).join("|");
+        }
+
+        const re = new RegExp("^system/(\\*|" + availableResources + ")(\\.(read|write|\\*))?$");
         return scopesArray.find(s => !(re.test(s))) || "";
     }
 }

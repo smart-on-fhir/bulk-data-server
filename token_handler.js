@@ -1,12 +1,10 @@
-const crypto    = require("crypto");
 const jwt       = require("jsonwebtoken");
-const base64url = require("base64-url");
 const jwkToPem  = require("jwk-to-pem");
 const config    = require("./config");
 const Lib       = require("./lib");
 const ScopeSet  = require("./ScopeSet");
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
 
     // Require "application/x-www-form-urlencoded" POSTs -----------------------
     let ct = req.headers["content-type"] || "";
@@ -97,7 +95,10 @@ module.exports = (req, res) => {
     }
 
     // Validate scope ----------------------------------------------------------
-    let tokenError = ScopeSet.getInvalidSystemScopes(req.body.scope);
+    // Note that the scope check if FHIR version dependent and makes sure that
+    // no unknown resources are involved. However, this code is common for every
+    // FHIR version so we just use "4" here.
+    let tokenError = await ScopeSet.getInvalidSystemScopes(req.body.scope, 4);
     if (tokenError) {
         return Lib.replyWithOAuthError(res, "invalid_scope", {
             message: "invalid_scope",

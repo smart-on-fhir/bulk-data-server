@@ -132,7 +132,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
     // Validate the _type parameter;
     const requestedTypes = Lib.makeArray(req.query._type || "").map(t => String(t || "").trim()).filter(Boolean);
     const fhirVersion = +(req.sim.stu || 3);
-    const availableTypes = await getAvailableResourceTypes(fhirVersion);
+    const availableTypes = await Lib.getAvailableResourceTypes(fhirVersion);
     const badParam = requestedTypes.find(type => availableTypes.indexOf(type) == -1);
     if (badParam) {
         return Lib.outcomes.invalidResourceType(res, badParam);
@@ -238,18 +238,6 @@ function cancelFlow(req, res) {
     return Lib.outcomes.cancelNotFound(res);
 }
 
-/**
- * Get a list of all the resource types present in the database
- * @param {number} fhirVersion 
- * @returns {Promise<string[]>}
- */
-function getAvailableResourceTypes(fhirVersion)
-{
-    const DB = getDB(fhirVersion);
-    return DB.promise("all", 'SELECT DISTINCT "fhir_type" FROM "data"')
-        .then(rows => rows.map(row => row.fhir_type));
-}
-
 async function handleStatus(req, res) {
     
     let sim = req.sim;
@@ -290,7 +278,7 @@ async function handleStatus(req, res) {
 
     // Validate the _type parameter;
     const requestedTypes = Lib.makeArray(sim.type || "").map(t => String(t || "").trim()).filter(Boolean);
-    const availableTypes = await getAvailableResourceTypes(fhirVersion);
+    const availableTypes = await Lib.getAvailableResourceTypes(fhirVersion);
     const badParam = requestedTypes.find(type => availableTypes.indexOf(type) == -1);
     if (badParam) {
         return Lib.outcomes.invalidResourceType(res, badParam);
