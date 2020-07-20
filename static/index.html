@@ -6,22 +6,22 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
         <title>SMART App Launcher</title>
-        <link rel="shortcut icon" href="/img/favicon.png" type="image/png" />
-        <link href="/vendor/bootstrap-3.3.6/css/bootstrap.min.css" rel="stylesheet">
-        <link href="/vendor/bootstrap-3.3.6/css/bootstrap-theme.min.css" rel="stylesheet">
-        <link href="/blue-nav.css" rel="stylesheet">
+        <link rel="shortcut icon" href="/bulk-data-server/img/favicon.png" type="image/png" />
+        <link href="/bulk-data-server/vendor/bootstrap-3.3.6/css/bootstrap.min.css" rel="stylesheet">
+        <link href="/bulk-data-server/vendor/bootstrap-3.3.6/css/bootstrap-theme.min.css" rel="stylesheet">
+        <link href="/bulk-data-server/blue-nav.css" rel="stylesheet">
         <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
         <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
         <!--[if lt IE 9]>
             <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
             <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
         <![endif]-->
-        <script src="/vendor/jquery-1.12.3.min.js"></script>
-        <script src="/vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
-        <script src="/env.js"></script>
-        <script src="/server-config.js"></script>
-        <script src="/lib.js"></script>
-        <script src="/app.js"></script>
+        <script src="/bulk-data-server/vendor/jquery-1.12.3.min.js"></script>
+        <script src="/bulk-data-server/vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
+        <script src="/bulk-data-server/env.js"></script>
+        <script src="/bulk-data-server/server-config.js"></script>
+        <script src="/bulk-data-server/lib.js"></script>
+        <script src="/bulk-data-server/app.js"></script>
     </head>
     <body>
         
@@ -30,9 +30,9 @@
             <div class="container">
                 <div class="navbar-header">
                     <div class="pull-left logo">
-                        <img src="/img/smart-bug.png" />
+                        <img src="/bulk-data-server/img/smart-bug.png" />
                     </div>
-                    <a class="navbar-brand" href="/index.html" style="white-space:nowrap;text-overflow:ellipsis;text-shadow:none" title="Click here to re-start the app with it's default settings">
+                    <a class="navbar-brand" href="/bulk-data-server/index.html" style="white-space:nowrap;text-overflow:ellipsis;text-shadow:none" title="Click here to re-start the app with it's default settings">
                         SMART Bulk Data Server <b style="color:#efa948;text-shadow:0 0 1px #000, 0 1px 0 #000">alpha</b>
                     </a>
                     <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1" aria-expanded="false">
@@ -75,7 +75,7 @@
         <div class="container" id="loading">
             <div class="row">
                 <div class="col-xs-12" style="text-align: center;margin-top:50px;">
-                    <img src="/img/ajax-loader.gif"/>
+                    <img src="/bulk-data-server/img/ajax-loader.gif"/>
                 </div>
             </div>
         </div>
@@ -232,7 +232,7 @@
                     <div class="panel-body">
                         
                         <div class="form-group col-sm-6">
-                            <a href="/sample-app/index.html?server=/fhir" id="try-app-link" target="_blank" class="btn btn-info btn-xs pull-right" stylr="transition: all 120ms">Try Sample App</a>
+                            <a href="/bulk-data-server/sample-app/index.html?server=/fhir" id="try-app-link" target="_blank" class="btn btn-info btn-xs pull-right" stylr="transition: all 120ms">Try Sample App</a>
                             <label>FHIR Server URL</label>
                             <input type="text" class="form-control" id="fhir-server-url" data-prop="fhir_server_url" readonly>
                         </div>

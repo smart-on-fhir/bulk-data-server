@@ -1,7 +1,8 @@
 const PORT = process.env.PORT || (process.env.NODE_ENV == "test" ? 9444 : 9443);
+const BASE_URL = 'bulk-data-server'; //process.env.BASE_URL
 module.exports = {
 
-    baseUrl: process.env.BASE_URL || `http://localhost:${PORT}`,
+    baseUrl: `http://10.14.196.25:${PORT}/${BASE_URL}` || `http://localhost:${PORT}`,
 
     port: PORT,
 

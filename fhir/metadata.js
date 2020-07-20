@@ -51,11 +51,11 @@ module.exports = (req, res) => {
                             "extension": [
                                 {
                                     "url": "token",
-                                    "valueUri": `${config.baseUrl}/auth/token`
+                                    "valueUri": `/auth/token`
                                 },
                                 {
                                     "url": "register",
-                                    "valueUri": `${config.baseUrl}/auth/register`
+                                    "valueUri": `/auth/register`
                                 }
                             ]
                         }

@@ -72,7 +72,8 @@ module.exports = (req, res) => {
     }
 
     // Validate authenticationToken.aud (must equal this url) ------------------
-    let tokenUrl = config.baseUrl + req.originalUrl;
+    let tokenUrl = config.baseUrl + req.url;
+
     if (tokenUrl.replace(/^https?/, "") !== authenticationToken.aud.replace(/^https?/, "")) {
         return Lib.replyWithOAuthError(res, "invalid_grant", {
             message: "invalid_aud",
@@ -139,6 +140,8 @@ module.exports = (req, res) => {
         // If the jku header is whitelisted, create a set of potential keys
         // by dereferencing the jku URL
         if (header.jku && clientDetailsToken.jwks_url) {
+            console.log("jwks url: " + clientDetailsToken.jwks_url);
+
             return Lib.fetchJwks(clientDetailsToken.jwks_url)
                 .then(json => {
                     if (!Array.isArray(json.keys)) {
@@ -161,9 +164,11 @@ module.exports = (req, res) => {
         // all keys found by dereferencing the registration-time JWKS URI (if any)
         // + any keys supplied in the registration-time JWKS (if any)
         if (clientDetailsToken.jwks_url) {
+            console.log("jwks url: " + clientDetailsToken.jwks_url);
             return Lib.fetchJwks(clientDetailsToken.jwks_url)
                 .then(json => json.keys)
                 .then(keys => {
+                    console.log("jwks " + clientDetailsToken.jwks);
                     // keys supplied in the registration-time JWKS (if any)
                     if (clientDetailsToken.jwks) {
                         keys = keys.concat(clientDetailsToken.jwks.keys);
