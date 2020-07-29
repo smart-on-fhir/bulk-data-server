@@ -121,19 +121,19 @@ module.exports = (req, res) => {
                     {
                         "name": "export",
                         "definition": {
-                            "reference": "OperationDefinition/export"
+                            "reference": "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/export" // or "OperationDefinition/export"
                         }
                     },
                     {
                         "name": "patient-export",
                         "definition": {
-                            "reference": "OperationDefinition/patient-export"
+                            "reference": "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/patient-export" // or "OperationDefinition/patient-export"
                         }
                     },
                     {
                         "name": "group-export",
                         "definition": {
-                            "reference": "OperationDefinition/group-export"
+                            "reference": "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/group-export" // or "OperationDefinition/group-export"
                         }
                     }
                 ]
