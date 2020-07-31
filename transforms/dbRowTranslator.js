@@ -19,7 +19,7 @@ module.exports = function(sim = {}) {
                 // URLs to allow the client to directly download bigger files
                 if (json.resourceType == "DocumentReference") {
                     const url = lib.getPath(json, "content.0.attachment.url");
-                    if (url.search(/\/attachments\/.*/) === 0) {
+                    if (url && url.search(/\/attachments\/.*/) === 0) {
                         // json.content[0].attachment.url = baseUrl + url;
                         json.content[0].attachment.url = lib.buildUrlPath(
                             baseUrl,
