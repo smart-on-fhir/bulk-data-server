@@ -466,32 +466,14 @@ async function insertDocumentReferences()
         "SELECT * FROM data WHERE fhir_type = 'Practitioner' LIMIT 1"
     );
 
-    // Insert one Binary resource
+    // Insert one DocumentReference with inline attachment
     // -------------------------------------------------------------------------
-    console.log("Creating one Binary resource");
-    const binaryId = uuid.v4();
-    const binary = {
-        resourceType: "Binary",
-        id: binaryId,
-        meta: {
-            versionId: "1",
-            lastUpdated: randomMoment("2010-05-25").format()
-        },
-        contentType: "image/jpeg",
-        content: fs.readFileSync(Path.join(__dirname, "/../attachments/portrait-1.jpg")).toString("base64")
-    };
-    await insertRow(
-        binaryId,
-        JSON.stringify(binary),
-        "Binary",
-        binary.meta.lastUpdated,
-        patient.resource_id,
-        patient.group_id
-    );
+    console.log("Add one DocumentReference with inline attachment");
+    
+    const photoPath = Path.join(__dirname, "/../attachments/portrait-1.jpg");
+    const photoData = fs.readFileSync(photoPath).toString("base64");
+    const photoSize = Buffer.from(photoData).byteLength;
 
-    // Insert one DocumentReference resource to link to the Binary above
-    // -------------------------------------------------------------------------
-    console.log("Linking the Binary resource via DocumentReference");
     const docRef1 = {
         resourceType: "DocumentReference",
         id: uuid.v4(),
@@ -529,8 +511,9 @@ async function insertDocumentReferences()
             {
                 "attachment": {
                     "contentType": "image/jpeg",
-                    "url": `/Binary/${binaryId}`,
-                    "size": 10551
+                    // "url" : `/Binary/${binaryId}`,
+                    "data": photoData,
+                    "size": photoSize
                 }
             }
         ]
