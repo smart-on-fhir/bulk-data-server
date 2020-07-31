@@ -1336,8 +1336,7 @@ describe("File Downloading", function() {
             test("AllergyIntolerance"),
             test("Patient"),
             test("Device"),
-            test("DocumentReference"),
-            test("Binary")
+            test("DocumentReference")
         ]);
 
     });
@@ -1350,7 +1349,11 @@ describe("File Downloading", function() {
         
         // Find those that contain absolute URLs
         const resources = String(resp.body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
-            return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
+            const url = x.content[0].attachment.url;
+            if (url) {
+                return url.search(/https?\:\/\/.+/) === 0;
+            }
+            return false;
         });
         
         // Try to download referenced files
@@ -1377,7 +1380,11 @@ describe("File Downloading", function() {
 
         // Find those that contain absolute URLs
         const resources = String(body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
-            return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
+            const url = x.content[0].attachment.url;
+            if (url) {
+                return url.search(/https?\:\/\/.+/) === 0;
+            }
+            return false;
         });
         
         // Try to download referenced files
@@ -1402,7 +1409,11 @@ it("Retrieval of referenced files on an open endpoint", async () => {
 
     // Find those that contain absolute URLs
     const resources = String(resp.body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
-        return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
+        const url = x.content[0].attachment.url;
+        if (url) {
+            return url.search(/https?\:\/\/.+/) === 0;
+        }
+        return false;
     });
 
     // Try to download referenced files
@@ -1429,7 +1440,11 @@ it("Retrieval of referenced files on protected endpoint", async () => {
 
     // Find those that contain absolute URLs
     const resources = String(body).trim().split("\n").map(l => JSON.parse(l)).filter(x => {
-        return x.content[0].attachment.url.search(/https?\:\/\/.+/) === 0;
+        const url = x.content[0].attachment.url;
+        if (url) {
+            return url.search(/https?\:\/\/.+/) === 0;
+        }
+        return false;
     });
 
     // Try to download referenced files
