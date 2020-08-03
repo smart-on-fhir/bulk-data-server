@@ -114,7 +114,7 @@ module.exports = async (req, res) => {
     }
 
     // Get the authentication token header
-    let header = jwt.decode(req.body.client_assertion, { complete: true }).header;
+    let header = jwt.decode(req.body.client_assertion, { complete: true, json: true }).header;
 
     // Get the "kid" from the authentication token header
     let kid = header.kid;
@@ -227,11 +227,15 @@ module.exports = async (req, res) => {
     .then(publicKeys => {
 
         let success = publicKeys.some(key => {
+            /**
+             * @type {import("jsonwebtoken").Algorithm}
+             */
+            const algorithm = key.alg;
             try {
                 jwt.verify(
                     req.body.client_assertion,
                     jwkToPem(key),
-                    { algorithm: key.alg }
+                    { algorithms: [algorithm] }
                 );
                 return true;
             } catch(ex) {

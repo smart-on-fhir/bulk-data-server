@@ -154,20 +154,19 @@ async function parseJSON(json)
  * 2. Ensures async result
  * 3. Catches errors and rejects the promise
  * @param {Object} json The JSON input object
- * @param {Function} replacer The JSON.stringify replacer function
- * @param {Number|String} indentation The The JSON.stringify indentation
+ * @param {Number|String} [indentation] The The JSON.stringify indentation
  * @return {Promise<String>} Promises a string
  * @todo Investigate if we can drop the try/catch block and rely on the built-in
  *       error catching.
  * @param json 
  */
-async function stringifyJSON(json, replacer = null, indentation = null)
+async function stringifyJSON(json, indentation)
 {
     return new Promise((resolve, reject) => {
         setImmediate(() => {
             let out;
             try {
-                out = JSON.stringify(json, replacer, indentation);
+                out = JSON.stringify(json, null, indentation);
             }
             catch (error) {
                 return reject(error);
@@ -206,7 +205,7 @@ async function forEachFile(options, cb)
 
         walker.on("errors", (root, nodeStatsArray, next) => {
             reject(
-                new Error("Error: " + nodeStatsArray.error + root + " - ")
+                new Error("Error: " + nodeStatsArray.map(e => e.error).join(";") + ";" + root + " - ")
             );
             next();
         });
@@ -262,6 +261,7 @@ function checkAuth(req, res, next)
                 `${e.name || "Error"}: ${e.message || "Invalid token"}`
             );
         }
+        // @ts-ignore
         let error = token.err || token.sim_error || token.auth_error;
         if (error) {
             return res.status(401).send(error);
@@ -322,7 +322,7 @@ function replyWithOAuthError(res, name, options = {})
  * whatever is supplied in the rest of the arguments. If no argument is supplied
  * the "%s" token is left as is.
  * @param {String} s The string to format
- * @param {*} ... The rest of the arguments are used for the replacements
+ * @param {*[]} [rest] The rest of the arguments are used for the replacements
  * @return {String}
  */
 function printf(s)
@@ -355,7 +355,7 @@ function parseToken(token)
     // Token header ------------------------------------------------------------
     let header;
     try {
-        header = JSON.parse(new Buffer(token[0], "base64"));
+        header = JSON.parse(Buffer.from(token[0], "base64").toString("utf8"));
     } catch (ex) {
         throw new Error("Invalid token structure. Cannot parse the token header.");
     }
@@ -368,7 +368,7 @@ function parseToken(token)
 
     // kid (required) ----------------------------------------------------------
     // The identifier of the key-pair used to sign this JWT. This identifier
-    // MUST be unique within the backend services's JWK Set.
+    // MUST be unique within the backend service's JWK Set.
     if (!header.kid) {
         throw new Error("Invalid JWT token header. Missing 'kid' property.");
     }
@@ -386,7 +386,7 @@ function parseToken(token)
     // Token body --------------------------------------------------------------
     let body;
     try {
-        body = JSON.parse(new Buffer(token[1], "base64"));
+        body = JSON.parse(Buffer.from(token[1], "base64").toString("utf8"));
     } catch (ex) {
         throw new Error("Invalid token structure. Cannot parse the token body.");
     }

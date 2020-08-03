@@ -424,7 +424,7 @@ function handleFileDownload(req, res) {
 
     if (args.fileError) {
         return res.status(400).end(JSON.stringify(
-            Lib.createOperationOutcome(args.fileError, { httpCode: 400 })
+            Lib.createOperationOutcome(args.fileError)
         ));
     }
 

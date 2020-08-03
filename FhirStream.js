@@ -55,7 +55,7 @@ class FhirStream extends Readable
         let delay = config.throttle || 0;
         if (!delay) {
             this._read = () => {
-                this.timer = setImmediate(this.getNextRow);
+                this.timer = setTimeout(this.getNextRow, 0);
             };
         }
         else {
@@ -74,10 +74,8 @@ class FhirStream extends Readable
     {
         if (this.timer) {
             let delay = config.throttle || 0;
-            if (delay) {
+            if (delay && this.timer) {
                 clearTimeout(this.timer);
-            } else {
-                clearImmediate(this.timer);
             }
         }
         callback && callback(err);

@@ -96,7 +96,7 @@ function buildGroupUrl(groupId, params) {
     return buildBulkUrl(["Group", groupId, "$export"], params);
 }
 
-function expectErrorOutcome(res, { message, code } = {}, done) {
+function expectErrorOutcome(res, { message = "", code = 0 } = {}, done) {
     if (code && res.statusCode !== code) {
         return done(`Expected ${code} statusCode but received ${res.statusCode}`);
     }
@@ -134,7 +134,7 @@ function findKeyPair(keys) {
         if (!Array.isArray(key.key_ops)) return;
         if (key.key_ops.indexOf("sign") == -1) return;
 
-        publicKey = keys.find(k => {
+        const publicKey = keys.find(k => {
             return (
                 k.kid === key.kid &&
                 k.alg === key.alg &&
@@ -156,8 +156,9 @@ function findKeyPair(keys) {
  * immediately authorizes with that client and returns a promise that gets
  * resolved with the access token response.
  * @param {Object} options
- * @param {Number} options.accessTokenLifeTime
- * @param {String} options.simulatedError
+ * @param {import("jsonwebtoken").Algorithm} [options.alg]
+ * @param {any} [options.err]
+ * @param {any} [options.dur]
  * @returns {Promise<Object>}
  */
 function authorize(options = {}) {

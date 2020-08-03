@@ -1,14 +1,15 @@
-const request   = require("request");
-const base64url = require("base64-url");
-const moment    = require("moment");
-const assert    = require("assert");
-const crypto    = require("crypto");
-const jwkToPem  = require("jwk-to-pem");
-const jwt       = require("jsonwebtoken");
-const express   = require("express");
-const lib       = require("./lib");
+const request    = require("request");
+const base64url  = require("base64-url");
+const moment     = require("moment");
+const assert     = require("assert");
+const crypto     = require("crypto");
+const jwkToPem   = require("jwk-to-pem");
+const jwt        = require("jsonwebtoken");
+const express    = require("express");
+const { expect } = require("chai");
+const lib        = require("./lib");
 const { server } = require("../index");
-const config    = require("../config");
+const config     = require("../config");
 
 
 before(next => {
@@ -51,11 +52,11 @@ async function rejects(block, error, message) {
             }
             else if (typeof error == "object") {
                 for (let key in error) {
-                    assert.ok(
-                        error[key] === ex[key],
+                    expect(error[key]).to.equal(
+                        ex[key],
                         `Expected the rejection error to have a "${key}" ` +
                         `property equal to '${error[key]}'`
-                    )
+                    );
                 }
             }
         }
@@ -254,8 +255,8 @@ describe("JWKS Auth", () => {
         
         // Make some checks
         .then(resp => {
-            assert.ok(state.RS384AccessToken, "RS384AccessToken should exist");
-            assert.ok(state.ES384AccessToken, "ES384AccessToken should exist");
+            expect(!!state.RS384AccessToken).to.equal(true, "RS384AccessToken should exist");
+            expect(!!state.ES384AccessToken).to.equal(true, "ES384AccessToken should exist");
         });
 
     });
@@ -310,8 +311,8 @@ describe("JWKS Auth", () => {
         
         // Make some checks
         .then(resp => {
-            assert.ok(state.RS384AccessToken, "RS384AccessToken should exist");
-            assert.ok(state.ES384AccessToken, "ES384AccessToken should exist");
+            expect(!!state.RS384AccessToken).to.equal(true, "RS384AccessToken should exist");
+            expect(!!state.ES384AccessToken).to.equal(true, "ES384AccessToken should exist");
         })
 
         // Make sure we stop the temporary server
@@ -448,14 +449,14 @@ describe("Bulk Data Kick-off Request", () => {
                     }
                 })
                 .then(() => lib.requestPromise({
-                    uri: meta.buildUrl() + "?_outputFormat=application%2Ffhir%2Bndjson",
+                    uri: meta.buildUrl() + "?_outputFormat=application" + "%2F" + "fhir" + "%2B" + "ndjson",
                     headers: {
                         Accept: "application/fhir+json",
                         Prefer: "respond-async"
                     }
                 }))
                 .then(() => lib.requestPromise({
-                    uri: meta.buildUrl() + "?_outputFormat=application%2Fndjson",
+                    uri: meta.buildUrl() + "?_outputFormat=application" + "%2F" + "ndjson",
                     headers: {
                         Accept: "application/fhir+json",
                         Prefer: "respond-async"
@@ -688,8 +689,8 @@ describe("Canceling", () => {
         })
         .then(() => lib.requestPromise({ url: statusUrl, method: "DELETE" }))
         .then(res => {
-            expect.ok(res.body.issue[0].diagnostics == "The procedure was canceled")
-            expect.ok(res.statusCode == 202)
+            expect(res.body.issue[0].diagnostics).to.equal("The procedure was canceled");
+            expect(res.statusCode).to.equal(202);
         })
         .then(() => done())
         .catch(({ error }) => done(error))
@@ -713,8 +714,8 @@ describe("Canceling", () => {
         .then(() => lib.requestPromise({ url: statusUrl, method: "DELETE" }))
         .then(() => lib.requestPromise({ url: statusUrl, method: "DELETE" }))
         .then(res => {
-            expect.ok(res.body.issue[0].diagnostics == "The procedure was already canceled by the client")
-            expect.ok(res.statusCode == 410)
+            expect(res.body.issue[0].diagnostics).to.equal("The procedure was already canceled by the client");
+            expect(res.statusCode).to.equal(410);
         })
         .catch(() => done())
     });
@@ -722,8 +723,8 @@ describe("Canceling", () => {
     it ("returns an error if trying to cancel unknown request", done => {
         lib.requestPromise({ url: lib.buildProgressUrl(), method: "DELETE" })
         .then(res => {
-            expect.ok(res.body.issue[0].diagnostics == "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled")
-            expect.ok(res.statusCode == 410)
+            expect(res.body.issue[0].diagnostics).to.equal("Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled")
+            expect(res.statusCode).to.equal(410)
         })
         .catch(() => done())
     });
@@ -960,14 +961,14 @@ describe("Progress Updates", () => {
         })
         .then(res => {
             // console.log(res.body.error)
-            assert.ok(res.body.error.length === 2);
-            assert.ok(res.body.error[0].type === "OperationOutcome");
-            assert.ok(res.body.error[0].url.split("/").pop() === "Xz.error.ndjson");
-            assert.ok(res.body.error[1].type === "OperationOutcome");
-            assert.ok(res.body.error[1].url.split("/").pop() === "Yz.error.ndjson");
+            expect(res.body.error.length).to.equal(2);
+            expect(res.body.error[0].type).to.equal("OperationOutcome");
+            expect(res.body.error[0].url.split("/").pop()).to.equal("Xz.error.ndjson");
+            expect(res.body.error[1].type).to.equal("OperationOutcome");
+            expect(res.body.error[1].url.split("/").pop()).to.equal("Yz.error.ndjson");
         })
         .catch(({ outcome }) => {
-            assert.ok(outcome.issue[0].diagnostics === 'The requested resource type "Xz" is not available on this server');
+            expect(outcome.issue[0].diagnostics).to.equal('The requested resource type "Xz" is not available on this server');
         })
         .then(() => done(), done);
     })
@@ -1010,7 +1011,7 @@ describe("File Downloading", function() {
         })
         .on("data", chunk => {
             try {
-                JSON.parse(chunk);
+                JSON.parse(String(chunk));
             } catch (e) {
                 errors.push(String(e));
             }
@@ -1747,6 +1748,7 @@ describe("Error responses", () => {
         ]
     };
 
+    // @ts-ignore
     const privateKey  = jwkToPem(jwks.keys[1], { private: true });
     const tokenUrl    = lib.buildUrl(["auth", "token"]);
     const registerUrl = lib.buildUrl(["auth", "register"]);
@@ -1864,10 +1866,10 @@ describe("Error responses", () => {
                     client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
                 }
             }, null, 400).catch(result => {
-                assert.equal(result.response.body.error, "invalid_request");
-                assert.ok(
-                    result.response.body.error_description.indexOf("Invalid registration token: ") === 0
-                );
+                expect(result.response.body.error).to.equal("invalid_request");
+                expect(
+                    result.response.body.error_description.indexOf("Invalid registration token: ")
+                ).to.equal(0);
             });   
         });
 
@@ -1882,14 +1884,19 @@ describe("Error responses", () => {
                     client_assertion     : "whatever"
                 }
             }, null, 400).catch(result => {
-                assert.equal(result.response.body.error, "invalid_request");
-                assert.ok(
-                    result.response.body.error_description.indexOf("Invalid registration token: ") === 0
-                );
+                expect(result.response.body.error).to.equal("invalid_request");
+                expect(
+                    result.response.body.error_description.indexOf("Invalid registration token: ")
+                ).to.equal(0);
             });
         });
 
         it("returns 400 invalid_request if the token does not contain valid client_id (sub) token", () => {
+            /**
+             * @type {jwt.Algorithm}
+             */
+            // @ts-ignore
+            const algorithm = jwks.keys[1].alg;
             return assertError({
                 method: "POST",
                 json  : true,
@@ -1898,7 +1905,7 @@ describe("Error responses", () => {
                     grant_type           : "client_credentials",
                     client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                     client_assertion     : jwt.sign({ a: 1 }, privateKey, {
-                        algorithm: jwks.keys[1].alg,
+                        algorithm,
                         keyid    : jwks.keys[1].kid,
                         header: {
                             kty: jwks.keys[1].kty
@@ -1906,12 +1913,11 @@ describe("Error responses", () => {
                     })
                 }
             }, null, 400).catch(result => {
-                assert.equal(result.response.body.error, "invalid_request");
+                expect(result.response.body.error).to.equal("invalid_request");
                 // console.log(result.response.body.error_description)
-                assert.ok(
-                    result.response.body.error_description.indexOf("Invalid client details token: ") === 0,
-                    "The error description must begin with 'Invalid client details token: '"
-                );
+                expect(
+                    result.response.body.error_description.indexOf("Invalid client details token: ")
+                ).to.equal(0, "The error description must begin with 'Invalid client details token: '");
             });
         });
 
@@ -1933,8 +1939,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid
                 });
 
@@ -1972,8 +1983,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid
                 });
 
@@ -1988,12 +2004,11 @@ describe("Error responses", () => {
                         client_assertion     : signed
                     }
                 }, null, 400).catch(result => {
-                    assert.equal(result.response.body.error, "invalid_grant");
+                    expect(result.response.body.error).to.equal("invalid_grant");
                     // console.log(result.response.body.error_description)
-                    assert.ok(
-                        result.response.body.error_description.indexOf("Invalid token 'aud' value. Must be ") === 0,
-                        `The error description must begin with 'Invalid token 'aud' value. Must be `
-                    );
+                    expect(
+                        result.response.body.error_description.indexOf("Invalid token 'aud' value. Must be ")
+                    ).to.equal(0, `The error description must begin with 'Invalid token 'aud' value. Must be `);
                 })
             })
         });
@@ -2015,8 +2030,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid
                 });
 
@@ -2055,8 +2075,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid
                 });
 
@@ -2094,8 +2119,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid
                 });
 
@@ -2134,8 +2164,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid
                 });
 
@@ -2173,8 +2208,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid,
                     header: {
                         jku: "whatever"
@@ -2266,8 +2306,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid
                 });
 
@@ -2297,8 +2342,13 @@ describe("Error responses", () => {
                 exp: Date.now()/1000 + 300, // 5 min
                 jti: crypto.randomBytes(32).toString("hex")
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid
                 });
 
@@ -2339,8 +2389,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid,
                     header: {
                         kty: jwks.keys[1].kty
@@ -2399,8 +2454,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid,
                     header: {
                         kty: jwks.keys[1].kty
@@ -2442,8 +2502,13 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
+                /**
+                 * @type {jwt.Algorithm}
+                 */
+                // @ts-ignore
+                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
-                    algorithm: jwks.keys[1].alg,
+                    algorithm,
                     keyid    : jwks.keys[1].kid,
                     header: {
                         kty: jwks.keys[1].kty
