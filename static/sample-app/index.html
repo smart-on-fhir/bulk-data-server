@@ -231,6 +231,19 @@
                 </div>
                 <div class="row">
                     <div class="col-xs-12">
+                        <label class="text-success" for="_elements">
+                            <i class="fa fa-filter" aria-hidden="true"></i> FHIR Elements
+                        </label>
+                        <input type="text" class="form-control" id="_elements">
+                        <p class="small text-muted help-block">
+                            Coma-separated list of FHIR elements to be included. Example: <code>meta,Patient.birthDate</code>.
+                            Some required elements are always included. Leave empty to include everything.
+                        </p>
+                        <br/>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-xs-12">
                         <label class="text-success">
                             <i class="fa fa-link" aria-hidden="true"></i> Download Link
                         </label>
@@ -381,6 +394,7 @@
                 var params     = [];
                 var group      = $("#group").val();
                 var start      = $("#start").val();
+                var _elements  = $("#_elements").val();
                 var dur        = (PARAMS.dur || 10);
                 var exportType = $(':radio[name="export-type"]:checked').val();
 
@@ -410,7 +424,11 @@
                 }
 
                 if (type.length && type.length != allLength) {
-                    params.push("_type=" + type.join(","))
+                    params.push("_type=" + type.join(","));
+                }
+
+                if (_elements) {
+                    params.push("_elements=" + _elements);
                 }
 
                 if (params.length) {
@@ -576,6 +594,7 @@
                     buildStartSelector();
                     
                     $(document).on("change", "select, :checkbox, :radio", buildDownloadUrl);
+                    $(document).on("input change", "#_elements", buildDownloadUrl);
                     
                     $("form").on("submit", function(e) {
                         e.preventDefault();
