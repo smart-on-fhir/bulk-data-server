@@ -138,6 +138,24 @@ async function handleRequest(req, res, groupId = null, system=false) {
         return Lib.outcomes.invalidResourceType(res, badParam);
     }
 
+    // Validate the _elements parameter
+    const _elements = Lib.makeArray(req.query._elements || "").map(t => String(t || "").trim()).filter(Boolean);
+    for (let element of _elements) {
+        const parts = element.split(/\s*\.\s*/);
+        if (parts.length > 2) {
+            return Lib.outcomes.invalidElements(res, element);
+        }
+        if (!element.match(/^[a-zA-Z]+(\.[a-zA-Z]+)?$/)) {
+            return Lib.outcomes.invalidElements(res, element);
+        }
+        if (parts.length == 2) {
+            const badParam = availableTypes.indexOf(parts[0]) == -1;
+            if (badParam) {
+                return Lib.outcomes.invalidElementsResource(res, parts[0]);
+            }
+        }
+    }
+
     // Now we need to count all the requested resources in the database.
     // This is to avoid situations where we make the clients wait certain
     // amount of time, jut to tell them that there is nothing to download.
@@ -173,7 +191,8 @@ async function handleRequest(req, res, groupId = null, system=false) {
             secure: !!req.headers.authorization,
             outputFormat: ext,
             group: groupId,
-            request: proto + "://" + req.headers.host + req.originalUrl
+            request: proto + "://" + req.headers.host + req.originalUrl,
+            _elements
         }
     );
 
@@ -316,9 +335,9 @@ async function handleStatus(req, res) {
                     delete params.request;
                 }
 
-                if ("secure" in params) {
-                    delete params.request;
-                }
+                // if ("secure" in params) {
+                //     delete params.secure;
+                // }
 
                 linksLen = linksArr.push({
                     type: row.fhir_type,

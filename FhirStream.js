@@ -213,15 +213,14 @@ class FhirStream extends Readable
             l = prefix.push(`o${this.overflow}`);
         }
         if (l) {
-            prefix = prefix.join("-");
-            row.resource_json = row.resource_json.replace(RE_UID, `"id":"${prefix}-` + '$1' + '"');
+            row.resource_json = row.resource_json.replace(RE_UID, `"id":"${prefix.join("-")}-` + '$1' + '"');
         }
+
+        row.resource_json = JSON.parse(row.resource_json);
 
         // For tests also include the modified_date
         if (this.extended) {
-            row.resource_json = JSON.parse(row.resource_json);
             row.resource_json.__modified_date = row.modified_date
-            row.resource_json = JSON.stringify(row.resource_json);
         }
         
         this.push(row);

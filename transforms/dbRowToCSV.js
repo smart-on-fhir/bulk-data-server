@@ -24,7 +24,7 @@ module.exports = function() {
         writableObjectMode: true,
         readableObjectMode: true,
         transform(row, _encoding, next) {
-            const obj = JSON.parse(row.resource_json)
+            const obj = row.resource_json;
             let keys = Object.keys(obj);
             if (!_hasHeader) {
                 this.push(keys.map(csvEscape).join(",") + "\r\n");

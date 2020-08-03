@@ -94,6 +94,16 @@ module.exports = {
         "invalid_scope": "Invalid scope"
     },
 
+    // When the "_elements" parameter is used the values are concatenated to
+    // this array to ensure that required elements are always included.
+    // Can contain:
+    // - [element] to match against any resourceType
+    // - [ResourceType].[element] to mach within a specified resource type
+    requiredElements: [
+        "resourceType",
+        "id"
+    ],
+
     // IMPORT ------------------------------------------------------------------
 
     // Maximum NDJSON file line length (as number of characters)

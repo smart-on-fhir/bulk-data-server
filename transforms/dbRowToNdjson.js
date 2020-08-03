@@ -6,7 +6,7 @@ module.exports = function() {
         readableObjectMode: true,
         transform(row, _encoding, next) {
             try {
-                this.push(row.resource_json + "\n");
+                this.push(JSON.stringify(row.resource_json) + "\n");
                 setImmediate(next);
             } catch (error) {
                 setImmediate(next, error);

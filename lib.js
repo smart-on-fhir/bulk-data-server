@@ -557,6 +557,24 @@ function getAvailableResourceTypes(fhirVersion) {
         .then(rows => rows.map(row => row.fhir_type));
 }
 
+function tagResource(resource, code, system = "https://smarthealthit.org/tags")
+{
+    if (!resource.meta) {
+        resource.meta = {};
+    }
+
+    if (!Array.isArray(resource.meta.tag)) {
+        resource.meta.tag = [];
+    }
+
+    const tag = resource.meta.tag.find(x => x.system === system);
+    if (tag) {
+        tag.code = code;
+    } else {
+        resource.meta.tag.push({ system, code });
+    }
+}
+
 // Errors as operationOutcome responses
 const outcomes = {
     fileExpired: res => operationOutcome(
@@ -665,6 +683,16 @@ const outcomes = {
         res,
         `Your request has been accepted. You can check it's status at "${location}"`,
         { httpCode: 202, severity: "information" }
+    ),
+    invalidElements: (res, found) => operationOutcome(
+        res,
+        `The _elements parameter should contain entries of the form "[element]" or "[ResourceType].[element]". Found "${found}".`,
+        { httpCode: 400 }
+    ),
+    invalidElementsResource: (res, type) => operationOutcome(
+        res,
+        `The _elements parameter includes a resource type "${type}" which is not available on this server.`,
+        { httpCode: 400 }
     )
 };
 
@@ -698,5 +726,6 @@ module.exports = {
     requireFhirJsonAcceptHeader,
     requireJsonContentTypeHeader,
     getBaseUrl,
-    getAvailableResourceTypes
+    getAvailableResourceTypes,
+    tagResource
 };
