@@ -72,7 +72,8 @@ module.exports = (req, res) => {
     }
 
     // Validate authenticationToken.aud (must equal this url) ------------------
-    let tokenUrl = config.baseUrl + req.url;
+    //let tokenUrl = config.baseUrl + req.url;
+    let tokenUrl = req.protocol + "://" + req.headers.host + req.originalUrl;
 
     if (tokenUrl.replace(/^https?/, "") !== authenticationToken.aud.replace(/^https?/, "")) {
         return Lib.replyWithOAuthError(res, "invalid_grant", {

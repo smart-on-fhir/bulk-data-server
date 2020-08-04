@@ -22,7 +22,7 @@ if (process.env.NODE_ENV != "test") {
 }
 
 // HTTP to HTTPS redirect (this is Heroku-specific!)
-router.use((req, res, next) => {
+/*router.use((req, res, next) => {
     let proto = req.headers["x-forwarded-proto"];
     let host  = req.headers.host;
     if (proto && (`${proto}://${host}` !== config.baseUrl)) { 
@@ -30,7 +30,7 @@ router.use((req, res, next) => {
     }
     console.log("Hitting this part!");
     next();
-});
+});*/
 
 // backend services authorization
 router.post("/auth/token", bodyParser.urlencoded({ extended: false }), tokenHandler);
