@@ -565,7 +565,7 @@ router.post("/\\$import", bulkImporter.createImportKickOffHandler());
 // =============================================================================
 
 // host dummy conformance statement
-router.get("/metadata", require("./fhir/metadata"));
+router.get("/metadata", extractSim, require("./fhir/metadata"));
 
 // list all the groups with their IDs and the number of patients included
 router.get("/Group", require("./fhir/group"));
