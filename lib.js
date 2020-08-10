@@ -662,7 +662,17 @@ const outcomes = {
     cancelGone: res => operationOutcome(
         res,
         "The procedure was already canceled by the client",
-        { httpCode: 410 /* Gone */ }
+        { httpCode: 404 }
+    ),
+    cancelCompleted: res => operationOutcome(
+        res,
+        "The export was already completed",
+        { httpCode: 404 }
+    ),
+    cancelDeleted: res => operationOutcome(
+        res,
+        "The exported resources have been marked for deletion",
+        { httpCode: 404 }
     ),
     cancelNotFound: res => operationOutcome(
         res,
@@ -693,6 +703,16 @@ const outcomes = {
         res,
         `The _elements parameter includes a resource type "${type}" which is not available on this server.`,
         { httpCode: 400 }
+    ),
+    exportDeleted: res => operationOutcome(
+        res,
+        "The exported resources have been deleted",
+        { httpCode: 404 }
+    ),
+    exportNotCompleted: res => operationOutcome(
+        res,
+        "The export is not completed yet",
+        { httpCode: 404 }
     )
 };
 

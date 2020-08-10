@@ -20,6 +20,7 @@ const router = express.Router({ mergeParams: true });
 
 const STATE_STARTED  = 2;
 const STATE_CANCELED = 4;
+const STATE_EXPORTED = 8;
 
 // Start helper express middlewares --------------------------------------------
 function extractSim(req, res, next) {
@@ -244,6 +245,21 @@ function handleGroup(req, res) {
     handleRequest(req, res, req.params.groupId);
 }
 
+/**
+ * After a bulk data request has been started, a client MAY send a DELETE
+ * request to the URL provided in the Content-Location header to cancel the
+ * request.
+ * 
+ * If the request has been completed, a server MAY use the request as a signal
+ * that a client is done retrieving files and that it is safe for the sever to
+ * remove those from storage.
+ * 
+ * Following the delete request, when subsequent requests are made to the
+ * polling location, the server SHALL return a 404 error and an associated FHIR
+ * OperationOutcome in JSON format.
+ * @param {*} req 
+ * @param {*} res 
+ */
 function cancelFlow(req, res) {
     if (JOBS[req.sim.id] === STATE_STARTED) {
         JOBS[req.sim.id] = STATE_CANCELED;
@@ -251,7 +267,13 @@ function cancelFlow(req, res) {
     }
     
     if (JOBS[req.sim.id] === STATE_CANCELED) {
+        delete JOBS[req.sim.id];
         return Lib.outcomes.cancelGone(res);
+    }
+
+    if (JOBS[req.sim.id] === STATE_EXPORTED) {
+        delete JOBS[req.sim.id];
+        return Lib.outcomes.cancelDeleted(res);
     }
 
     return Lib.outcomes.cancelNotFound(res);
@@ -263,6 +285,10 @@ async function handleStatus(req, res) {
     
     if (JOBS[sim.id] === STATE_CANCELED) {
         return Lib.outcomes.canceled(res);
+    }
+
+    if (JOBS[sim.id] === STATE_EXPORTED) {
+        return Lib.outcomes.cancelCompleted(res);
     }
 
     // ensure requestStart param is present
@@ -283,9 +309,7 @@ async function handleStatus(req, res) {
         }).status(202).end();
     }
 
-    if (JOBS.hasOwnProperty(sim.id)) {
-        delete JOBS[sim.id];
-    }
+    JOBS[sim.id] = STATE_EXPORTED;
 
     // Get the count multiplier
     let multiplier = parseInt(String(sim.m || "1"), 10);
@@ -398,7 +422,16 @@ async function handleStatus(req, res) {
 };
 
 function handleFileDownload(req, res) {
-    const args         = req.sim;
+    const args = req.sim;
+
+    if (!JOBS.hasOwnProperty(args.id) || JOBS[args.id] === STATE_CANCELED) {
+        return Lib.outcomes.exportDeleted(res);
+    }
+
+    if (JOBS[args.id] !== STATE_EXPORTED) {        
+        return Lib.outcomes.exportNotCompleted(res);
+    }
+
     // const accept       = String(req.headers.accept || "");
     const outputFormat = args.outputFormat || "ndjson";
 
