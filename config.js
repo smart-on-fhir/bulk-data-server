@@ -99,9 +99,112 @@ module.exports = {
     // Can contain:
     // - [element] to match against any resourceType
     // - [ResourceType].[element] to mach within a specified resource type
+    // Note that items below are based on US Core or Argonaut R4 Profiles
     requiredElements: [
         "resourceType",
-        "id"
+        "id",
+
+        "AllergyIntolerance.patient",
+        "AllergyIntolerance.substance",
+        "AllergyIntolerance.status",
+
+        "CarePlan.text",
+        "CarePlan.subject",
+        "CarePlan.status",
+        "CarePlan.category",
+
+        "CareTeam.subject",
+        "CareTeam.status",
+        "CareTeam.category",
+
+        // Claim
+
+        "Condition.patient",
+        "Condition.code",
+        "Condition.category",
+        "Condition.clinicalStatus",
+        "Condition.verificationStatus",
+
+        "Device.type",
+        "Device.udicarrier",
+        "Device.patient",
+
+        "DiagnosticReport.status",
+        "DiagnosticReport.category",
+        "DiagnosticReport.code",
+        "DiagnosticReport.subject",
+        "DiagnosticReport.effectiveDateTime",
+        "DiagnosticReport.effectivePeriod",
+        "DiagnosticReport.issued",
+        "DiagnosticReport.performer",
+        "DiagnosticReport.result",
+        "DiagnosticReport.image",
+        "DiagnosticReport.presentedForm",
+
+        "DocumentReference.status",
+        "DocumentReference.type",
+        "DocumentReference.category",
+        "DocumentReference.subject",
+        "DocumentReference.content",
+
+        "Encounter.status",
+        "Encounter.class",
+        "Encounter.type",
+        "Encounter.subject",
+
+        // ExplanationOfBenefit
+        // Group
+        // ImagingStudy
+        
+        "MedicationRequest.status",
+        "MedicationRequest.intent",
+        "MedicationRequest.medicationCodeableConcept",
+        "MedicationRequest.medicationReference",
+        "MedicationRequest.subject",
+        "MedicationRequest.authoredOn",
+        "MedicationRequest.requester",
+
+        "Organization.active",
+        "Organization.name",
+
+        "Practitioner.identifier",
+        "Practitioner.name",
+
+        "Observation.status",
+        "Observation.category",
+        "Observation.code",
+        "Observation.subject",
+        "Observation.valueQuantity",
+        "Observation.valueCodeableConcept",
+        "Observation.valueString",
+        "Observation.valueRange",
+        "Observation.valueRatio",
+        "Observation.valueSampledData",
+        "Observation.valueAttachment",
+        "Observation.valueTime",
+        "Observation.valueDateTime",
+        "Observation.valuePeriod",
+        "Observation.DataAbsentReason",
+        "Observation.effectiveDateTime",
+        "Observation.effectivePeriod",
+        "Observation.referenceRange",
+
+        "Immunization.status",
+        "Immunization.date",
+        "Immunization.vaccineCode",
+        "Immunization.patient",
+        "Immunization.wasNotGiven",
+        "Immunization.reported",
+
+        "Patient.identifier",
+        "Patient.name",
+        "Patient.gender",
+
+        "Procedure.patient",
+        "Procedure.status",
+        "Procedure.code",
+        "Procedure.performedDateTime",
+        "Procedure.performedPeriod",
     ],
 
     // IMPORT ------------------------------------------------------------------
