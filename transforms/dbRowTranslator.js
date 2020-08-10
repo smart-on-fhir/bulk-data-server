@@ -51,7 +51,7 @@ function filterElements(json, elements = [])
         }
     }
 
-    lib.tagResource(out, "SUBSETTED");
+    lib.tagResource(out, "SUBSETTED", "http://terminology.hl7.org/CodeSystem/v3-ObservationValue");
 
     return out;
 }
