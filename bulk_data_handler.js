@@ -90,54 +90,51 @@ const exportTypes = {
     }
 };
 
-/**
- * Handles the first request of the flow (the one that comes from
- * `/$export` or `/Patient/$export` or `/group/{groupId}/$export`)
- * @param {Object} req 
- * @param {Object} res 
- * @param {Number} groupId 
- */
-async function handleRequest(req, res, groupId = null, system=false) {
 
-    // Validate the accept header
-    let accept = req.headers.accept;
-    if (!accept || accept == "*/*") {
-        accept = "application/fhir+ndjson"
-    }
-    if (accept != "application/fhir+ndjson" &&
-        accept != "application/fhir+json") {
-        return Lib.outcomes.invalidAccept(res, accept);
-    }
-
-    let ext = "ndjson";
-
-    // validate the output-format parameter
-    let outputFormat = req.query._outputFormat || req.query['output-format']
+function getOutputFormatParameter(req, res, next)
+{
+    let outputFormat = getExportParam(req, "_outputFormat");
     if (outputFormat) {
-        ext = supportedFormats[outputFormat];
-        if (!ext) {
+        if (!supportedFormats[outputFormat]) {
             return Lib.outcomes.invalidOutputFormat(res, outputFormat);
         }
+        req.exportParams._outputFormat = outputFormat;
     }
+    next();
+}
 
-    // Validate the "_since" parameter
-    if (req.query._since) {
+function getSinceParameter(req, res, next)
+{
+    let since = getExportParam(req, "_since");
+    if (since) {
         try {
-            Lib.fhirDateTime(req.query._since, true);
+            Lib.fhirDateTime(since, true);
+            req.exportParams._since = since;
         } catch (ex) {
             console.error(ex);
-            return Lib.outcomes.invalidSinceParameter(res, req.query._since);
+            return Lib.outcomes.invalidSinceParameter(res, since);
         }
     }
+    next();
+}
 
-    // Validate the _type parameter;
+async function getTypeParameter(req, res, next)
+{
     const requestedTypes = Lib.makeArray(req.query._type || "").map(t => String(t || "").trim()).filter(Boolean);
-    const fhirVersion = +(req.sim.stu || 3);
+    const fhirVersion    = +(req.sim.stu || 3);
     const availableTypes = await Lib.getAvailableResourceTypes(fhirVersion);
     const badParam = requestedTypes.find(type => availableTypes.indexOf(type) == -1);
     if (badParam) {
         return Lib.outcomes.invalidResourceType(res, badParam);
     }
+    req.exportParams._type = requestedTypes;
+    next();
+}
+
+async function getElementsParameter(req, res, next)
+{
+    const fhirVersion = +(req.sim.stu || 3);
+    const availableTypes = await Lib.getAvailableResourceTypes(fhirVersion);
 
     // Validate the _elements parameter
     const _elements = Lib.makeArray(req.query._elements || "").map(t => String(t || "").trim()).filter(Boolean);
@@ -157,6 +154,72 @@ async function handleRequest(req, res, groupId = null, system=false) {
         }
     }
 
+    req.exportParams._elements = _elements;
+    next();
+}
+
+function getPatientParameter(req, res, next)
+{
+    if (req.method === "POST") {
+        let patient = (req.body.parameter || []).filter(x => x.name === "patient").map(x => x.valueReference);
+        if (patient && patient.length) {
+            req.exportParams.patient = patient;
+        }
+    }
+    else {
+        if ("patient" in req.query) {
+            return Lib.operationOutcome(res, "The patient parameter is only available in POST requests", { httpCode: 400 });
+        }
+    }
+
+    next();
+}
+
+function getExportParam(req, name)
+{
+    if (req.method == "GET") {
+        return req.query[name];
+    }
+    
+    if (req.method == "POST") {
+        const entry = (req.body.parameter || []).find(x => x.name === name);
+        if (entry) {
+            const valueX = Object.keys(entry).find(key => key.indexOf("value") === 0);
+            if (valueX) {
+                return entry[valueX];
+            }
+        }
+    }
+
+    return null;
+}
+
+
+/**
+ * Handles the first request of the flow (the one that comes from
+ * `/$export` or `/Patient/$export` or `/group/{groupId}/$export`)
+ * @param {Object} req 
+ * @param {Object} res 
+ * @param {function} next
+ * @param {Number} groupId 
+ * @param {boolean} system
+ */
+async function handleRequest(req, res, next, groupId = null, system=false) {
+
+    // Validate the accept header
+    let accept = req.headers.accept;
+    if (!accept || accept == "*/*") {
+        accept = "application/fhir+ndjson"
+    }
+    if (accept != "application/fhir+ndjson" &&
+        accept != "application/fhir+json") {
+        return Lib.outcomes.invalidAccept(res, accept);
+    }
+
+    // extension based on _outputFormat
+    let outputFormat = req.exportParams._outputFormat || "application/fhir+ndjson";
+    let ext = supportedFormats[outputFormat];
+    
     // Now we need to count all the requested resources in the database.
     // This is to avoid situations where we make the clients wait certain
     // amount of time, jut to tell them that there is nothing to download.
@@ -167,11 +230,11 @@ async function handleRequest(req, res, groupId = null, system=false) {
         // main set. The _type parameter has no impact on which related
         // resources are included) (e.g. practitioner details for clinical
         // resources). In the absence of this parameter, all types are included.
-        type : req.query._type,
+        type : req.exportParams._type,
 
         // The start date/time means only records since the nominated time. In
         // the absence of the parameter, it means all data ever.
-        start: req.query._since,
+        start: req.exportParams._since,
 
         // The chosen group ID (if any)
         group: groupId,
@@ -193,7 +256,7 @@ async function handleRequest(req, res, groupId = null, system=false) {
             outputFormat: ext,
             group: groupId,
             request: proto + "://" + req.headers.host + req.originalUrl,
-            _elements
+            _elements: req.exportParams._elements
         }
     );
 
@@ -220,8 +283,8 @@ async function handleRequest(req, res, groupId = null, system=false) {
     
 };
 
-function handleSystemLevelExport(req, res) {
-    handleRequest(req, res, null, true);
+function handleSystemLevelExport(req, res, next) {
+    handleRequest(req, res, next, null, true);
 }
 
 /**
@@ -229,8 +292,8 @@ function handleSystemLevelExport(req, res) {
  * Returns all data on all patients that the client’s account has access to,
  * since the starting date time provided.
  */
-function handlePatient(req, res) {
-    handleRequest(req, res);
+function handlePatient(req, res, next) {
+    handleRequest(req, res, next, null, false);
 };
 
 /**
@@ -241,8 +304,8 @@ function handlePatient(req, res) {
  * scope for now – the question of whether we need to do sort this out has
  * been referred to ONC for consideration).
  */
-function handleGroup(req, res) {
-    handleRequest(req, res, req.params.groupId);
+function handleGroup(req, res, next) {
+    handleRequest(req, res, next, req.params.groupId, false);
 }
 
 /**
@@ -493,6 +556,18 @@ function handleFileDownload(req, res) {
     });
 }
 
+function validatePostExportRequest(req, res, next) {
+    
+    // Verify that the POST body contains a Parameters resource
+    const { resourceType } = req.body;
+
+    if (resourceType !== "Parameters") {
+        return Lib.operationOutcome(res, "The POST body should be a Parameters resource", { httpCode: 400 });
+    }
+
+    next();
+}
+
 // =============================================================================
 // BulkData Export Endpoints
 // =============================================================================
@@ -501,7 +576,15 @@ function handleFileDownload(req, res) {
 // Export data from a FHIR server whether or not it is associated with a patient.
 // This supports use cases like backing up a server or exporting terminology
 // data by restricting the resources returned using the _type parameter.
-router.get("/\\$export", [
+router.route("/\\$export")
+.post(express.json({
+    type: [
+        "application/json",
+        "application/fhir+json",
+        "application/json+fhir"
+    ]
+}), validatePostExportRequest)
+.all(
 
     extractSim,
 
@@ -516,12 +599,28 @@ router.get("/\\$export", [
     // Validate auth token if present
     Lib.checkAuth,
 
+    // @ts-ignore
+    (req, res, next) => { req.exportParams = {}; next(); },
+    
+    getOutputFormatParameter,
+    getSinceParameter,
+    getTypeParameter,
+    getElementsParameter,
+    getPatientParameter,
     handleSystemLevelExport
-]);
+);
 
 // /Patient/$export - Returns all data on all patients
 // /$export - does the same on this server because we don't
-router.get("/Patient/\\$export", [
+router.route("/Patient/\\$export")
+.post(express.json({
+    type: [
+        "application/json",
+        "application/fhir+json",
+        "application/json+fhir"
+    ]
+}), validatePostExportRequest)
+.all(
 
     extractSim,
 
@@ -536,11 +635,27 @@ router.get("/Patient/\\$export", [
     // Validate auth token if present
     Lib.checkAuth,
 
+    // @ts-ignore
+    (req, res, next) => { req.exportParams = {}; next(); },
+    
+    getOutputFormatParameter,
+    getSinceParameter,
+    getTypeParameter,
+    getElementsParameter,
+    getPatientParameter,
     handlePatient
-]);
+);
 
 // Provides access to all data on all patients in the nominated group
-router.get("/group/:groupId/\\$export", [
+router.route("/group/:groupId/\\$export")
+.post(express.json({
+    type: [
+        "application/json",
+        "application/fhir+json",
+        "application/json+fhir"
+    ]
+}), validatePostExportRequest)
+.all(
 
     extractSim,
 
@@ -555,8 +670,16 @@ router.get("/group/:groupId/\\$export", [
     // Validate auth token if present
     Lib.checkAuth,
 
+    // @ts-ignore
+    (req, res, next) => { req.exportParams = {}; next(); },
+    
+    getOutputFormatParameter,
+    getSinceParameter,
+    getTypeParameter,
+    getElementsParameter,
+    getPatientParameter,
     handleGroup
-]);
+);
 
 // This is the endPoint that should provide progress information
 router.get("/bulkstatus", [
@@ -611,7 +734,6 @@ router.use("/OperationDefinition", OpDef);
 
 // router.get("/files/", Lib.checkAuth, express.static(__dirname + "/attachments"));
 router.use('/attachments', Lib.checkAuth, express.static(__dirname + "/attachments"));
-
 
 
 module.exports = router;
