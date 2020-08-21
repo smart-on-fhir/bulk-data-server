@@ -1,4 +1,5 @@
 const lib = require("./lib");
+const config = require("./config");
 
 /**
  * Very simple SQL query builder. This is custom builder to ONLY handle the few
@@ -32,6 +33,9 @@ class QueryBuilder {
         // If true the system level resources (like Group) are also considered
         this._systemLevel = false;
 
+        // List of patient IDs
+        this._patients = [];
+
         this.setOptions(options);
     }
 
@@ -57,23 +61,9 @@ class QueryBuilder {
         if (options.systemLevel) {
             this._systemLevel = true;
         }
-    }
-
-    exportOptions() {
-        const out = {};
-        if (this._fhirTypes.length) {
-            out.type = this._fhirTypes.join(",");
+        if (Array.isArray(options.patients)) {
+            this._patients = options.patients;
         }
-        if (this._startTime) {
-            out.start = this._startTime;
-        }
-        if (this._groupId) {
-            out.group = this._groupId;
-        }
-        if (this._systemLevel) {
-            out.systemLevel = true;
-        }
-        return out;
     }
 
     compile() {
@@ -101,12 +91,12 @@ class QueryBuilder {
             }
         }
         // console.log(" ======================== ");
-        // console.log(this._groupId, sql);
+        // console.log(sql, params);
         // console.log(" ======================== ");
         return { sql, params };
     }
 
-    compileCount(countColumnAlias = "row_count") {
+    compileCount(countColumnAlias = "rowCount") {
         let sql = `SELECT "fhir_type", COUNT(*) as "${countColumnAlias}" FROM "data"`;
         let where  = this.compileWhere();
         let params = {};
@@ -142,7 +132,11 @@ class QueryBuilder {
         }
 
         if (!this._systemLevel) {
-            len = where.push(`patient_id IS NOT NULL`);
+            if (this._patients.length) {
+                len = where.push(`patient_id IN("${this._patients.join('", "')}")`);
+            } else {
+                len = where.push(`patient_id IS NOT NULL`);
+            }
         }
 
         if (len) {
@@ -153,15 +147,8 @@ class QueryBuilder {
     }
 
     setFhirTypes(types = []) {
-        const _types = lib.makeArray(types).map(t => String(t || "").trim());
-
-        // validate, sanitize
-        let badParam = _types.find(type => !type.match(/^([A-Z][a-z]+)+$/));
-        if (badParam) {
-            console.error(`Invalid fhirType parameter "${badParam}"`);
-            return;
-        }
-        this._fhirTypes = _types;
+        this._fhirTypes = lib.makeArray(types)
+            .map(t => String(t || "").trim()).filter(Boolean);
     }
 
     setColumns(cols = []) {
@@ -169,38 +156,16 @@ class QueryBuilder {
         this._columns = lib.makeArray(cols).filter(Boolean).map(String);
     }
 
-    addColumn(col) {
-        // TODO: validate, sanitize
-        this._columns.push(col);
-    }
-
     setStartTime(dateTime) {
-        let t;
-        try { 
-            t = lib.fhirDateTime(dateTime);
-        } catch (ex) {
-            console.error(`Invalid dateTime "${dateTime}"`);
-            return;
-        }
-        this._startTime = t;
+        this._startTime = lib.fhirDateTime(dateTime);
     }
 
     setLimit(n) {
-        let _n = parseInt(n + "", 10);
-        if (isNaN(_n) || !isFinite(_n) || _n < 1) {
-            console.error(`Invalid limit parameter "${n}"`);
-            return;
-        }
-        this._limit = _n;
+        this._limit = lib.uInt(n, config.defaultPageSize);
     }
 
     setOffset(n) {
-        let _n = parseInt(n + "", 10);
-        if (isNaN(_n) || !isFinite(_n) || _n < 0) {
-            console.error(`Invalid offset parameter "${n}"`);
-            return;
-        }
-        this._offset = _n;
+        this._offset = lib.uInt(n);
     }
 
     setGroupId(gId) {

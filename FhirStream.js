@@ -12,21 +12,34 @@ const RE_UID = new RegExp(
 
 class FhirStream extends Readable
 {
-    constructor(req, res)
+    /**
+     * 
+     * @param {object} options
+     * @param {number} options.stu
+     * @param {string} options.fileName
+     * @param {number} [options.limit]
+     * @param {number} [options.databaseMultiplier]
+     * @param {number} [options.offset]
+     * @param {boolean} [options.extended]
+     * @param {string} [options.group]
+     * @param {string} [options.since]
+     * @param {boolean} [options.systemLevel]
+     * @param {string[]|null} [options.patients]
+     */
+    constructor(options)
     {
         super({ objectMode: true });
 
-        const args      = req.sim;
+        this.db = getDB(+options.stu);
 
-        this.db = getDB(+(args.stu || 3));
-
-        this.limit      = Lib.uInt(args.limit, config.defaultPageSize);
-        this.multiplier = Lib.uInt(args.m, 1);
-        this.offset     = Lib.uInt(args.offset, 0);
-        this.extended   = Lib.bool(args.extended);
-        this.group      = args.group;
-        this.start      = args._since;
-        this.types      = [req.params.file.split(".")[1]];
+        this.limit      = Lib.uInt(options.limit, config.defaultPageSize);
+        this.multiplier = Lib.uInt(options.databaseMultiplier, 1);
+        this.offset     = Lib.uInt(options.offset, 0);
+        this.extended   = Lib.bool(options.extended);
+        this.patients   = options.patients || null;
+        this.group      = options.group || "";
+        this.start      = options.since || "";
+        this.types      = [options.fileName.split(".")[1]];
         this.params     = {};
         this.cache      = [];
         this.statement  = null;
@@ -43,57 +56,38 @@ class FhirStream extends Readable
             group      : this.group,
             start      : this.start,
             type       : this.types,
-            systemLevel: args.systemLevel,
+            systemLevel: options.systemLevel,
+            patients   : this.patients,
             columns    : this.extended ?
                 ["resource_json", "modified_date"] :
                 ["resource_json"]
         });
 
-        this.handleError = this.handleError.bind(this);
         this.getNextRow  = this.getNextRow .bind(this);
 
-        let delay = config.throttle || 0;
-        if (!delay) {
-            this._read = () => {
-                this.timer = setTimeout(this.getNextRow, 0);
-            };
-        }
-        else {
-            this._read = () => {
-                this.timer = setTimeout(this.getNextRow, delay);
-            };
-        }
-    }
-
-    handleError(error)
-    {
-        setImmediate(() => this.emit('error', error));
+        this._read = () => {
+            this.timer = setTimeout(this.getNextRow, config.throttle || 0);
+        };
     }
 
     _destroy(err, callback)
     {
         if (this.timer) {
-            let delay = config.throttle || 0;
-            if (delay && this.timer) {
-                clearTimeout(this.timer);
-            }
+            clearTimeout(this.timer);
         }
         callback && callback(err);
     }
 
     init()
     {
-        if (!this.initialized) {
-            return this.countRecords()
-                .then(() => this.prepare())
-                .then(() => this.fetch())
-                .then(() => {
-                    this.initialized = true;
-                    return this;
-                })
-                .catch(this.handleError);
-        }
-        return Promise.resolve(this);
+        return this.countRecords()
+            .then(() => this.prepare())
+            .then(() => this.fetch())
+            .then(() => this)
+            .catch(error => {
+                this.emit('error', error);
+                return this;
+            });
     }
 
     /**
@@ -126,9 +120,9 @@ class FhirStream extends Readable
     {
         // SELECT "fhir_type", COUNT(*) as "totalRows" FROM "data"
         // WHERE "fhir_type" IN("Patient") GROUP BY "fhir_type"
-        let { sql, params } = this.builder.compileCount("totalRows");
+        let { sql, params } = this.builder.compileCount();
         return this.db.promise("get", sql, params).then(row => {
-            this.total = row && row.totalRows ? row.totalRows || 0 : 0;
+            this.total = row && row.rowCount ? row.rowCount || 0 : 0;
             this.page = Math.floor(this.offset / this.limit) + 1;
             this.overflow = Math.floor(this.offset/this.total);
             return this;
@@ -179,7 +173,7 @@ class FhirStream extends Readable
             const lastGlobalRecordIndex = Math.min(this.total * this.multiplier, totalPages * this.limit);
 
             // the index of the last record in this file
-            const lastLocalRecordIndex = Math.min(this.page * this.limit, this.total * this.multiplier) - globalRecordIndex;
+            // const lastLocalRecordIndex = Math.min(this.page * this.limit, this.total * this.multiplier) - globalRecordIndex;
             
 
             if (globalRecordIndex < lastGlobalRecordIndex) {
@@ -188,9 +182,9 @@ class FhirStream extends Readable
                     this.params.$_offset = 0;
                 }
                 
-                if (this.params.$_offset >= this.total) {
-                    this.params.$_offset = this.params.$_offset - this.total
-                }
+                // if (this.params.$_offset >= this.total) {
+                //     this.params.$_offset = this.params.$_offset - this.total
+                // }
                 
                 return this.fetch().then(this.getNextRow);
             }

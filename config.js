@@ -7,7 +7,8 @@ module.exports = {
 
     port: PORT,
 
-    throttle: 1,
+    // Delay in milliseconds between NDJSON row generation
+    throttle: 0,
     
     // Max. number of fhir resources (lines) in one ndjson file
     defaultPageSize: 10000,
@@ -25,6 +26,9 @@ module.exports = {
     // The bigger the number the fewer sql queries will be executed but more
     // memory will be needed to store those bigger chunks of data
     rowsPerChunk: 500,
+
+    // in minutes
+    maxExportAge: 10,
 
     jwtSecret: process.env.SECRET || "this-is-our-big-secret",
 

@@ -18,13 +18,13 @@ function csvEscape(value) {
     return out;
 }
 
-module.exports = function() {
+module.exports = function(options = {}) {
     let _hasHeader = false;
     return new Transform({
         writableObjectMode: true,
         readableObjectMode: true,
         transform(row, _encoding, next) {
-            const obj = row.resource_json;
+            const obj = options.extended ? row : row.resource_json;
             let keys = Object.keys(obj);
             if (!_hasHeader) {
                 this.push(keys.map(csvEscape).join(",") + "\r\n");
