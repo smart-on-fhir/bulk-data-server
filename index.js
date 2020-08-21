@@ -12,11 +12,13 @@ const encodedOutcome = require("./outcome_handler");
 
 const app = express();
 
+/* istanbul ignore if */
 if (process.env.NODE_ENV != "test") {
     app.use(morgan("combined"));
 }
 
 // HTTP to HTTPS redirect (this is Heroku-specific!)
+/* istanbul ignore next */
 app.use((req, res, next) => {
     let proto = req.headers["x-forwarded-proto"];
     let host  = req.headers.host;
@@ -57,12 +59,14 @@ app.use("/outcome", encodedOutcome);
 app.use(express.static("static"));
 
 // global error handler
+/* istanbul ignore next */
 app.use(function (err, req, res, next) {
     console.error(err.stack);
     res.status(500).send('Something broke!');
 });
 
 // If invoked directly start a server (otherwise let the tests do that)
+/* istanbul ignore if */
 // @ts-ignore
 if (!module.parent) {
     app.listen(config.port, function() {

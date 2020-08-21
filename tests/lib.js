@@ -5,6 +5,17 @@ const jwt       = require("jsonwebtoken");
 const jwkToPem  = require("jwk-to-pem");
 const config    = require("../config");
 
+
+class RequestError extends Error
+{
+    constructor(message, response, outcome = null)
+    {
+        super(message);
+        this.response = response;
+        this.outcome = outcome;
+    }
+}
+
 /**
  * Promisified version of request. Rejects with an Error or resolves with the
  * response (use response.body to access the parsed body).
@@ -17,40 +28,34 @@ function requestPromise(options, delay = 0) {
         setTimeout(() => {
             request(Object.assign({ strictSSL: false }, options), (error, res) => {
                 if (error) {
-                    return reject({ error, response: res });
+                    return reject(new RequestError(error.message, res));
                 }
 
-                let message = "Request failed";
+                let message = res.statusMessage || "Request failed";
 
                 if (!res || !res.statusCode) {
-                    return reject({
-                        error: new Error(message),
-                        response: res
-                    });
+                    return reject(new RequestError(message, res));
                 }
 
                 if (res.statusCode == 404) {
-                    return reject({
-                        error: new Error("Not Found"),
-                        response: res
-                    });
+                    return reject(new RequestError("Not Found", res));
                 }
 
                 if (res.statusCode >= 400) {
+                    // console.log(res.body, res.statusMessage)
                     let outcome;
                     try {
                         if (res.body.resourceType == "OperationOutcome") {
                             outcome = res.body;
-                            message = res.statusMessage || "Unknown error!";
+                            message = res.body.issue.map(
+                                i => `${i.code} ${i.severity}: ${i.diagnostics}`
+                            ).join(";");
                         }
                     } catch(ex) {
                         message = String(res.body || res.statusMessage || "Unknown error!")
                     }
-                    return reject({
-                        error: new Error(message),
-                        response: res,
-                        outcome
-                    });
+                    
+                    return reject(new RequestError(message, res, outcome));
                 }
                 resolve(res);
             });
@@ -96,25 +101,28 @@ function buildGroupUrl(groupId, params) {
     return buildBulkUrl(["Group", groupId, "$export"], params);
 }
 
-function expectErrorOutcome(res, { message = "", code = 0 } = {}, done) {
+function expectErrorOutcome(res, { message = "", code = 0 } = {}, done = e => { if (e) throw e }) {
+    if (!res || !res.statusCode) {
+        return done(new Error(`Received invalid response`));
+    }
     if (code && res.statusCode !== code) {
-        return done(`Expected ${code} statusCode but received ${res.statusCode}`);
+        return done(new Error(`Expected ${code} statusCode but received ${res.statusCode}`));
     }
     let json = res.body;
     if (typeof json == "string") {
         try {
             json = JSON.parse(json);
         } catch(ex) {
-            return done(`Error parsing body as json: ${ex}`);
+            return done(new Error(`Error parsing body as json: ${ex}`));
         }
     }
 
     if (json.resourceType != "OperationOutcome") {
-        return done(`Expected an OperationOutcome response but got ${json.resourceType}`);
+        return done(new Error(`Expected an OperationOutcome response but got ${json.resourceType}`));
     }
 
     if (message && (!json.issue || !json.issue[0] || json.issue[0].diagnostics != message)) {
-        return done(`Did not return proper error message`);
+        return done(new Error(`Did not return proper error message`));
     }
 
     done();
@@ -159,6 +167,7 @@ function findKeyPair(keys) {
  * @param {import("jsonwebtoken").Algorithm} [options.alg]
  * @param {any} [options.err]
  * @param {any} [options.dur]
+ * @param {string} [options.scope = "system/*.*"]
  * @returns {Promise<Object>}
  */
 function authorize(options = {}) {
@@ -223,7 +232,7 @@ function authorize(options = {}) {
             uri   : tokenUrl,
             json  : true,
             form  : {
-                scope: "system/*.*",
+                scope: "scope" in options ? options.scope : "system/*.*",
                 grant_type: "client_credentials",
                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                 client_assertion: signed
