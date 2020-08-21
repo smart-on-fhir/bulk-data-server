@@ -155,8 +155,8 @@
                 files.map(function(f) {
                     var url = f.url;
                     return '<a class="download-link text-success" rel="download" href="' + url + '">' +
-                        '<i class="fa fa-file-text-o" aria-hidden="true"></i>' + url.split("/").pop() +
-                        '&nbsp;<b class="badge">' + formatNumber(f.count) + '</b></a>';
+                        '<i class="fa fa-file-text-o" aria-hidden="true"></i>' + 
+                        '<span>' + url.split("/").pop() + '&nbsp;</span><b class="badge">' + formatNumber(f.count) + '</b></a>';
                 }).join("")
             );
         }
