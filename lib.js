@@ -265,7 +265,7 @@ function checkAuth(req, res, next)
             return operationOutcome(
                 res,
                 "Authentication is required",
-                { httpCode: 400 }
+                { httpCode: 401 }
             )
         }
     }
