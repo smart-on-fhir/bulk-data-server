@@ -193,7 +193,7 @@ module.exports = (req, res) => {
         }
     }
 
-    if (!req.accepts(SUPPORTED_FORMATS)) {
+    if (req.headers.accept != "json" && !req.accepts(SUPPORTED_FORMATS)) {
         return lib.replyWithError(res, "only_json_supported", 400);
     }
 
