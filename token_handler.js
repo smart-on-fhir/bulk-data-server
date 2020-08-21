@@ -2,7 +2,6 @@ const jwt       = require("jsonwebtoken");
 const jwkToPem  = require("jwk-to-pem");
 const config    = require("./config");
 const Lib       = require("./lib");
-const ScopeSet  = require("./ScopeSet");
 
 module.exports = async (req, res) => {
 
@@ -98,7 +97,7 @@ module.exports = async (req, res) => {
     // Note that the scope check if FHIR version dependent and makes sure that
     // no unknown resources are involved. However, this code is common for every
     // FHIR version so we just use "4" here.
-    let tokenError = await ScopeSet.getInvalidSystemScopes(req.body.scope, 4);
+    let tokenError = await Lib.getInvalidSystemScopes(req.body.scope, 4);
     if (tokenError) {
         return Lib.replyWithOAuthError(res, "invalid_scope", {
             message: "invalid_scope",
@@ -239,7 +238,7 @@ module.exports = async (req, res) => {
                 );
                 return true;
             } catch(ex) {
-                console.error(ex);
+                // console.error(ex);
                 return false;
             }
         });

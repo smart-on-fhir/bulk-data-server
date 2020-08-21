@@ -239,13 +239,6 @@ function getPath(obj, path = "")
     return path.split(".").reduce((out, key) => out ? out[key] : undefined, obj)
 }
 
-function die(error="Unknown error")
-{
-    console.log("\n"); // in case we have something written to stdout directly
-    console.error(error);
-    process.exit(1);
-}
-
 // require a valid auth token if there is an auth token
 function checkAuth(req, res, next)
 {
@@ -396,12 +389,7 @@ function parseToken(token)
 
 function wait(ms = 0) {
     return new Promise(resolve => {
-        if (ms) {
-            setTimeout(resolve, ms);
-        }
-        else {
-            setImmediate(resolve);
-        }
+        setTimeout(resolve, uInt(ms));
     });
 }
 
@@ -522,29 +510,29 @@ function requireJsonContentTypeHeader(req, res, next) {
     next();
 }
 
-/**
- * Returns the absolute base URL of the given request
- * @param {object} request 
- */
-function getBaseUrl(request) {
+// /**
+//  * Returns the absolute base URL of the given request
+//  * @param {object} request 
+//  */
+// function getBaseUrl(request) {
     
-    // protocol
-    let proto = request.headers["x-forwarded-proto"];
-    if (!proto) {
-        proto = request.socket.encrypted ? "https" : "http";
-    }
+//     // protocol
+//     let proto = request.headers["x-forwarded-proto"];
+//     if (!proto) {
+//         proto = request.socket.encrypted ? "https" : "http";
+//     }
 
-    // host
-    let host = request.headers.host;
-    if (request.headers["x-forwarded-host"]) {
-        host = request.headers["x-forwarded-host"];
-        if (request.headers["x-forwarded-port"]) {
-            host += ":" + request.headers["x-forwarded-port"];
-        }
-    }
+//     // host
+//     let host = request.headers.host;
+//     if (request.headers["x-forwarded-host"]) {
+//         host = request.headers["x-forwarded-host"];
+//         if (request.headers["x-forwarded-port"]) {
+//             host += ":" + request.headers["x-forwarded-port"];
+//         }
+//     }
 
-    return proto + "://" + host;
-}
+//     return proto + "://" + host;
+// }
 
 /**
  * Get a list of all the resource types present in the database
@@ -575,6 +563,39 @@ function tagResource(resource, code, system = "https://smarthealthit.org/tags")
     }
 }
 
+/**
+ * Checks if the given scopes string is valid for use by backend services.
+ * This will only accept system scopes and will also reject empty scope.
+ * @param {String} scopes The scopes to check
+ * @param {number} [fhirVersion] The FHIR version that this scope should be
+ * validated against. If provided, the scope should match one of the resource
+ * types available in the database for that version (or *). Otherwise no
+ * check is performed.
+ * @returns {Promise<string>} The invalid scope or empty string on success
+ * @static
+ */
+async function getInvalidSystemScopes(scopes, fhirVersion) {
+    scopes = String(scopes || "").trim();
+
+    if (!scopes) {
+        return config.errors.missing_scope;
+    }
+
+    const scopesArray = scopes.split(/\s+/);
+
+    // If no FHIR version is specified accept anything that looks like a
+    // resource
+    let availableResources = "[A-Z][A-Za-z0-9]+";
+
+    // Otherwise check the DB to see what types of resources we have
+    if (fhirVersion) {
+        availableResources = (await getAvailableResourceTypes(fhirVersion)).join("|");
+    }
+
+    const re = new RegExp("^system/(\\*|" + availableResources + ")(\\.(read|write|\\*))?$");
+    return scopesArray.find(s => !(re.test(s))) || "";
+}
+
 // Errors as operationOutcome responses
 const outcomes = {
     fileExpired: res => operationOutcome(
@@ -584,21 +605,10 @@ const outcomes = {
         "expired",
         { httpCode: 410 }
     ),
-    noContent: res => operationOutcome(
-        res,
-        "No Content - your query did not match any fhir resources",
-        { httpCode: 204 }
-    ),
     invalidAccept: (res, accept) => operationOutcome(
         res,
         `Invalid Accept header "${accept}". Currently we only recognize ` +
         `"application/fhir+ndjson" and "application/fhir+json"`,
-        { httpCode: 400 }
-    ),
-    invalidOutputFormat: (res, value) => operationOutcome(
-        res,
-        `Invalid output-format parameter "${value}". Currently we only ` +
-        `recognize "application/fhir+ndjson", "application/ndjson" and "ndjson"`,
         { httpCode: 400 }
     ),
     invalidSinceParameter: (res, value) => operationOutcome(
@@ -622,67 +632,24 @@ const outcomes = {
         "The Prefer header must be respond-async",
         { httpCode: 400 }
     ),
-    requireRequestStart: res => operationOutcome(
-        res,
-        "The request start time parameter (requestStart) is missing " +
-        "in the encoded params",
-        { httpCode: 400 }
-    ),
-    invalidRequestStart: (req, res) => operationOutcome(
-        res,
-        `The request start time parameter (requestStart: ${
-        req.sim.requestStart}) is invalid`,
-        { httpCode: 400 }
-    ),
-    invalidResourceType: (res, resourceType) => operationOutcome(
-        res,
-        `The requested resource type "${resourceType}" is not available on this server`,
-        { httpCode: 400 }
-    ),
-    futureRequestStart: res => operationOutcome(
-        res,
-        "The request start time parameter (requestStart) must be " +
-        "a date in the past",
-        { httpCode: 400 }
-    ),
     fileGenerationFailed: res => operationOutcome(
         res,
         getErrorText("file_generation_failed")
-    ),
-    canceled: res => operationOutcome(
-        res,
-        "The procedure was canceled by the client and is no longer available",
-        { httpCode: 410 /* Gone */ }
     ),
     cancelAccepted: res => operationOutcome(
         res,
         "The procedure was canceled",
         { severity: "information", httpCode: 202 /* Accepted */ }
     ),
-    cancelGone: res => operationOutcome(
-        res,
-        "The procedure was already canceled by the client",
-        { httpCode: 404 }
-    ),
     cancelCompleted: res => operationOutcome(
         res,
         "The export was already completed",
-        { httpCode: 404 }
-    ),
-    cancelDeleted: res => operationOutcome(
-        res,
-        "The exported resources have been marked for deletion",
         { httpCode: 404 }
     ),
     cancelNotFound: res => operationOutcome(
         res,
         "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled",
         { httpCode: 404 /* Not Found */ }
-    ),
-    onlyNDJsonAccept: res => operationOutcome(
-        res,
-        "Only application/fhir+ndjson is currently supported for accept headers",
-        { httpCode: 400 }
     ),
     importAccepted: (res, location) => operationOutcome(
         res,
@@ -693,16 +660,6 @@ const outcomes = {
         res,
         `Your request has been accepted. You can check it's status at "${location}"`,
         { httpCode: 202, severity: "information" }
-    ),
-    invalidElements: (res, found) => operationOutcome(
-        res,
-        `The _elements parameter should contain entries of the form "[element]" or "[ResourceType].[element]". Found "${found}".`,
-        { httpCode: 400 }
-    ),
-    invalidElementsResource: (res, type) => operationOutcome(
-        res,
-        `The _elements parameter includes a resource type "${type}" which is not available on this server.`,
-        { httpCode: 400 }
     ),
     exportDeleted: res => operationOutcome(
         res,
@@ -745,7 +702,8 @@ module.exports = {
     requireRespondAsyncHeader,
     requireFhirJsonAcceptHeader,
     requireJsonContentTypeHeader,
-    getBaseUrl,
+    // getBaseUrl,
     getAvailableResourceTypes,
+    getInvalidSystemScopes,
     tagResource
 };
