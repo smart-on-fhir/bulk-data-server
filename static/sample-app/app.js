@@ -318,6 +318,7 @@
         if (e.data.newValue) {
             $(".preparing-progress").addClass("hidden");
         }
+        renderError(e.data.newValue);
     }
 
     function onFormSubmit(e)
@@ -766,15 +767,36 @@
         // ---------------------------------------------------------------------
         // Bindings
         // ---------------------------------------------------------------------
+
+        // Display the FHIR version when it changes. Currently only happens once on load
         MODEL.on("change:fhirVersion", e => renderFHIRVersion(e.data.newValue));
-        MODEL.on("change:error", e => renderError(e.data.newValue));
+
+        // Display the group selector. Currently only happens once on load
         MODEL.on("change:groups", e => renderGroupSelector(e.data.newValue));
+
+        // Display the patient selector. Happens once on load and later when the
+        // selected group is changing
         MODEL.on("change:patients", e => renderPatientCheckboxes(e.data.newValue));
+
+        // When we have the list of available resources and their counts render
+        // the resourceType selector. Happens once on load
         MODEL.on("change:resourceCounts", e => renderResourceCheckboxes(e.data.newValue));
+
+        // Render the download links (files) that we receive after pooling the
+        // status endpoint
         MODEL.on("change:files", e => renderFiles(e.data.newValue));
+
+        // Render the download errors (files) that we receive after pooling the
+        // status endpoint
         MODEL.on("change:fileErrors", e => renderFileErrors(e.data.newValue));
+
+        // When the selected patients change
         MODEL.on("change:selectedPatients", onSelectedPatientsChange);
+
+        // When the exportType changes (patient or system)
         MODEL.on("change:exportType", onExportTypeChange);
+
+        // When the selected group changes (or is emptied)
         MODEL.on("change:group", onGroupChange);
         MODEL.on("change:group change:exportType", onExportTypeOrGroupChange);
         MODEL.on("change:error", onErrorChange);
