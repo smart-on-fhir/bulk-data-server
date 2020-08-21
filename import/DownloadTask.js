@@ -123,16 +123,20 @@ class DownloadTask extends Task
             .pipe(transformer)
             .pipe(new ResourceValidator(this.options.type));
 
+        transformer.once("error", error => {
+            this.end(error);
+        });
+
+        pipeline.once("error", error => {
+            this.end(error);
+        });
+
         this.response.on("data", chunk => {
             this.position += Buffer.byteLength(chunk);
         });
 
         transformer.on("data", () => {
             this._count = transformer.count;
-        });
-
-        pipeline.once("error", error => {
-            this.end(error);
         });
 
         return pipeline;
