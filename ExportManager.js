@@ -221,7 +221,8 @@ class ExportManager
                 databaseMultiplier     : req.sim.m,
                 // stu                    : req.sim.stu,
                 resourcesPerFile       : req.sim.page,
-                accessTokenLifeTime    : req.sim.tlt
+                accessTokenLifeTime    : req.sim.tlt,
+                fileError              : req.sim.fileError
             });
             job.kickOff(req, res, system);
         }
@@ -249,9 +250,9 @@ class ExportManager
 
     static createDownloadHandler()
     {
-        return function handleFileDownload(req, res) {
-            return ExportManager.find(req.sim.id).then(
-                job => job.download(req, res),
+        return function handleFileDownload(req, res, next) {
+            ExportManager.find(req.sim.id).then(
+                job => job.download(req, res).catch(next),
                 () => lib.outcomes.exportDeleted(res)
             );
         }
@@ -301,8 +302,8 @@ class ExportManager
             .setSince(options.since);
 
         ["resourceTypes", "fhirElements", "id", "requestStart", "secure", "patients",
-         "outputFormat", "request", "fileError","jobStatus", "extended", "createdAt"]
-         .forEach(key => {
+         "outputFormat", "request", "fileError","jobStatus", "extended", "createdAt",
+        "ignoreTransientError"].forEach(key => {
             if (key in options) {
                 this[key] = options[key];
             }
@@ -351,7 +352,8 @@ class ExportManager
             fileError              : this.fileError,
             jobStatus              : this.jobStatus,
             extended               : this.extended,
-            createdAt              : this.createdAt
+            createdAt              : this.createdAt,
+            ignoreTransientError   : this.ignoreTransientError
         };
     }
 
@@ -458,6 +460,15 @@ class ExportManager
         if (this.jobStatus === "EXPORTED") {
             return lib.outcomes.cancelCompleted(res);
         }
+
+        if (!this.ignoreTransientError && this.simulatedError == "transient_error") {
+            this.ignoreTransientError = true;
+            this.save();
+            return lib.operationOutcome(res, "An unknown error ocurred (transient_error). Please try again.", {
+                httpCode : 500,
+                issueCode: "transient"
+            });
+        }
     
         // ensure requestStart param is present
         let requestStart = moment(this.requestStart);
@@ -522,7 +533,9 @@ class ExportManager
                                     ...params,
                                     fileError: `Failed to export ${i + 1}.${row.fhir_type}.${this.outputFormat}`
                                 })),
-                                `/fhir/bulkfiles/${row.fhir_type}.error.ndjson`
+                                "/fhir/bulkfiles/",
+                                // `/fhir/bulkfiles/${row.fhir_type}.error.ndjson`
+                                `${i + 1}.${row.fhir_type}.${this.outputFormat}`
                             )
                         });
                     }
@@ -571,7 +584,7 @@ class ExportManager
         });
     };
 
-    download(req, res)
+    async download(req, res)
     {
         if (this.secure && !req.headers.authorization) {
             return lib.operationOutcome(res, "Not authorized", { httpCode: 401 });
@@ -589,6 +602,12 @@ class ExportManager
             return lib.outcomes.fileExpired(res);
         }
 
+        // early exit in case simulated file errors
+        if (fileError) {
+            return res.set({ "Content-Type": "application/fhir+ndjson" })
+                .end(JSON.stringify(lib.createOperationOutcome(req.sim.fileError)));
+        }
+
         const acceptEncoding = req.headers["accept-encoding"] || "";
         const shouldDeflate  = (/\bdeflate\b/.test(acceptEncoding));
         const shouldGzip     = (/\bgzip\b/.test(acceptEncoding));
@@ -598,12 +617,6 @@ class ExportManager
             "Content-Type": exportTypes[this.outputFormat].contentType,
             "Content-Disposition": "attachment"
         });
-
-        if (fileError) {
-            return res.status(400).end(JSON.stringify(
-                lib.createOperationOutcome(req.sim.fileError)
-            ));
-        }
 
         /* istanbul ignore else */
         if (shouldGzip) {

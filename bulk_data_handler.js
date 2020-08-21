@@ -91,7 +91,7 @@ router.get("/metadata", extractSim, require("./fhir/metadata"));
 // list all the groups with their IDs and the number of patients included
 router.get("/Group", require("./fhir/group"));
 
-router.get("/Patient", require("./fhir/patient"));
+router.get("/\\$get-patients", require("./fhir/patient"));
 
 // $get-resource-counts operation
 router.get("/\\$get-resource-counts", require("./fhir/get-resource-counts"));
