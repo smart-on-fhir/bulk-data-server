@@ -9,11 +9,20 @@
         <link href="../vendor/bootstrap-3.3.6/css/bootstrap.min.css" rel="stylesheet">
         <link href="../vendor/bootstrap-3.3.6/css/bootstrap-theme.min.css" rel="stylesheet">
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+        <link href="../vendor/prism.css" rel="stylesheet" />
         <!--[if lt IE 9]>
             <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
             <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
         <![endif]-->
         <style>
+            label {
+                user-select: none;
+            }
+            input[type="checkbox"], input[type="radio"] {
+                vertical-align: text-bottom;
+                margin: 0 4px 0 0 !important;
+                height: 1.3em;
+            }
             h1.page-header {
                 background: url(logo.png) left -2px no-repeat;
                 background-size: 64px;
@@ -29,7 +38,7 @@
                 font-weight: 400;
                 letter-spacing: 7px;
             }
-            .file-list, .resource-check-list {
+            .file-list, .file-errors-list, .resource-check-list {
                 display: flex;
                 flex-wrap: wrap;
                 justify-content: flex-start;
@@ -156,6 +165,134 @@
                     margin: 12px 0 12px 15px;
                 }
             }
+
+            /* ============================================================== */
+
+            .patient-select-wrap {
+                position: relative;
+            }
+            .patient-select-options {
+                position: absolute;
+                left: 0;
+                top: 100%;
+                right: 0;
+                background: #FFF;
+                border: 1px solid #CCC;
+                border-radius: 0 0 4px 4px;
+                border-top: 0 none;
+                margin-top: -4px;
+                padding: 2px;
+                display: none;
+                flex-wrap: wrap;
+                z-index: 3;
+                /* box-shadow: 0 0 1px 0 #000; */
+            }
+            .patient-select-options > label {
+                display: flex;
+                flex: 1 0 16em;
+                margin: 1px;
+                padding: 2px 6px;
+                border-radius: 2px;
+                line-height: 22px;
+                overflow: hidden;
+                flex-wrap: wrap;
+            }
+            .patient-select-options > span {
+                display: flex;
+                flex: 1 0 16em;
+                margin: 0 1px;
+                padding: 0px 6px;
+                line-height: 0;
+                overflow: hidden;
+                flex-wrap: wrap;
+            }
+            .patient-select-options label div {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                flex: 1 0 11em;
+            }
+            .patient-select-options label span {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                padding-left: 18px;
+                font-size: 11px;
+                font-weight: 300;
+                color: rgba(0, 0, 0, 0.5);
+                font-family: monospace;
+            }
+            .patient-select-options label:hover {
+                background-color: #EEE;
+                box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1) inset;
+            }
+            .patient-select-options input {
+                margin-top: 1px !important;
+            }
+            .patient-select-wrap:focus {
+                outline: none;
+                
+            }
+            .patient-select-wrap:not(.disabled):focus-within .patient-select-options {
+                display: flex;
+                box-shadow: 0 6px 4px -4px rgba(0, 0, 0, 0.3);
+            }
+
+            .patient-select-wrap.disabled {
+                background: #eee;
+                cursor: not-allowed;
+                /* pointer-events: none; */
+            }
+            .patient-select-wrap.disabled * {
+                pointer-events: none;
+                background: transparent;
+            }
+
+            #request-code {
+                height: auto;
+                max-height: 90vh;
+                overflow-y: scroll;
+                resize: vertical;
+                margin: 6px 0 0;
+                display: none;
+                border-radius: 1px;
+                position:relative;
+            }
+
+            code[class*="language-"], pre[class*="language-"] {
+                background: #FFF;
+                white-space: pre-wrap;
+                word-break: break-all;
+            }
+
+            .badge {
+                text-shadow: none;
+                font-weight: 300;
+            }
+
+            .file-list .badge {
+                background-color: rgba(0, 0, 0, 0.05);
+                color: #999;
+            }
+
+            .copy-btn {
+                vertical-align: top;
+                margin: 3px 0 0 6px;
+                /* position: absolute;
+                top: 6px;
+                right: 6px;
+                user-select: none; */
+                /* opacity: 0; */
+                /* transition: opacity 0.6s; */
+            }
+            #request-code:hover .copy-btn {
+                opacity: 1;
+            }
+            .btn:disabled, .btn:disabled:hover {
+                background-color: #999;
+                border-color: #888;
+            }
+            
         </style>
     </head>
     <body>
@@ -186,7 +323,7 @@
         </div>
 
         <div class="container">
-            <form>
+            <form autocomplete="off">
                 <div class="row">
                     <div class="col-sm-6 col-sm-offset-3">
                         <div class="btn-group" data-toggle="buttons" style="width:100%">
@@ -205,7 +342,7 @@
                         <h5 class="text-success">
                             <i class="fa fa-list" aria-hidden="true"></i> Resources to Download
                         </h5>
-                        <div class="form-control resource-check-list" readonly></div>
+                        <div class="form-control resource-check-list" readonly>Loading...</div>
                     </div>
                 </div>
                 <br/>
@@ -230,7 +367,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="col-xs-12">
+                    <div class="col-sm-6">
                         <label class="text-success" for="_elements">
                             <i class="fa fa-filter" aria-hidden="true"></i> FHIR Elements
                         </label>
@@ -241,19 +378,42 @@
                         </p>
                         <br/>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-xs-12">
-                        <label class="text-success">
-                            <i class="fa fa-link" aria-hidden="true"></i> Download Link
+                    <div class="col-sm-6">
+                        <label class="text-success" for="_patients">
+                            <i class="fa fa-user-circle" aria-hidden="true"></i> Patients
                         </label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="url">
-                            <span class="input-group-btn">
-                                <button class="btn btn-success">Prepare Download!</button>
-                            </span>
+                        <div class="patient-select-wrap" tabindex="0">
+                            <div class="form-control">Loading...</div>
+                            <div class="patient-select-options"></div>
                         </div>
+                        <p class="small text-muted help-block">
+                            Coma-separated list of patient IDs. When provided, the server SHALL NOT return resources in the
+                            patient compartments belonging to patients outside of this list.
+                        </p>
+                        <br/>
                     </div>
+                </div>
+                <div class="form-control" readonly style="height: auto;padding:6px">
+                    <div class="pull-right">
+                        <button class="btn btn-success"><span> Start Export </span>&nbsp; <i class="fa fa-play" aria-hidden="true"></i> </button>
+                    </div>
+                    <label class="text-success" style="margin:7px 20px 0 0">
+                        &nbsp; <input type="checkbox" id="show-request" autocomplete="off"/> Show Kick-off Request
+                    </label>
+                    <label style="margin:7px 0 0">
+                        <input type="radio" name="code-type" value="http" autocomplete="off" /> HTTP
+                    </label>
+                    <label style="margin:7px 0 0">
+                        <input type="radio" name="code-type" value="curl" autocomplete="off" /> CURL
+                    </label>
+                    <button
+                    class="btn btn-info btn-sm copy-btn" type="button"><i
+                    class="fa fa-copy"></i> Copy</button>
+                    <br clear="all"/>
+                    <pre class="form-control" id="request-code"><code
+                    id="http-headers" class="language-http"></code><code
+                    id="http-body" class="language-json"></code><code
+                    id="curl" class="language-shell"></code></pre>
                 </div>
                 <br/>
                 <div class="hidden preparing-progress">
@@ -272,349 +432,30 @@
                     </div>
                 </div>
                 <div class="panel panel-success hidden">
-                    <div class="panel-heading"><b>Files to Download</b> <b class="badge"></b></div>
-                    <div class="panel-body file-list"></div>
+                    <div class="panel-heading">
+                        <button class="btn btn-sm btn-danger pull-right" style="margin:-5px -11px 0 0" id="delete-export" type="button">
+                            <i class="fa fa-trash-o" aria-hidden="true"></i> Delete this export</button>
+                        <b>Files to Download</b> <b class="badge file-count"></b>
+                    </div>
+                    <div class="panel-body file-list">Loading...</div>
+                </div>
+                <div class="panel panel-danger hidden">
+                    <div class="panel-heading">
+                        <b>Files Failed to Export</b> <b class="badge file-errors-count"></b>
+                    </div>
+                    <div class="panel-body file-errors-list">Loading...</div>
                 </div>
                 <div class="panel panel-danger" style="display: none">
                     <div class="panel-heading"><b>Error</b></div>
-                    <div class="panel-body">
-                        <pre id="error" class="text-danger"></pre>
-                    </div>
+                    <div id="error" class="panel-body text-danger" style="font-family: monospace;white-space: pre-wrap;word-break: break-all;"></div>
                 </div>
             </form>
         </div>
         <script src="../vendor/jquery-1.12.3.min.js"></script>
         <script src="../vendor/bootstrap-3.3.6/js/bootstrap.min.js"></script>
         <script src="../vendor/moment.min.js"></script>
+        <script src="../vendor/prism.js"></script>
         <script src="../lib.js"></script>
-        <script>
-            var STATE  = Lib.getUrlQuery({ camelCaseKeys: true });
-            var PARAMS = getHiddenParams(STATE.server);
-            var TIMER;
-
-            function uInt(x, defaultValue = 0) {
-                x = parseInt(x + "", 10);
-                if (isNaN(x) || !isFinite(x) || x < 0) {
-                    x = uInt(defaultValue, 0);
-                }
-                return x;
-            }
-
-            function formatNumber(n) {
-                n = uInt(n);
-                n = String(n).split("");
-                let l = 0, out = [];
-
-                for (let i = n.length - 1; i >= 0; i--) {
-                    if (l && l % 3 === 0) {
-                        out.unshift(",");
-                    }
-                    out.unshift(n[i]);
-                    l++;
-                }
-
-                return out.join("");
-            }
-
-            function getHiddenParams(url) {
-                var code;
-                try {
-                    var match = url.match(/\/([^/]+)\/fhir/);
-                    if (match && match[1]) {
-                        code = JSON.parse(Lib.base64UrlDecode(match[1]));
-                    }
-                } catch (ex) {
-                    code = null
-                }
-                finally {
-                    if (!code || typeof code != "object") {
-                        code = {}
-                    }
-                }
-                return code;
-            }
-
-            function base64UrlEscape(str) {
-                return str.replace(/\+/g, '-')
-                    .replace(/\//g, '_')
-                    .replace(/=/g, '');
-            }
-
-            function base64UrlEncode(str) {
-                return base64UrlEscape(btoa(str));
-            }
-            
-            function buildGroupSelector(groups) {
-                var select = $("#group").html(
-                    '<option value="">No Group (include all the patients)</option>'
-                );
-                select.append(
-                    '<option value="" disabled>---------------------------------------------------</option>'
-                );
-                $.each(groups.entry, function(i, g) {
-                    var opt = $("<option/>");
-                    // opt.attr("value", g.resource.id);
-                    opt.attr("value", g.resource.identifier[0].value);
-                    opt.text(g.resource.name + " (" + formatNumber(g.resource.quantity) + " patients)");
-                    select.append(opt);
-                });
-            }
-
-            function buildResourceCheckboxes(resources) {
-                var div = $(".resource-check-list").empty();
-                var exportType = $(':radio[name="export-type"]:checked').val();
-
-                $.each(resources, function(i, o) {
-                    var cb = $('<input type="checkbox" />');
-                    cb.attr({
-                        value  : o.name,
-                        checked: true,
-                        name   : "type"
-                    });
-                    var label = $('<label/>');
-                    label.text(" " + o.name);
-                    label.append('<small class="text-muted">&nbsp;(' + formatNumber(o.valueInteger) + ')</small>');
-                    label.prepend(cb);
-                    div.append(label);
-                });
-            }
-
-            function buildStartSelector() {
-                $("#start").html([
-                    '<option value="">No Time Filter (include everything)</option>',
-                    '<option value="' + (moment().subtract(1 , "month").format("YYYY-MM-DD")) + '">Within the last month</option>',
-                    '<option value="' + (moment().subtract(1 , "year" ).format("YYYY-MM-DD")) + '">Within the last year</option>',
-                    '<option value="' + (moment().subtract(5 , "years").format("YYYY-MM-DD")) + '">Within the last 5 years</option>',
-                    '<option value="' + (moment().subtract(10, "years").format("YYYY-MM-DD")) + '">Within the last 10 years</option>',
-                    '<option value="' + (moment().subtract(20, "years").format("YYYY-MM-DD")) + '">Within the last 20 years</option>'
-                ].join(""));
-            }
-
-            function buildDownloadUrl() {
-                var params     = [];
-                var group      = $("#group").val();
-                var start      = $("#start").val();
-                var _elements  = $("#_elements").val();
-                var dur        = (PARAMS.dur || 10);
-                var exportType = $(':radio[name="export-type"]:checked').val();
-
-                $(
-                    ':checkbox[value="Group"],' +
-                    ':checkbox[value="Practitioner"],' +
-                    ':checkbox[value="Organization"]'
-                ).attr("disabled", exportType == "patient").closest("label").toggleClass("disabled", exportType == "patient");
-                
-                var type       = $(":checkbox[name=type]").not(":disabled").get();
-                var allLength  = type.length;
-
-                type = type.filter(function(cb) {//debugger;
-                    return !!cb.checked
-                }).map(function(cb) { return cb.value; });
-
-                $("#group").prop("disabled", exportType == "system");
-
-                var url = "/fhir";
-                if (exportType != "system") {
-                    url += group ? "/Group/" + group : "/Patient"
-                }
-                url += "/$export";
-
-                if (start) {
-                    params.push("_since=" + start);
-                }
-
-                if (type.length && type.length != allLength) {
-                    params.push("_type=" + type.join(","));
-                }
-
-                if (_elements) {
-                    params.push("_elements=" + _elements);
-                }
-
-                if (params.length) {
-                    url += "?" + params.join("&");
-                }
-
-                url = buildURL(url)
-
-                $("#url").val(url);
-                $(".progress-bar").css("transition-duration", Math.ceil(dur/20) + "s");
-                // return url;
-            }
-
-            function showError(error) {
-                var txt = "Unknown error";
-                if (error instanceof Error) {
-                    txt = String(error);
-                }
-                else if (error.responseJSON) { // XHR with JSON response
-                    txt = JSON.stringify(error.responseJSON, null, 4);
-                }
-                else if (error.status && error.statusText) { // XHR error
-                    txt = error.status + ": " + error.statusText;
-                }
-                else {
-                    console.log(txt + ": ", arguments);
-                }
-
-                $("#error").text(txt).closest(".panel").show();
-                $(".preparing-progress").addClass("hidden");
-            }
-
-            function hideError() {
-                $("#error").empty().closest(".panel").hide();
-            }
-
-            function setProgress(n, dur) {
-                if (dur !== undefined) {
-                    $(".progress-bar").css("transitionDuration", (dur || 0) + "s");
-                    setTimeout(function() {
-                        $(".progress-bar")
-                            .attr("aria-valuenow", n)
-                            .css("width", n + "%")
-                            .find(".sr-only").text(n + "% Complete");
-                    }, 20);
-                } else {
-                    $(".progress-bar")
-                        .attr("aria-valuenow", n)
-                        .css("width", n + "%")
-                        .find(".sr-only").text(n + "% Complete");
-                }
-            }
-
-            function buildURL(path) {
-                var server = String(STATE.server || location.origin).replace(/\bfhir\/?$/, "");
-                server = server.replace(/^https?\:/, location.protocol);
-                return server + String(path || "/").replace(/^\//, "");
-            }
-
-            function prepareDownload() {
-                hideError();
-                $.ajax({
-                    url: $("#url").val(),
-                    headers: {
-                        Accept: "application/fhir+json",
-                        Prefer: "respond-async"
-                    }
-                }).then(function(body, resultCode, xhr) {
-                    if (xhr.status == 202) { // Accepted
-                        var statusUrl = xhr.getResponseHeader("content-location");
-                        setProgress(0, 0);
-                        $(".preparing-progress").removeClass("hidden");
-                        waitForFiles(statusUrl);
-                        $("#cancel-btn").data("url", statusUrl)
-                    }
-                    else if (xhr.status == 204) { // No Content
-                        $(".badge").text("0");
-                        $(".file-list").html(
-                            '<b class="text-danger">No data was found to match your parameters</b>'
-                        ).closest(".panel").removeClass("hidden");
-                    }
-                }, showError)
-            }
-
-            function waitForFiles(url) {
-                $.ajax({ url: url }).then(function(body, resultCode, xhr) {
-                    var dur = parseInt(xhr.getResponseHeader("retry-after"), 10);
-
-                    if (xhr.status == 200) {
-                        var files = body.output
-                        // console.log(files)
-                        if (dur) {
-                            setProgress(100, 0);
-                            if (TIMER) clearTimeout(TIMER);
-                            TIMER = setTimeout(function() {
-                                listFiles(files);
-                            }, 100);
-                        } else {
-                            listFiles(files);
-                        }
-                    }
-                    else if (xhr.status == 202) {
-                        var pct = parseInt(xhr.getResponseHeader("x-progress"), 10);
-                        if (!isNaN(pct) && isFinite(pct)) {
-                            setProgress(100, dur);
-                            if (pct < 100) {
-                                if (TIMER) clearTimeout(TIMER);
-                                TIMER = setTimeout(function() {
-                                    waitForFiles(url);
-                                }, dur * 1000);
-                            }
-                        }
-                    }
-                }, showError);
-            }
-
-            function listFiles(files) {
-                $(".preparing-progress").addClass("hidden");
-                $fileList = $(".file-list");
-                setProgress(0, 0);
-                
-                var len = files.length;
-
-                if (len > 100) {
-                    $(".badge").text("first 100 of " + len);
-                    files = files.slice(0, 100);
-                } else {
-                    $(".badge").text(len);
-                }
-
-                $fileList.html(
-                    files.map(function(f) {
-                        var url = f.url;
-                        return '<a class="download-link text-success" rel="download" href="' + url + '">' +
-                            '<i class="fa fa-file-text-o" aria-hidden="true"></i>' + url.split("/").pop() +
-                            '</a>';
-                    }).join("")
-                );
-
-                $fileList.closest(".panel").removeClass("hidden");
-            }
-
-            jQuery(function($) {
-                var base = String(STATE.server || location.origin);
-                base = base.replace(/\bfhir\/?$/, "");
-                base = base.replace(/\/[^/]*$/, "");
-                // console.log(PARAMS)
-                $("#fhir-version").html({
-                    2: "FHIR DSTU2",
-                    3: "FHIR STU3",
-                    4: "FHIR R4"
-                }[PARAMS.stu || 3]);
-
-                $.when(
-                    $.get(base + "/fhir/Group"),
-                    $.get(base + "/fhir/$get-resource-counts")
-                )
-                .then(function(groups, resources) {
-                    buildGroupSelector(groups[0]);
-                    buildResourceCheckboxes(resources[0].parameter);
-                })
-                .then(function() {
-                    buildStartSelector();
-                    
-                    $(document).on("change", "select, :checkbox, :radio", buildDownloadUrl);
-                    $(document).on("input change", "#_elements", buildDownloadUrl);
-                    
-                    $("form").on("submit", function(e) {
-                        e.preventDefault();
-                        prepareDownload();
-                    });
-
-                    $("#cancel-btn").on("click", function() {
-                        var url = $(this).data("url");
-                        if (url) {
-                            if (TIMER) clearTimeout(TIMER);
-                            $.ajax({ url: url, method: "DELETE" }).then(function() {
-                                setProgress(0, 0);
-                                waitForFiles(url);
-                            });
-                        }
-                    });
-
-                    buildDownloadUrl();
-                });
-            });
-        </script>
+        <script src="./app.js"></script>
     </body>
 </html>
