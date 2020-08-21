@@ -323,41 +323,22 @@ async function insertResource(entry, patientId, group) {
  * @returns {Object} The modified json
  */
 function assignTimes(json) {
-    let minDate = moment();
     let absMinDate = moment([2000, 0, 1]);
-    let unHandled = []
-
-    json.entry.forEach((entry, index) => {
+    json.entry.forEach(entry => {
         let type = entry.resource.resourceType;
-        let paths = TIME_MAP[ type ] || [ -10 ];
-        
-        let time;
+        let paths = TIME_MAP[ type ] || [];
 
         for (const path of paths) {
             if (typeof path == "string") {
-                time = moment(Lib.getPath(entry.resource, path) || absMinDate);
+                entry.__time = moment(Lib.getPath(entry.resource, path) || absMinDate);
                 break;
             }
-            else {
-                entry.__time = path;
-                unHandled.push(index);
-            }
         }
 
-        if (time) {
-            if (time.isBefore(absMinDate, "year")) {
-                time = moment(absMinDate);
-            }
-            if (time.isBefore(minDate, "day")) {
-                minDate = moment(time);
-            }
-            entry.__time = time.format();
+        if (!entry.__time) {
+            entry.__time = randomMoment(absMinDate, moment());
         }
-    });
 
-    unHandled.forEach(index => {
-        let entry = json.entry[index];
-        entry.__time = minDate.subtract(Math.abs(entry.__time), "days");
         if (entry.__time.isBefore(absMinDate, "year")) {
             entry.__time = moment(absMinDate);
         }
