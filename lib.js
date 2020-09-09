@@ -490,7 +490,8 @@ function requireFhirJsonAcceptHeader(req, res, next) {
  * @param {Function} next
  */
 function requireRespondAsyncHeader(req, res, next) {
-    if (req.headers.prefer != "respond-async") {
+    const tokens = String(req.headers.prefer || "").trim().split(/\s*[,;]\s*/);
+    if (!tokens.includes("respond-async")) {
         return outcomes.requirePreferAsync(res);
     }
     next();
