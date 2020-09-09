@@ -28,7 +28,7 @@ module.exports = {
     rowsPerChunk: 500,
 
     // in minutes
-    maxExportAge: 10,
+    maxExportAge: 30,
 
     jwtSecret: process.env.SECRET || "this-is-our-big-secret",
 

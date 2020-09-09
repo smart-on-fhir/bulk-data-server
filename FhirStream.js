@@ -182,9 +182,9 @@ class FhirStream extends Readable
                     this.params.$_offset = 0;
                 }
                 
-                // if (this.params.$_offset >= this.total) {
-                //     this.params.$_offset = this.params.$_offset - this.total
-                // }
+                if (this.params.$_offset >= this.total) {
+                    this.params.$_offset = this.params.$_offset - this.total
+                }
                 
                 return this.fetch().then(this.getNextRow);
             }
