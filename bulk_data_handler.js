@@ -1,4 +1,5 @@
 const express      = require("express");
+const cors         = require("cors");
 const Lib          = require("./lib");
 const OpDef        = require("./fhir/OperationDefinition/index");
 const bulkImporter = require("./import/bulk_data_import_handler");
@@ -86,21 +87,21 @@ router.post("/\\$import", bulkImporter.createImportKickOffHandler());
 // =============================================================================
 
 // host dummy conformance statement
-router.get("/metadata", extractSim, require("./fhir/metadata"));
+router.get("/metadata", cors({ origin: true }), extractSim, require("./fhir/metadata"));
 
 // list all the groups with their IDs and the number of patients included
-router.get("/Group", require("./fhir/group"));
+router.get("/Group", cors({ origin: true }), require("./fhir/group"));
 
-router.get("/\\$get-patients", require("./fhir/patient"));
+router.get("/\\$get-patients", cors({ origin: true }), require("./fhir/patient"));
 
 // $get-resource-counts operation
-router.get("/\\$get-resource-counts", require("./fhir/get-resource-counts"));
+router.get("/\\$get-resource-counts", cors({ origin: true }), require("./fhir/get-resource-counts"));
 
 // operation definitions
-router.use("/OperationDefinition", OpDef);
+router.use("/OperationDefinition", cors({ origin: true }), OpDef);
 
 // router.get("/files/", Lib.checkAuth, express.static(__dirname + "/attachments"));
-router.use('/attachments', Lib.checkAuth, express.static(__dirname + "/attachments"));
+router.use('/attachments', cors({ origin: true }), Lib.checkAuth, express.static(__dirname + "/attachments"));
 
 
 module.exports = router;
