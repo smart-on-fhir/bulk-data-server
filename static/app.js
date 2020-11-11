@@ -1,4 +1,4 @@
-(function() {
+(function($, Lib, CFG, ENV) {
 
     var map = {
         err       : { type: "string", defaultValue: "" },
@@ -149,11 +149,16 @@
         }
         $('<script async src="https://www.googletagmanager.com/gtag/js?id=' +
             ENV.GOOGLE_ANALYTICS_ID + '"/>').appendTo("body");
+        // @ts-ignore
         window.dataLayer = window.dataLayer || [];
+        // @ts-ignore
         window.gtag = function(){
+            // @ts-ignore
             dataLayer.push(arguments);
         }
+        // @ts-ignore
         gtag('js', new Date()); 
+        // @ts-ignore
         gtag('config', ENV.GOOGLE_ANALYTICS_ID);
     }
 
@@ -333,4 +338,5 @@
         }, 1000);
     });
 
-})();
+// @ts-ignore
+})(jQuery, Lib, CFG, ENV);
