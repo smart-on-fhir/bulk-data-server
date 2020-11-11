@@ -197,6 +197,13 @@ class ExportManager
      */
     jobStatus = "UNDEFINED";
 
+    /**
+     * When a _since timestamp is supplied in the export request, a portion of
+     * the resources (expressed as percentage here) will be reported as deleted
+     * using the deleted field in the output JSON.
+     */
+    simulateDeletedPct = 0;
+
     extended = false;
 
 
@@ -222,7 +229,8 @@ class ExportManager
                 // stu                    : req.sim.stu,
                 resourcesPerFile       : req.sim.page,
                 accessTokenLifeTime    : req.sim.tlt,
-                fileError              : req.sim.fileError
+                fileError              : req.sim.fileError,
+                simulateDeletedPct     : req.sim.del
             });
             job.kickOff(req, res, system);
         }
@@ -299,6 +307,7 @@ class ExportManager
             .setSystemLevel(options.systemLevel)
             .setGroup(options.group)
             // .setPatients(options.patients)
+            .setSimulateDeletedPct(options.simulateDeletedPct)
             .setSince(options.since);
 
         ["resourceTypes", "fhirElements", "id", "requestStart", "secure", "patients",
@@ -353,7 +362,8 @@ class ExportManager
             jobStatus              : this.jobStatus,
             extended               : this.extended,
             createdAt              : this.createdAt,
-            ignoreTransientError   : this.ignoreTransientError
+            ignoreTransientError   : this.ignoreTransientError,
+            simulateDeletedPct     : this.simulateDeletedPct
         };
     }
 
@@ -508,11 +518,11 @@ class ExportManager
             // console.log(sql, rows, this)
             // Finally generate those download links
             let len = rows.length;
-            let linksArr = []
-            let errorArr = []
-            let linksLen = 0;
-            let params   = { id: this.id };//Object.assign({}, sim);
-            let baseUrl  = config.baseUrl //+ req.originalUrl.split("?").shift().replace(/\/[^/]+\/fhir\/.*/, "");
+            let linksArr   = [];
+            let errorArr   = [];
+            let deletedArr = [];
+            let linksLen   = 0;
+            let baseUrl    = config.baseUrl //+ req.originalUrl.split("?").shift().replace(/\/[^/]+\/fhir\/.*/, "");
             
             for(let y = 0; y < len; y++ ) { // for each selected resource
                 let row = rows[y];
@@ -530,25 +540,59 @@ class ExportManager
                             url: lib.buildUrlPath(
                                 baseUrl,
                                 base64url.encode(JSON.stringify({
-                                    ...params,
+                                    id: this.id,
                                     fileError: `Failed to export ${i + 1}.${row.fhir_type}.${this.outputFormat}`
                                 })),
                                 "/fhir/bulkfiles/",
-                                // `/fhir/bulkfiles/${row.fhir_type}.error.ndjson`
                                 `${i + 1}.${row.fhir_type}.${this.outputFormat}`
                             )
                         });
                     }
                     else {
-                        params.offset = this.resourcesPerFile * i; // overwrite offset
-                        params.limit  = this.resourcesPerFile;     // overwrite limit
-        
+                        let offset = this.resourcesPerFile * i;
+                        let count = Math.min(
+                            this.resourcesPerFile,
+                            row.rowCount * this.databaseMultiplier - offset
+                        );
+
+                        // Here we know we have a list of {count} resources that
+                        // we can put into a file by generating the proper link
+                        // to it. However, if {this.simulateDeletedPct} is set,
+                        // certain percentage of them should go into the
+                        // "deleted" array instead!
+                        if (this.simulateDeletedPct) {
+                            let cnt = Math.round(count/100 * this.simulateDeletedPct);
+                            
+                            deletedArr.push({
+                                type: row.fhir_type,
+                                count: cnt,
+                                url: lib.buildUrlPath(
+                                    baseUrl,
+                                    base64url.encode(JSON.stringify({
+                                        id    : this.id,
+                                        limit : cnt,
+                                        del   : 1,
+                                        offset
+                                    })),
+                                    "/fhir/bulkfiles/",
+                                    `${i + 1}.${row.fhir_type}.${this.outputFormat}`
+                                )
+                            });
+
+                            count  -= cnt;
+                            offset += cnt;
+                        }
+
                         linksLen = linksArr.push({
                             type: row.fhir_type,
-                            count: Math.min(this.resourcesPerFile, row.rowCount * this.databaseMultiplier - params.offset),
+                            count: count,
                             url: lib.buildUrlPath(
                                 baseUrl,
-                                base64url.encode(JSON.stringify(params)),
+                                base64url.encode(JSON.stringify({
+                                    id    : this.id,
+                                    offset,
+                                    limit : count
+                                })),
                                 "/fhir/bulkfiles/",
                                 `${i + 1}.${row.fhir_type}.${this.outputFormat}`
                             )
@@ -577,7 +621,16 @@ class ExportManager
                 // file. Note: If no data is returned from the kick-off request,
                 // the server should return an empty array.
                 "output" : linksArr,
-    
+
+                // When a _since timestamp is supplied in the export request,
+                // this array SHALL be populated with output files containing
+                // FHIR Transaction Bundles that indicate which FHIR resources
+                // would have been returned, but have been deleted subsequent to
+                // that date. If no resources have been deleted or the _since
+                // parameter was not supplied, the server MAY omit this key
+                // or MAY return an empty array.
+                "deleted": deletedArr,
+
                 // If no errors occurred, the server should return an empty array
                 "error": errorArr
             }).end();
@@ -646,8 +699,9 @@ class ExportManager
 
         input.init().then(() => {
             let pipeline = input.pipe(translator({
-                _elements: this.fhirElements,
-                err: this.fileError
+                _elements  : this.fhirElements,
+                err        : this.fileError,
+                deleted    : !!req.sim.del,
             }));
 
             const transform = exportTypes[this.outputFormat].transform;
@@ -749,6 +803,16 @@ class ExportManager
     setAccessTokenLifeTime(minutes = config.defaultTokenLifeTime)
     {
         this.accessTokenLifeTime = lib.uInt(minutes, config.defaultTokenLifeTime);
+        return this;
+    }
+
+    /**
+     * Set what percentage of the output resources should be reported as deleted
+     * @param {number} pct 
+     */
+    setSimulateDeletedPct(pct = 0)
+    {
+        this.simulateDeletedPct = lib.uInt(pct, 0);
         return this;
     }
 

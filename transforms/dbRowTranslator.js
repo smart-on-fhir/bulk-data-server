@@ -56,6 +56,22 @@ function filterElements(json, elements = [])
     return out;
 }
 
+function generateDeleteTransaction(json)
+{
+    return {
+        resourceType: "Bundle",
+        type: "transaction",
+        entry:[
+            {
+                request: {
+                    method: "DELETE", 
+                    url   : `${json.resourceType}/${json.id}`
+                }
+            }
+        ]
+    };
+}
+
 module.exports = function(sim = {}) {
     return new Transform({
         writableObjectMode: true,
@@ -63,23 +79,29 @@ module.exports = function(sim = {}) {
         transform(row, _encoding, next) {
             try {
 
-                // Filter by _elements if needed
-                if (Array.isArray(sim._elements)) {
-                    row.resource_json = filterElements(row.resource_json, sim._elements);
+                if (!!sim.deleted) {
+                    row.resource_json = generateDeleteTransaction(row.resource_json);
                 }
 
-                // Rewrite urls in DocumentReference resources. Only url props
-                // that begin with `/files/` will be converted to absolute HTTP
-                // URLs to allow the client to directly download bigger files
-                if (row.resource_json.resourceType == "DocumentReference") {
-                    const url = lib.getPath(row.resource_json, "content.0.attachment.url");
-                    if (url && url.search(/\/attachments\/.*/) === 0) {
-                        row.resource_json.content[0].attachment.url = lib.buildUrlPath(
-                            baseUrl,
-                            base64url.encode(JSON.stringify({ err: sim.err || "" })),
-                            "fhir",
-                            url
-                        );
+                else {
+                    // Filter by _elements if needed
+                    if (Array.isArray(sim._elements)) {
+                        row.resource_json = filterElements(row.resource_json, sim._elements);
+                    }
+
+                    // Rewrite urls in DocumentReference resources. Only url props
+                    // that begin with `/files/` will be converted to absolute HTTP
+                    // URLs to allow the client to directly download bigger files
+                    if (row.resource_json.resourceType == "DocumentReference") {
+                        const url = lib.getPath(row.resource_json, "content.0.attachment.url");
+                        if (url && url.search(/\/attachments\/.*/) === 0) {
+                            row.resource_json.content[0].attachment.url = lib.buildUrlPath(
+                                baseUrl,
+                                base64url.encode(JSON.stringify({ err: sim.err || "" })),
+                                "fhir",
+                                url
+                            );
+                        }
                     }
                 }
 
