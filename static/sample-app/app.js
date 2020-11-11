@@ -30,6 +30,7 @@
         progressMessage : "Preparing files. Please wait...",
         statusUrl       : null,
         files           : null,
+        deletedFiles    : null,
         codeType        : null
     });
 
@@ -146,7 +147,7 @@
         }
 
         if (!len) {
-            $(".file-list").html(
+            $fileList.html(
                 '<b class="text-danger">No data was found to match your parameters</b>'
             );
         }
@@ -160,6 +161,28 @@
                 }).join("")
             );
         }
+
+        $fileList.closest(".panel")[0].scrollIntoView({ behavior: "smooth" });
+    }
+
+    function renderDeletedFiles(files)
+    {
+        const $fileList = $(".del-file-list");
+
+        if (files === null || !files.length) {
+            return $fileList.closest(".panel").addClass("hidden");
+        } else {
+            $fileList.closest(".panel").removeClass("hidden");
+        }
+        
+        $fileList.html(
+            files.map(function(f) {
+                var url = f.url;
+                return '<a class="download-link text-success" rel="download" href="' + url + '">' +
+                    '<i class="fa fa-file-text-o" aria-hidden="true"></i>' + 
+                    '<span>' + url.split("/").pop() + '&nbsp;</span><b class="badge">' + formatNumber(f.count) + '</b></a>';
+            }).join("")
+        );
 
         $fileList.closest(".panel")[0].scrollIntoView({ behavior: "smooth" });
     }
@@ -618,6 +641,7 @@
                     MODEL.set({
                         progressVisible: false,
                         files          : null,
+                        deletedFiles   : null,
                         fileErrors     : null
                     });
                     resolve();
@@ -659,8 +683,9 @@
                 else if (xhr.status == 204) {
                     MODEL.set({
                         progressVisible : false,
-                        files: null,
-                        fileErrors: null
+                        files           : null,
+                        deletedFiles    : null,
+                        fileErrors      : null
                     });
                 }
 
@@ -698,17 +723,19 @@
                     if (TIMER) clearTimeout(TIMER);
                     TIMER = setTimeout(function() {
                         MODEL.set({
-                            progressVisible: false,
-                            files: body.output,
-                            fileErrors: body.error,
+                            progressVisible : false,
+                            files           : body.output,
+                            deletedFiles    : body.deleted,
+                            fileErrors      : body.error,
                             inTransientError: false
                         });
                     }, 100);
                 } else {
                     MODEL.set({
-                        progressVisible: false,
-                        files: body.output,
-                        fileErrors: body.error,
+                        progressVisible : false,
+                        files           : body.output,
+                        deletedFiles    : body.deleted,
+                        fileErrors      : body.error,
                         inTransientError: false
                     });
                 }
@@ -785,6 +812,9 @@
         // Render the download links (files) that we receive after pooling the
         // status endpoint
         MODEL.on("change:files", e => renderFiles(e.data.newValue));
+
+        // Render the download links for deleted files (if any)
+        MODEL.on("change:deletedFiles", e => renderDeletedFiles(e.data.newValue));
 
         // Render the download errors (files) that we receive after pooling the
         // status endpoint

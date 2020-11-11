@@ -9,7 +9,8 @@
         tlt       : { type: "number", defaultValue: CFG.defaultTokenLifeTime || 15 },
         dur       : { type: "number", defaultValue: CFG.defaultWaitTime || 10 },
         m         : { type: "number", defaultValue: 1 },
-        stu       : { type: "number", defaultValue: 3 }
+        stu       : { type: "number", defaultValue: 3 },
+        del       : { type: "number", defaultValue: 0 }
     };
 
     var MODEL    = new Lib.Model();
@@ -80,10 +81,10 @@
 
     /**
      * Generates new client_id and saves it into the model. Note that this
-     * function should only be called if we have the "jwks_url" OR "jwks" set
-     * already. Additionally, the access token lifetime ("tlt") and the
-     * simulated error ("err") will also be included to the client_id if
-     * available.
+     * function should only be called if we have the "jwks_url" OR "jwks" is set
+     * already. Additionally, the access token lifetime ("tlt"), the simulated
+     * deleted % (del) and the the simulated error ("err") will also be included
+     * into the client_id if available.
      */
     function generateClientId() {
         var auth_type = MODEL.get("auth_type"),
@@ -104,6 +105,7 @@
             if (authError) {
                 params.err = authError;
             }
+
             $.ajax({
                 url   : "/auth/register",
                 method: "POST",
@@ -133,7 +135,8 @@
             dur : +MODEL.get("dur"),
             tlt : +MODEL.get("tlt"),
             m   : +MODEL.get("m"),
-            stu : +MODEL.get("stu")
+            stu : +MODEL.get("stu"),
+            del : +MODEL.get("del")
         })));
     }
 
@@ -265,7 +268,7 @@
         MODEL.on("change:jwks change:jwks_url change:err change:tlt", generateClientId);
 
         // Whenever the advanced options change (re)generate the launchData
-        MODEL.on("change:page change:dur change:err change:tlt change:m change:stu", updateLaunchData);
+        MODEL.on("change:page change:dur change:del change:err change:tlt change:m change:stu", updateLaunchData);
         
         // Whenever launchData changes, update the fhir server fhir_server_url
         MODEL.on("change:launchData", function updateFhirUrl(e) {

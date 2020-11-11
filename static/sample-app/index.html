@@ -38,7 +38,7 @@
                 font-weight: 400;
                 letter-spacing: 7px;
             }
-            .file-list, .file-errors-list, .resource-check-list {
+            .file-list, .file-errors-list, .resource-check-list, .del-file-list {
                 display: flex;
                 flex-wrap: wrap;
                 justify-content: flex-start;
@@ -295,7 +295,7 @@
                 font-weight: 300;
             }
 
-            .file-list .badge {
+            .file-list .badge, .del-file-list .badge {
                 background-color: rgba(0, 0, 0, 0.05);
                 color: #999;
             }
@@ -463,6 +463,10 @@
                         <b>Files to Download</b> <b class="badge file-count"></b>
                     </div>
                     <div class="panel-body file-list">Loading...</div>
+                </div>
+                <div class="panel panel-warning hidden">
+                    <div class="panel-heading"><b>Deleted Resources</b></div>
+                    <div class="panel-body del-file-list">Loading...</div>
                 </div>
                 <div class="panel panel-danger hidden">
                     <div class="panel-heading">
