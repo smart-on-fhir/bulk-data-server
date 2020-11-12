@@ -654,12 +654,12 @@ const outcomes = {
     ),
     importAccepted: (res, location) => operationOutcome(
         res,
-        `Your request has been accepted. You can check it's status at "${location}"`,
+        `Your request has been accepted. You can check its status at "${location}"`,
         { httpCode: 202, severity: "information" }
     ),
     exportAccepted: (res, location) => operationOutcome(
         res,
-        `Your request has been accepted. You can check it's status at "${location}"`,
+        `Your request has been accepted. You can check its status at "${location}"`,
         { httpCode: 202, severity: "information" }
     ),
     exportDeleted: res => operationOutcome(
