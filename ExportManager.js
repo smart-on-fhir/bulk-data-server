@@ -560,7 +560,7 @@ class ExportManager
                         // to it. However, if {this.simulateDeletedPct} is set,
                         // certain percentage of them should go into the
                         // "deleted" array instead!
-                        if (this.simulateDeletedPct) {
+                        if (this.simulateDeletedPct && this.since) {
                             let cnt = Math.round(count/100 * this.simulateDeletedPct);
                             
                             deletedArr.push({
