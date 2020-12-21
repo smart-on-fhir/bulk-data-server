@@ -27,8 +27,8 @@ module.exports = {
     // memory will be needed to store those bigger chunks of data
     rowsPerChunk: 500,
 
-    // in minutes
-    maxExportAge: 30,
+    // In minutes! Files created after export are deleted after 30 minutes.
+    maxExportAge: 60,
 
     jwtSecret: process.env.SECRET || "this-is-our-big-secret",
 
