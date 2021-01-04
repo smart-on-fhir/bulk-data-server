@@ -197,8 +197,8 @@ module.exports = async (req, res) => {
         return Promise.reject();
     })
 
-    // Filter the potential keys to retain only those where the kty and
-    // kid match the values supplied in the client's JWK header.
+    // Filter the potential keys to retain only those where the `kid` matches
+    // the value supplied in the client's JWK header.
     .then(keys => {
 
         let publicKeys = keys.filter(key => {
@@ -211,8 +211,7 @@ module.exports = async (req, res) => {
 
         if (!publicKeys.length) {
             Lib.replyWithOAuthError(res, "invalid_grant", {
-                message: `No public keys found in the JWKS with "kid" equal to "${kid
-                }" and "kty" equal to "${header.kty}"`
+                message: `No public keys found in the JWKS with "kid" equal to "${kid}"`
             });
             return Promise.reject();
         }
