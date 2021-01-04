@@ -250,8 +250,10 @@ function checkAuth(req, res, next)
                 config.jwtSecret
             );
         } catch (e) {
-            return res.status(401).send(
-                `${e.name || "Error"}: ${e.message || "Invalid token"}`
+            return operationOutcome(
+                res,
+                "Invalid token " + e.message,
+                { httpCode: 401 }
             );
         }
         // @ts-ignore

@@ -225,6 +225,7 @@ module.exports = async (req, res) => {
     // - If all attempts fail, the signature verification fails.
     .then(publicKeys => {
 
+        let error = "";
         let success = publicKeys.some(key => {
             /**
              * @type {import("jsonwebtoken").Algorithm}
@@ -239,6 +240,7 @@ module.exports = async (req, res) => {
                 return true;
             } catch(ex) {
                 // console.error(ex);
+                error = ex.message;
                 return false;
             }
         });
@@ -246,7 +248,7 @@ module.exports = async (req, res) => {
         if (!success) {
 
             Lib.replyWithOAuthError(res, "invalid_grant", {
-                message: "Unable to verify the token with any of the public keys found in the JWKS"
+                message: "Unable to verify the token with any of the public keys found in the JWKS: " + error
             });
             return Promise.reject();
         }
@@ -261,9 +263,15 @@ module.exports = async (req, res) => {
             return Promise.reject();
         }
 
-        const expiresIn = clientDetailsToken.accessTokensExpireIn ?
-            clientDetailsToken.accessTokensExpireIn * 60 :
-            config.defaultTokenLifeTime * 60;
+        // Here, expiresIn is set to the server settings for token lifetime.
+        // However, if the authentication token has shorter lifetime it will
+        // also be used for the access token.
+        const expiresIn = Math.min(
+            authenticationToken.exp - Math.floor(Date.now() / 1000),
+            clientDetailsToken.accessTokensExpireIn ?
+                clientDetailsToken.accessTokensExpireIn * 60 :
+                config.defaultTokenLifeTime * 60
+        );
 
         var token = Object.assign({}, clientDetailsToken.context, {
             token_type: "bearer",
