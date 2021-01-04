@@ -2,6 +2,7 @@ const express        = require("express");
 const http           = require("http");
 const bodyParser     = require("body-parser");
 const morgan         = require("morgan");
+const cors           = require("cors");
 const config         = require("./config");
 const generator      = require("./generator");
 const tokenHandler   = require("./token_handler");
@@ -29,7 +30,8 @@ app.use((req, res, next) => {
 });
 
 // backend services authorization
-app.post("/auth/token", bodyParser.urlencoded({ extended: false }), tokenHandler);
+app.options("/auth/token", cors({ origin: true }));
+app.post("/auth/token", cors({ origin: true }), bodyParser.urlencoded({ extended: false }), tokenHandler);
 
 // backend services registration
 app.post("/auth/register", bodyParser.urlencoded({ extended: false }), register);
