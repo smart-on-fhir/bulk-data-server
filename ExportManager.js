@@ -632,7 +632,9 @@ class ExportManager
                 }
             }
     
-            res.json({
+            res.set({
+                "Expires": new Date(this.createdAt + config.maxExportAge * 60000).toUTCString()
+            }).json({
     
                 // a FHIR instant type that indicates the server's time when the
                 // query is run. No resources that have a modified data after this
