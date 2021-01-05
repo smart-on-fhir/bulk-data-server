@@ -206,6 +206,11 @@ class ExportManager
 
     extended = false;
 
+    /**
+     * An array to hold kickoff errors that should be included in the errors
+     * payload property if lenient handling is preferred
+     */
+    kickoffErrors;
 
     /**
      * 
@@ -298,6 +303,8 @@ class ExportManager
     {
         this.id = crypto.randomBytes(16).toString("hex");
 
+        this.kickoffErrors = options.kickoffErrors || [];
+
         this.setSimulatedError(options.simulatedError)
             .setSimulatedExportDuration(options.simulatedExportDuration)
             .setDatabaseMultiplier(options.databaseMultiplier)
@@ -363,12 +370,16 @@ class ExportManager
             extended               : this.extended,
             createdAt              : this.createdAt,
             ignoreTransientError   : this.ignoreTransientError,
-            simulateDeletedPct     : this.simulateDeletedPct
+            simulateDeletedPct     : this.simulateDeletedPct,
+            kickoffErrors          : this.kickoffErrors
         };
     }
 
     async kickOff(req, res, system)
     {
+
+        const isLenient = !!String(req.headers.prefer || "").match(/\bhandling\s*=\s*lenient\b/i);
+
         // Verify that the POST body contains a Parameters resource ------------
         if (req.method == "POST" && req.body.resourceType !== "Parameters") {
             return lib.operationOutcome(res, "The POST body should be a Parameters resource", { httpCode: 400 });
@@ -404,6 +415,26 @@ class ExportManager
         const _since        = getExportParam(req, "_since")        || "";
         const _outputFormat = getExportParam(req, "_outputFormat") || "application/fhir+ndjson";
         const _elements     = getExportParam(req, "_elements")     || "";
+        const _typeFilter   = getExportParam(req, "_typeFilter")   || "";
+        const _includeAssociatedData = getExportParam(req, "_includeAssociatedData") || "";
+
+        if (_includeAssociatedData) {
+            const outcome = lib.createOperationOutcome(`The "_includeAssociatedData" parameter is not supported by this server`);
+            if (!isLenient) {
+                this.delete();
+                return res.status(400).json(outcome);
+            }
+            this.kickoffErrors.push(outcome);
+        }
+
+        if (_typeFilter) {
+            const outcome = lib.createOperationOutcome(`The "_typeFilter" parameter is not supported by this server`);
+            if (!isLenient) {
+                this.delete();
+                return res.status(400).json(outcome);
+            }
+            this.kickoffErrors.push(outcome);
+        }
 
         if (_patient && req.method != "POST") {
             return lib.operationOutcome(res, `The "patient" parameter is only available in POST requests`, { httpCode: 400 });
@@ -519,7 +550,7 @@ class ExportManager
             // Finally generate those download links
             let len = rows.length;
             let linksArr   = [];
-            let errorArr   = [];
+            let errorArr   = [...this.kickoffErrors];
             let deletedArr = [];
             let linksLen   = 0;
             let baseUrl    = config.baseUrl //+ req.originalUrl.split("?").shift().replace(/\/[^/]+\/fhir\/.*/, "");
