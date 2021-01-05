@@ -265,12 +265,12 @@ module.exports = async (req, res) => {
         // Here, expiresIn is set to the server settings for token lifetime.
         // However, if the authentication token has shorter lifetime it will
         // also be used for the access token.
-        const expiresIn = Math.min(
+        const expiresIn = Math.round(Math.min(
             authenticationToken.exp - Math.floor(Date.now() / 1000),
             clientDetailsToken.accessTokensExpireIn ?
                 clientDetailsToken.accessTokensExpireIn * 60 :
                 config.defaultTokenLifeTime * 60
-        );
+        ));
 
         var token = Object.assign({}, clientDetailsToken.context, {
             token_type: "bearer",
@@ -292,7 +292,5 @@ module.exports = async (req, res) => {
 
         res.json(token);
     })
-    .catch((e) => {
-        res.end(e)
-    });
+    .catch(e => res.end(e.toString()));
 };
