@@ -278,7 +278,7 @@ class ExportManager
             filter: path => path.endsWith(".json")
         }, (path, fileStats, next) => {
             return lib.readJSON(path).then(state => {
-                if (state.jobStatus === "EXPORTED" && Date.now() - state.createdAt > config.maxExportAge * 60000) {
+                if (/*state.jobStatus === "EXPORTED" &&*/ Date.now() - state.createdAt > config.maxExportAge * 60000) {
                     fs.unlink(path, err => {
                         /* istanbul ignore if */
                         if (err) {
