@@ -1,6 +1,7 @@
 const request    = require("request");
 const base64url  = require("base64-url");
 const moment     = require("moment");
+/** @type {any} */
 const assert     = require("assert");
 const crypto     = require("crypto");
 const jwkToPem   = require("jwk-to-pem");
@@ -2468,7 +2469,7 @@ describe("Error responses", () => {
                     error: "invalid_grant",
                     error_description: `No public keys found in the JWKS with "kid" equal to "${
                         jwks.keys[1].kid
-                    }" and "kty" equal to "${jwks.keys[1].kty}"`
+                    }"`
                 }, 400);
             })
         });
@@ -2520,7 +2521,7 @@ describe("Error responses", () => {
                     }
                 });
 
-                return assertError({
+                return lib.requestPromise({
                     method: "POST",
                     json  : true,
                     url   : tokenUrl,
@@ -2530,11 +2531,17 @@ describe("Error responses", () => {
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
                     }
-                }, {
-                    error: "invalid_grant",
-                    error_description: `Unable to verify the token with any of the public keys found in the JWKS`
-                }, 400);
-            })
+                })
+            }).then(
+                () => {
+                    throw new Error("This request should have failed");
+                },
+                result => {
+                    assert.strictEqual(result.response.statusCode, 400);
+                    assert.strictEqual(result.response.body.error, "invalid_grant", 'The "error" property should equal "invalid_grant"');
+                    assert.match(result.response.body.error_description, /^Unable to verify the token with any of the public keys found in the JWKS\b/);
+                }
+            );
         });
 
         it("returns 401 invalid_client if the id token contains {err:'token_invalid_token'}", () => {

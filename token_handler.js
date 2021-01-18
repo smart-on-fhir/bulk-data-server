@@ -292,5 +292,5 @@ module.exports = async (req, res) => {
 
         res.json(token);
     })
-    .catch(e => res.end(e.toString()));
+    .catch(e => res.end(String(e  || "")));
 };
