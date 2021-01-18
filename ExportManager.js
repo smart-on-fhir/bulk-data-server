@@ -594,7 +594,7 @@ class ExportManager
                         if (this.simulateDeletedPct && this.since) {
                             let cnt = Math.round(count/100 * this.simulateDeletedPct);
                             
-                            deletedArr.push({
+                            cnt && deletedArr.push({
                                 type: row.fhir_type,
                                 count: cnt,
                                 url: lib.buildUrlPath(

@@ -124,6 +124,7 @@ class Client
      * @param {object}   [options.headers = {}]
      * @param {boolean}  [options.secure = false]
      * @param {string}   [options.fileError]
+     * @param {number}   [options.del]
      */
     async kickOff(options = {})
     {
@@ -134,7 +135,8 @@ class Client
             err     : options.simulatedError || "",
             extended: !!options.extended,
             secure  : !!options.secure,
-            fileError: options.fileError
+            fileError: options.fileError,
+            del: options.del
         };
 
         if (options.resourcesPerFile) {
@@ -1591,6 +1593,19 @@ describe("File Downloading", function() {
                 await lib.requestPromise({ url });
             }
         }
+    });
+
+    it("Retrieval of referenced files on an open endpoint with deletions", async () => {
+        const client = new Client();
+        await client.kickOff({ _type: "Device", _since: "2010-01-01T12:00:00Z", del: 10 });
+        const status = await client.checkStatus();
+
+        const deleted = status.body.deleted
+        assert(Array.isArray(deleted))
+
+        await Promise.all(
+            deleted.map(file => client.downloadFile(file.url))
+        )
     });
     
     it("Retrieval of referenced files on protected endpoint", async () => {
