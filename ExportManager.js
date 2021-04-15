@@ -877,6 +877,9 @@ class ExportManager
     {
         const requestedTypes = lib.makeArray(types || "").map(t => String(t || "").trim()).filter(Boolean);
         const availableTypes = await lib.getAvailableResourceTypes(this.stu);
+        if (availableTypes.indexOf("OperationDefinition") === -1) {
+            availableTypes.push("OperationDefinition");
+        }
         const badParam = requestedTypes.find(type => availableTypes.indexOf(type) == -1);
         if (badParam) {
             this.resourceTypes = [];
