@@ -395,7 +395,8 @@ function parseToken(token)
  */
 function getGrantedScopes(req) {
     try {
-        const accessToken = parseToken((req.headers.authorization || "").replace(/^bearer\s+/i, ""))
+        const accessToken = jwt.verify((req.headers.authorization || "").replace(/^bearer\s+/i, ""), config.jwtSecret)
+        // @ts-ignore jwt.verify returns string | object but for JWK we know it is an object
         return scopeSet(accessToken.scope)
     } catch {
         return []
