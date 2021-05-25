@@ -64,6 +64,7 @@ router.get("/bulkfiles/:file", [
 ]);
 
 router.delete("/bulkstatus/:id", [
+    extractSim,
     Lib.checkAuth,
     ExportManager.createCancelHandler()
 ]);
@@ -101,7 +102,7 @@ router.get("/\\$get-resource-counts", cors({ origin: true }), require("./fhir/ge
 router.use("/OperationDefinition", cors({ origin: true }), OpDef);
 
 // router.get("/files/", Lib.checkAuth, express.static(__dirname + "/attachments"));
-router.use('/attachments', cors({ origin: true }), Lib.checkAuth, express.static(__dirname + "/attachments"));
+router.use('/attachments', cors({ origin: true }), extractSim, Lib.checkAuth, express.static(__dirname + "/attachments"));
 
 
 module.exports = router;

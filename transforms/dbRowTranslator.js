@@ -97,7 +97,10 @@ module.exports = function(sim = {}) {
                         if (url && url.search(/\/attachments\/.*/) === 0) {
                             row.resource_json.content[0].attachment.url = lib.buildUrlPath(
                                 baseUrl,
-                                base64url.encode(JSON.stringify({ err: sim.err || "" })),
+                                base64url.encode(JSON.stringify({
+                                    err: sim.err || "",
+                                    secure: !!sim.secure
+                                })),
                                 "fhir",
                                 url
                             );

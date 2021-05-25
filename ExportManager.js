@@ -572,6 +572,7 @@ class ExportManager
                                 baseUrl,
                                 base64url.encode(JSON.stringify({
                                     id: this.id,
+                                    secure: this.secure,
                                     fileError: `Failed to export ${i + 1}.${row.fhir_type}.${this.outputFormat}`
                                 })),
                                 "/fhir/bulkfiles/",
@@ -603,6 +604,7 @@ class ExportManager
                                         id    : this.id,
                                         limit : cnt,
                                         del   : 1,
+                                        secure: this.secure,
                                         offset
                                     })),
                                     "/fhir/bulkfiles/",
@@ -622,7 +624,8 @@ class ExportManager
                                 base64url.encode(JSON.stringify({
                                     id    : this.id,
                                     offset,
-                                    limit : count
+                                    limit : count,
+                                    secure: this.secure,
                                 })),
                                 "/fhir/bulkfiles/",
                                 `${i + 1}.${row.fhir_type}.${this.outputFormat}`
@@ -735,6 +738,7 @@ class ExportManager
                 _elements  : this.fhirElements,
                 err        : this.fileError,
                 deleted    : !!req.sim.del,
+                secure     : this.secure
             }));
 
             const transform = exportTypes[this.outputFormat].transform;
