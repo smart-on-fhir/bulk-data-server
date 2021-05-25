@@ -113,7 +113,15 @@ module.exports = async (req, res) => {
     }
 
     // Get the authentication token header
-    let header = jwt.decode(req.body.client_assertion, { complete: true, json: true }).header;
+    let decodedToken = jwt.decode(req.body.client_assertion, { complete: true, json: true });
+    if (!decodedToken) {
+        return Lib.replyWithOAuthError(res, "invalid_client", {
+            message: "sim_invalid_token",
+            code   : 400
+        });
+    }
+
+    let header = decodedToken.header;
 
     // Get the "kid" from the authentication token header
     let kid = header.kid;
