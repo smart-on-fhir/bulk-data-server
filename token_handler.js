@@ -1,6 +1,7 @@
 const jwt       = require("jsonwebtoken");
 const jwkToPem  = require("jwk-to-pem");
 const config    = require("./config");
+const { scopeSet } = require("./lib");
 const Lib       = require("./lib");
 
 module.exports = async (req, res) => {
@@ -280,9 +281,19 @@ module.exports = async (req, res) => {
                 config.defaultTokenLifeTime * 60
         ));
 
+        const grantedScopes = scopeSet(req.body.scope)
+            .filter(s => s.action !== "write")
+            .map(s => ({ ...s, action: "read" }));
+
+        if (!grantedScopes.length) {
+            return Lib.replyWithOAuthError(res, "invalid_scope", {
+                message: "No access could be granted."
+            });
+        }
+
         var token = Object.assign({}, clientDetailsToken.context, {
             token_type: "bearer",
-            scope     : clientDetailsToken.scope,
+            scope     : grantedScopes.join(" "), // "system/*.read", //req.body.scope,
             client_id : req.body.client_id,
             expires_in: expiresIn
         });

@@ -679,6 +679,13 @@ class ExportManager
             return lib.operationOutcome(res, "Not authorized", { httpCode: 401 });
         }
 
+        const grantedScopes = lib.getGrantedScopes(req)
+        const resourceType  = req.params.file.split(".")[1]
+        const hasAccess = lib.hasAccessToResourceType(grantedScopes, resourceType, "read")
+        if (!hasAccess) {
+            return lib.operationOutcome(res, "Permission denied", { httpCode: 403 });
+        }
+
         if (this.jobStatus !== "EXPORTED") {        
             return lib.outcomes.exportNotCompleted(res);
         }
