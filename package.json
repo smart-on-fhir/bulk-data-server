@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha tests/*.test.js",
-    "test:watch": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha -w tests/*.test --watch-ignore jobs",
+    "test:watch": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha -w tests/*.test --watch-ignore jobs tests/*.test.js",
     "test:import": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha tests/import.test.js",
     "coverage": "nyc npm run test",
     "start": "node ."
