@@ -383,7 +383,7 @@ class Client
 }
 
 // Begin tests =================================================================
-describe("Conformance Statement", () => {
+describe.only("Conformance Statement", () => {
     describe("works with json types", () => {
         [
             "application/fhir+json",
@@ -397,14 +397,33 @@ describe("Conformance Statement", () => {
                     url: lib.buildUrl([
                         `/fhir/metadata?_format=${encodeURIComponent(mime)}`
                     ])
-                }).catch(er => Promise.reject(`${er.error} (${er.response.body})`));
+                }).then(
+                    res => expect(res.headers["content-type"]).to.equal("application/fhir+json; charset=utf-8"),
+                    er => Promise.reject(`${er.error} (${er.response.body})`)
+                );
             });
 
             it (`/fhir/metadata using accept:${mime}`, () => {
                 return lib.requestPromise({
                     url: lib.buildUrl(["/fhir/metadata"]),
                     headers: { accept: mime }
-                }).catch(er => Promise.reject(`${er.error} (${er.response.body})`));
+                }).then(
+                    res => expect(res.headers["content-type"]).to.equal("application/fhir+json; charset=utf-8"),
+                    er => Promise.reject(`${er.error} (${er.response.body})`)
+                );
+            });
+
+            it (`/fhir/metadata using accept:${mime};charset=UTF-8`, () => {
+                return lib.requestPromise({
+                    url: lib.buildUrl(["/fhir/metadata"]),
+                    headers: { accept: `${mime};charset=UTF-8` }
+                }).then(
+                    res => {
+                        console.log(res.headers["content-type"])
+                        expect(res.headers["content-type"]).to.equal("application/fhir+json; charset=utf-8")
+                    },
+                    er => Promise.reject(`${er.error} (${er.response.body})`)
+                );
             });
         });
     });

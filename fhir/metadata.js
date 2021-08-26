@@ -11,9 +11,23 @@ const SUPPORTED_FORMATS = [
     "application/json+fhir",
     "application/json",
     "text/json",
+    "json"
+];
+
+const SUPPORTED_ACCEPT_MIME_TYPES = [
+    "application/fhir+json",
+    "application/json+fhir",
+    "application/json",
+    "text/json",
     "json",
     "*/*"
 ];
+
+const FHIR_VERSION_TO_CONTENT_TYPE = {
+    4: "application/fhir+json; charset=utf-8",
+    3: "application/json+fhir; charset=utf-8",
+    2: "application/json; charset=utf-8"
+};
 
 function getFhirVersion(stu) {
     switch (+stu) {
@@ -193,11 +207,12 @@ module.exports = (req, res) => {
         }
     }
 
-    if (req.headers.accept != "json" && !req.accepts(SUPPORTED_FORMATS)) {
+    const accept = String(req.headers.accept || "*/*").toLowerCase().split(/\s*;\s*/).shift();
+    if (!SUPPORTED_ACCEPT_MIME_TYPES.some(f => f === accept)) {
         return lib.replyWithError(res, "only_json_supported", 400);
     }
 
     const statement = new CapabilityStatement(stu);
 
-    res.json(statement.toJSON());
+    res.set("content-type", FHIR_VERSION_TO_CONTENT_TYPE[stu]).json(statement.toJSON());
 };
