@@ -19,6 +19,7 @@ const SUPPORTED_ACCEPT_MIME_TYPES = [
     "application/json+fhir",
     "application/json",
     "text/json",
+    "text/html", // for browsers
     "json",
     "*/*"
 ];
@@ -207,7 +208,7 @@ module.exports = (req, res) => {
         }
     }
 
-    const accept = String(req.headers.accept || "*/*").toLowerCase().split(/\s*;\s*/).shift();
+    const accept = String(req.headers.accept || "*/*").toLowerCase().split(/\s*[;,]\s*/).shift();
     if (!SUPPORTED_ACCEPT_MIME_TYPES.some(f => f === accept)) {
         return lib.replyWithError(res, "only_json_supported", 400);
     }
