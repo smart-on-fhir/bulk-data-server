@@ -19,6 +19,7 @@ const SUPPORTED_ACCEPT_MIME_TYPES = [
     "application/json+fhir",
     "application/json",
     "text/json",
+    "text/html", // for browsers
     "json",
     "*/*"
 ];
