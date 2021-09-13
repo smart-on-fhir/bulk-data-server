@@ -215,5 +215,5 @@ module.exports = (req, res) => {
 
     const statement = new CapabilityStatement(stu);
 
-    res.set("content-type", FHIR_VERSION_TO_CONTENT_TYPE[stu]).json(statement.toJSON());
+    res.set("content-type", FHIR_VERSION_TO_CONTENT_TYPE[stu]).send(JSON.stringify(statement.toJSON(), null, 4));
 };
