@@ -232,7 +232,7 @@ function authorize(options = {}) {
             uri   : tokenUrl,
             json  : true,
             form  : {
-                scope: "scope" in options ? options.scope : "system/*.*",
+                scope: "scope" in options ? options.scope : "system/*.read",
                 grant_type: "client_credentials",
                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                 client_assertion: signed

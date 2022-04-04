@@ -526,7 +526,7 @@ describe("Authentication", () => {
                 url   : tokenUrl,
                 json  : true,
                 form  : {
-                    scope: "system/*.*",
+                    scope: "system/*.read",
                     grant_type: "client_credentials",
                     client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                     client_assertion: signedToken
@@ -965,7 +965,7 @@ describe("Token endpoint", () => {
             uri   : config.baseUrl + "/auth/token",
             json  : true,
             form  : {
-                scope: "system/*.*",
+                scope: "system/*.read",
                 grant_type: "client_credentials",
                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                 client_assertion: "a.b.c"
@@ -979,7 +979,7 @@ describe("Token endpoint", () => {
             uri   : config.baseUrl + "/auth/token",
             json  : true,
             form  : {
-                scope: "system/*.*",
+                scope: "system/*.read",
                 grant_type: "client_credentials",
                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                 client_assertion: base64url.encode(JSON.stringify({
@@ -997,7 +997,7 @@ describe("Token endpoint", () => {
             uri   : config.baseUrl + "/auth/token",
             json  : true,
             form  : {
-                scope: "system/*.*",
+                scope: "system/*.read",
                 grant_type: "client_credentials",
                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                 client_assertion: base64url.encode(JSON.stringify({
@@ -1015,7 +1015,7 @@ describe("Token endpoint", () => {
             uri   : config.baseUrl + "/auth/token",
             json  : true,
             form  : {
-                scope: "system/*.*",
+                scope: "system/*.read",
                 grant_type: "client_credentials",
                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                 client_assertion: base64url.encode(JSON.stringify({
@@ -1033,7 +1033,7 @@ describe("Token endpoint", () => {
             uri   : config.baseUrl + "/auth/token",
             json  : true,
             form  : {
-                scope: "system/*.*",
+                scope: "system/*.read",
                 grant_type: "client_credentials",
                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                 client_assertion: base64url.encode(JSON.stringify({
@@ -1051,7 +1051,7 @@ describe("Token endpoint", () => {
             uri   : config.baseUrl + "/auth/token",
             json  : true,
             form  : {
-                scope: "system/*.*",
+                scope: "system/*.read",
                 grant_type: "client_credentials",
                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                 client_assertion: base64url.encode(JSON.stringify({
@@ -2027,7 +2027,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2071,7 +2071,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2117,7 +2117,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2162,7 +2162,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2251,7 +2251,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2298,7 +2298,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2344,7 +2344,7 @@ describe("Error responses", () => {
                             json  : true,
                             url   : tokenUrl,
                             form  : {
-                                scope                : "system/*.*",
+                                scope                : "system/*.read",
                                 grant_type           : "client_credentials",
                                 client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                                 client_assertion     : signed
@@ -2393,7 +2393,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2429,7 +2429,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2479,7 +2479,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2545,7 +2545,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
@@ -2599,7 +2599,7 @@ describe("Error responses", () => {
                     json  : true,
                     url   : tokenUrl,
                     form  : {
-                        scope                : "system/*.*",
+                        scope                : "system/*.read",
                         grant_type           : "client_credentials",
                         client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
                         client_assertion     : signed
