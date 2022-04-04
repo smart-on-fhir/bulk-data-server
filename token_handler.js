@@ -3,6 +3,7 @@ const jwkToPem  = require("jwk-to-pem");
 const config    = require("./config");
 const { scopeSet } = require("./lib");
 const Lib       = require("./lib");
+const { validateScopesForBulkDataExport, ScopeList } = require("./scope");
 
 module.exports = async (req, res) => {
 
@@ -95,14 +96,14 @@ module.exports = async (req, res) => {
     }
 
     // Validate scope ----------------------------------------------------------
-    // Note that the scope check if FHIR version dependent and makes sure that
+    // Note that the scope check is FHIR version dependent and makes sure that
     // no unknown resources are involved. However, this code is common for every
     // FHIR version so we just use "4" here.
-    let tokenError = await Lib.getInvalidSystemScopes(req.body.scope, 4);
+    let tokenError = await validateScopesForBulkDataExport(req.body.scope, 4);
     if (tokenError) {
-        return Lib.replyWithOAuthError(res, "invalid_scope", {
-            message: "invalid_scope",
-            params: [ req.body.scope ]
+        return res.status(400).json({
+            error: "invalid_scope",
+            error_description: tokenError
         });
     }
 
@@ -270,7 +271,16 @@ module.exports = async (req, res) => {
             });
             return Promise.reject();
         }
-
+    })
+    .then(() => ScopeList.fromString(req.body.scope).negotiateForExport(4))
+    .then(grantedScopes => {
+        if (!grantedScopes.length) {
+            Lib.replyWithOAuthError(res, "invalid_scope", {
+                message: `No access could be granted for scopes "${req.body.scope}".`
+            });
+            return Promise.reject();
+        }
+    
         // Here, expiresIn is set to the server settings for token lifetime.
         // However, if the authentication token has shorter lifetime it will
         // also be used for the access token.
@@ -281,19 +291,9 @@ module.exports = async (req, res) => {
                 config.defaultTokenLifeTime * 60
         ));
 
-        const grantedScopes = scopeSet(req.body.scope)
-            .filter(s => s.action !== "write")
-            .map(s => ({ ...s, action: "read" }));
-
-        if (!grantedScopes.length) {
-            return Lib.replyWithOAuthError(res, "invalid_scope", {
-                message: "No access could be granted."
-            });
-        }
-
         var token = Object.assign({}, clientDetailsToken.context, {
             token_type: "bearer",
-            scope     : grantedScopes.join(" "), // "system/*.read", //req.body.scope,
+            scope     : grantedScopes.join(" "),
             client_id : req.body.client_id,
             expires_in: expiresIn
         });
