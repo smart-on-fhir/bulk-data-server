@@ -957,7 +957,27 @@ describe("Bulk Data Kick-off Request", () => {
 
 describe("Token endpoint", () => {
     it ("rejects missing scopes", () => rejects(lib.authorize({ scope: undefined })));
-    it ("rejects invalid scopes", () => rejects(lib.authorize({ scope: "system/Patient.revoke" })));
+    
+    it ("rejects invalid V1 scopes", async () => {
+        await rejects(lib.authorize({ scope: "system/Patient.revoke" }))
+        await rejects(lib.authorize({ scope: "bad/Patient.*" }))
+        await rejects(lib.authorize({ scope: "user/missing.read" }))
+        await rejects(lib.authorize({ scope: "*/*.*" }))
+    });
+
+    it ("rejects invalid v2 scopes", async () => {
+        await rejects(lib.authorize({ scope: "system/ResourceType.rsx" }))
+        await rejects(lib.authorize({ scope: "bad/ResourceType.rs" }))
+        await rejects(lib.authorize({ scope: "user/missing.sd" }))
+        await rejects(lib.authorize({ scope: "system/ResourceType.*" }))
+    });
+    
+    it ("does not reject valid v1 scopes", () => !rejects(lib.authorize({ scope: "system/ResourceType.read" })));
+    
+    it ("does not reject valid v2 scopes", async () => {
+        const response = await lib.authorize({ scope: "system/Patient.rs" })
+        expect(response.scope).to.equal("system/Patient.rs")
+    });
 
     it ("rejects due to bad base64 token encoding", () => rejects(async() => {
         await lib.requestPromise({
