@@ -383,7 +383,7 @@ class Client
 }
 
 // Begin tests =================================================================
-describe.only("Conformance Statement", () => {
+describe("Conformance Statement", () => {
     describe("works with json types", () => {
         [
             "application/fhir+json",
@@ -419,7 +419,7 @@ describe.only("Conformance Statement", () => {
                     headers: { accept: `${mime};charset=UTF-8` }
                 }).then(
                     res => {
-                        console.log(res.headers["content-type"])
+                        // console.log(res.headers["content-type"])
                         expect(res.headers["content-type"]).to.equal("application/fhir+json; charset=utf-8")
                     },
                     er => Promise.reject(`${er.error} (${er.response.body})`)
@@ -2213,7 +2213,7 @@ describe("Error responses", () => {
                     }
                 }, {
                     error: "invalid_scope",
-                    error_description: 'Invalid scope: "whatever"'
+                    error_description: 'Invalid scope "whatever"'
                 }, 400);
             })
         });

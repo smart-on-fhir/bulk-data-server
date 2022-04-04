@@ -1,12 +1,13 @@
-const FS        = require("fs");
-const Path      = require("path");
-const Walker    = require("walk");
-const jwt       = require("jsonwebtoken");
-const moment    = require("moment");
-const config    = require("./config");
-const base64url = require("base64-url");
-const request   = require("request");
-const getDB     = require("./db");
+const FS         = require("fs");
+const Path       = require("path");
+const Walker     = require("walk");
+const jwt        = require("jsonwebtoken");
+const moment     = require("moment");
+const config     = require("./config");
+const base64url  = require("base64-url");
+const request    = require("request");
+const getDB      = require("./db");
+const { format } = require("util");
 
 
 
@@ -210,7 +211,7 @@ async function forEachFile(options, cb)
             next();
         });
 
-        walker.on("end", () => resolve() );
+        walker.on("end", () => resolve(true) );
 
         walker.on("file", (root, fileStats, next) => {
             let path = Path.resolve(root, fileStats.name);
@@ -277,7 +278,7 @@ function checkAuth(req, res, next)
 
 function getErrorText(name, ...rest)
 {
-    return printf(config.errors[name], ...rest);
+    return format(config.errors[name], ...rest);
 }
 
 function replyWithError(res, name, code = 500, ...params)
@@ -310,20 +311,6 @@ function replyWithOAuthError(res, name, options = {})
         error: name,
         error_description: message
     });
-}
-
-/**
- * Simplified version of printf. Just replaces all the occurrences of "%s" with
- * whatever is supplied in the rest of the arguments. If no argument is supplied
- * the "%s" token is left as is.
- * @param {String} s The string to format
- * @param {*[]} [rest] The rest of the arguments are used for the replacements
- * @return {String}
- */
-function printf(s)
-{
-    var args = arguments, l = args.length, i = 0;
-    return String(s || "").replace(/(%s)/g, a => ++i > l ? "" : args[i]);
 }
 
 function buildUrlPath(...segments)
@@ -735,7 +722,6 @@ module.exports = {
     operationOutcome,
     checkAuth,
     getErrorText,
-    printf,
     buildUrlPath,
     replyWithError,
     replyWithOAuthError,
