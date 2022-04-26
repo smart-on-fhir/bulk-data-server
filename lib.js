@@ -711,6 +711,30 @@ const outcomes = {
     )
 };
 
+/**
+ * Make Promise abortable with the given signal.
+ * @param {Promise<any>} p
+ * @param {AbortSignal} signal
+ * @returns {Promise<any>}
+ */
+function abortablePromise(p, signal) {
+    if (signal.aborted) {
+        return Promise.reject(new AbortError("Already aborted"));
+    }
+
+    return new Promise((resolve, reject) => {
+        const abort = () => reject(new AbortError());
+        signal.addEventListener("abort", abort, { once: true });
+        return p.then(resolve).finally(() => signal.removeEventListener("abort", abort));
+    });
+}
+
+class AbortError extends Error {
+    constructor(message = "Aborted") {
+        super(message)
+    }
+}
+
 module.exports = {
     htmlEncode,
     readFile,
@@ -745,5 +769,7 @@ module.exports = {
     tagResource,
     scopeSet,
     getGrantedScopes,
-    hasAccessToResourceType
+    hasAccessToResourceType,
+    abortablePromise,
+    AbortError
 };
