@@ -220,7 +220,7 @@ class ExportManager
     static find(id)
     {
         return lib.readJSON(`${__dirname}/jobs/${id}.json`).then(
-            state =>  new ExportManager(state)
+            state => new ExportManager(state || {})
         );
     }
 
@@ -278,7 +278,7 @@ class ExportManager
             filter: path => path.endsWith(".json")
         }, (path, fileStats, next) => {
             return lib.readJSON(path).then(state => {
-                if (/*state.jobStatus === "EXPORTED" &&*/ Date.now() - state.createdAt > config.maxExportAge * 60000) {
+                if (state && /*state.jobStatus === "EXPORTED" &&*/ Date.now() - state.createdAt > config.maxExportAge * 60000) {
                     fs.unlink(path, err => {
                         /* istanbul ignore if */
                         if (err) {
@@ -290,7 +290,7 @@ class ExportManager
                 else {
                     next();
                 }
-            });
+            }).catch(console.log);
         }).then(() => {
             /* istanbul ignore if */
             if (process.env.NODE_ENV != "test") {

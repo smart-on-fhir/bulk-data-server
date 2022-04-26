@@ -138,7 +138,7 @@ async function parseJSON(json)
         setImmediate(() => {
             let out;
             try {
-                out = JSON.parse(json);
+                out = JSON.parse(json || "null");
             }
             catch (error) {
                 return reject(error);
