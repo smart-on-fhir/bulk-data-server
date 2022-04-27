@@ -1,18 +1,18 @@
-const request    = require("request");
-const base64url  = require("base64-url");
-const moment     = require("moment");
 /** @type {any} */
-const assert     = require("assert");
-const crypto     = require("crypto");
-const jwkToPem   = require("jwk-to-pem");
-const jwt        = require("jsonwebtoken");
-const express    = require("express");
-const { expect } = require("chai");
-const lib        = require("./lib");
-const { server } = require("../index");
-const config     = require("../config");
+const assert        = require("assert");
+const base64url     = require("base64-url");
+const moment        = require("moment");
+const crypto        = require("crypto");
+const jwkToPem      = require("jwk-to-pem");
+const jwt           = require("jsonwebtoken");
+const express       = require("express");
+const { expect }    = require("chai");
+const fs            = require("fs");
+const { server }    = require("../index");
+const config        = require("../config");
 const ExportManager = require("../ExportManager");
-const fs = require("fs");
+const { wait }      = require("../lib");
+const lib           = require("./lib");
 
 const BlueCCrossBlueShieldId = "ff7dc35f-79e9-47a0-af22-475cf301a085";
 
@@ -126,18 +126,19 @@ class Client
      * @param {boolean}  [options.secure = false]
      * @param {string}   [options.fileError]
      * @param {number}   [options.del]
+     * @param {string}   [options._typeFilter]
      */
     async kickOff(options = {})
     {
         const sim = {
-            stu     : options.stu || 4,
-            m       : options.databaseMultiplier || 1,
-            dur     : options.simulatedExportDuration || 0,
-            err     : options.simulatedError || "",
-            extended: !!options.extended,
-            secure  : !!options.secure,
+            stu      : options.stu || 4,
+            m        : options.databaseMultiplier || 1,
+            dur      : options.simulatedExportDuration || 0,
+            err      : options.simulatedError || "",
+            extended : !!options.extended,
+            secure   : !!options.secure,
             fileError: options.fileError,
-            del: options.del
+            del      : options.del
         };
 
         if (options.resourcesPerFile) {
@@ -206,9 +207,13 @@ class Client
                     }
                 });
             }
+
+            if ("_typeFilter" in options) {
+                body.parameter.push({ name: "_typeFilter", valueString: options._typeFilter });
+            }
         }
         else {
-            ["_since", "_type", "_elements", "patient", "_outputFormat"].forEach(key => {
+            ["_since", "_type", "_elements", "patient", "_outputFormat", "_typeFilter"].forEach(key => {
                 if (key in options) {
                     qs[key] = options[key];
                 }
@@ -315,7 +320,21 @@ class Client
         return require(path);
     }
 
-    waitForExport() {}
+    /**
+     * @param {object} [options]
+     * @param {string} [options.accessToken]
+     * @param {number} [options.frequency = 100] How often to check (in milliseconds)
+     */
+    async waitForExport(options = {}) {
+        while (true) {
+            await this.checkStatus(options);
+            if (this.statusResponse.statusCode === 202) {
+                await wait(options.frequency || 100)
+            } else {
+                return this.statusResponse;
+            }
+        }
+    }
 
     /**
      * Starts an export and waits for it. Then downloads the file at the given
@@ -705,17 +724,20 @@ describe("Authentication", () => {
     });
 });
 
-describe("System-level Export", () => {
+describe("System-level Export", function() {
+    this.timeout(5000)
     it ("works", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Group,Patient", systemLevel: true });
-        const { body } = await client.checkStatus();
+        const { body } = await client.waitForExport();
         client.cancel();
         expect(body.output.map(x => x.type)).to.deep.equal(["Group", "Patient"]);
     });
 });
 
-describe("Bulk Data Kick-off Request", () => {
+describe("Bulk Data Kick-off Request", function() {
+    this.timeout(5000);
+    
     [
         {
             description: "/fhir/$export",
@@ -929,6 +951,19 @@ describe("Bulk Data Kick-off Request", () => {
                 });
 
                 it ("Rejects invalid stu", () => rejects(new Client().kickOff({ ...meta.options, stu: 9 })));
+            });
+
+            describe("_typeFilter parameter", () => {
+                describe("using _filter", () => {
+                    ["GET", "POST"].forEach(method => {
+                        const options = { ...meta.options, usePOST: method === "POST" };
+                        it ("works with " + method, async () => {
+                            const client = new Client()
+                            await client.kickOff({ ...options, _typeFilter: '_filter=id sw "0"' });
+                            await client.cancel()
+                        });
+                    });
+                });
             });
 
             it ("returns proper content-location header", done => {
@@ -1145,7 +1180,8 @@ describe("Canceling", () => {
     });
 });
 
-describe("Progress Updates", () => {
+describe("Progress Updates", function() {
+    this.timeout(15000)
 
     it ("rejects invalid auth token", () => rejects(async () => {
         const client = new Client();
@@ -1170,7 +1206,7 @@ describe("Progress Updates", () => {
     it ("Respects the 'simulatedExportDuration' parameter", async () => {
         const client1 = new Client();
         await client1.kickOff({ simulatedExportDuration: 0 });
-        await client1.checkStatus();
+        await client1.waitForExport();
         expect(client1.statusResponse.statusCode).to.equal(200);
 
         const client2 = new Client();
@@ -1182,7 +1218,7 @@ describe("Progress Updates", () => {
     it ("Replies with links after the wait time", async () => {
         const client = new Client();
         await client.kickOff();
-        await client.checkStatus();
+        await client.waitForExport();
         expect(
             client.statusResponse.body.output,
             `Did not reply with links array in body.output`
@@ -1192,19 +1228,48 @@ describe("Progress Updates", () => {
     it ("Generates correct number of links", async () => {
         const client1 = new Client();
         await client1.kickOff({ _type: "Patient", resourcesPerFile: 25 });
-        await client1.checkStatus();
+        await client1.waitForExport();
         expect(client1.statusResponse.body.output.length).to.equal(4);
 
         const client2 = new Client();
         await client2.kickOff({ _type: "Patient", resourcesPerFile: 22, databaseMultiplier: 10 });
-        await client2.checkStatus();
+        await client2.waitForExport();
         expect(client2.statusResponse.body.output.length).to.equal(46);
+    });
+
+    it ("Generates correct number of links with _filter", async () => {
+        const client1 = new Client();
+        await client1.kickOff({
+            _type: "Patient",
+            resourcesPerFile: 30,
+            _typeFilter: '_filter=maritalStatus.text eq "Never Married"' // 33
+        });
+        await client1.waitForExport();
+        // console.log(client1.statusResponse.body)
+        expect(client1.statusResponse.body.output.length).to.equal(2);
+        expect(client1.statusResponse.body.output[0].count).to.equal(30);
+        expect(client1.statusResponse.body.output[1].count).to.equal(3);
+
+        const client2 = new Client();
+        await client2.kickOff({
+            _type: "Patient",
+            resourcesPerFile: 100,
+            _typeFilter: '_filter=maritalStatus.text eq "Never Married"', // 330
+            databaseMultiplier: 10
+        });
+        await client2.waitForExport();
+        // console.log(client1.statusResponse.body)
+        expect(client2.statusResponse.body.output.length).to.equal(4);
+        expect(client2.statusResponse.body.output[0].count).to.equal(100);
+        expect(client2.statusResponse.body.output[1].count).to.equal(100);
+        expect(client2.statusResponse.body.output[2].count).to.equal(100);
+        expect(client2.statusResponse.body.output[3].count).to.equal(30);
     });
 
     it ("rejects further calls on completed exports", () => rejects(async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
-        await client.checkStatus();
+        await client.waitForExport();
         await client.checkStatus();
     }));
 
@@ -1214,7 +1279,7 @@ describe("Progress Updates", () => {
         // of 10 resources.
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 22, databaseMultiplier: 10 });
-        await client.checkStatus();
+        await client.waitForExport();
         
         const { output } = client.statusResponse.body;
         const n = output.length;
@@ -1236,7 +1301,7 @@ describe("Progress Updates", () => {
     it ('Includes "error" property in the result', async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
-        await client.checkStatus();
+        await client.waitForExport();
         expect(client.statusResponse.body.error).to.deep.equal([]);
     });
 
@@ -1250,7 +1315,7 @@ describe("Progress Updates", () => {
     it ("protects against too many generated files", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Observation", resourcesPerFile: 1 });
-        return client.checkStatus().then(
+        return client.waitForExport().then(
             () => { throw new Error("Should have failed"); },
             err => {
                 expect(err.response.statusCode).to.equal(413);
@@ -1262,7 +1327,7 @@ describe("Progress Updates", () => {
     it ("Can simulate 'some_file_generation_failed' errors", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 25, simulatedError: "some_file_generation_failed" });
-        await client.checkStatus();
+        await client.waitForExport();
         expect(client.statusResponse.body.output.length).to.equal(2);
         expect(client.statusResponse.body.error.length).to.equal(2);
     });
@@ -1276,7 +1341,7 @@ describe("File Downloading", function() {
         const { access_token } = await lib.authorize();
         const client = new Client();
         await client.kickOff({ _type: "Patient", accessToken: access_token });
-        await client.checkStatus({ accessToken: access_token });
+        await client.waitForExport({ accessToken: access_token });
         await client.downloadFileAt(0, "bad-token");
     }));
 
@@ -1284,7 +1349,7 @@ describe("File Downloading", function() {
         const { access_token } = await lib.authorize();
         const client = new Client();
         await client.kickOff({ _type: "Patient", accessToken: access_token });
-        await client.checkStatus({ accessToken: access_token });
+        await client.waitForExport({ accessToken: access_token });
         await client.downloadFileAt(0);
     }));
 
@@ -1292,7 +1357,7 @@ describe("File Downloading", function() {
     it ("Returns valid ndjson files", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         const errors = [];
 
@@ -1312,7 +1377,7 @@ describe("File Downloading", function() {
     it ("Handles the 'limit' parameter", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 12 });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         expect(lines.length).to.equal(12);
     });
@@ -1322,7 +1387,7 @@ describe("File Downloading", function() {
         // First download 2 patients with limit=2 and no offset
         const client1 = new Client();
         await client1.kickOff({ _type: "Patient", resourcesPerFile: 2 });
-        await client1.checkStatus();
+        await client1.waitForExport();
         const res1 = await client1.downloadFileAt(0);
         const patient_1_2 = res1.lines[1];
 
@@ -1330,7 +1395,7 @@ describe("File Downloading", function() {
         // the second one from the previous fetch
         const client2 = new Client();
         await client2.kickOff({ _type: "Patient", resourcesPerFile: 1 });
-        await client2.checkStatus();
+        await client2.waitForExport();
         const res2 = await client2.downloadFileAt(1);
         const patient_2_1 = res2.lines[0];
 
@@ -1340,7 +1405,7 @@ describe("File Downloading", function() {
     it ("Handles the 'fileError' parameter", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0, null, "whatever");
         const outcome = JSON.parse(lines[0]);
         expect(outcome.issue[0].diagnostics).to.equal("whatever");
@@ -1349,7 +1414,7 @@ describe("File Downloading", function() {
     it ("The files have the correct number of lines", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 2 });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(1);
         expect(lines.length).to.equal(2);
     });
@@ -1357,7 +1422,7 @@ describe("File Downloading", function() {
     it ("can do limit and offset on Groups", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Group", systemLevel: true, resourcesPerFile: 6 });
-        await client.checkStatus();
+        await client.waitForExport();
         const res1 = await client.downloadFileAt(0);
         expect(res1.lines.length).to.equal(6);
         const res2 = await client.downloadFileAt(1);
@@ -1367,7 +1432,7 @@ describe("File Downloading", function() {
     it ("can download Group files", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Group", systemLevel: true });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         expect(lines.length).to.equal(8);
     });
@@ -1383,7 +1448,7 @@ describe("File Downloading", function() {
     it ("Supports the _elements parameter", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 1, systemLevel: true, _elements: "birthDate" });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         const patient = JSON.parse(lines[0]);
         expect(Object.keys(patient)).to.deep.equal([
@@ -1398,7 +1463,7 @@ describe("File Downloading", function() {
     it ("Supports the _elements parameter on CSV", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 1, systemLevel: true, _elements: "id", _outputFormat: "csv" });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         expect(lines[0]).to.equal("resourceType,id,identifier,name,gender,meta");
     });
@@ -1434,7 +1499,7 @@ describe("File Downloading", function() {
     it ("Handles the '_since' parameter", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 1, _since: "2010-01-01", extended: true });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         lines.forEach(row => expect(moment(row.modified_date).isSameOrAfter("2010-01-01", "day")).to.equal(true));
     });
@@ -1442,7 +1507,7 @@ describe("File Downloading", function() {
     it ("Can simulate the 'file_missing_or_expired' error", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", simulatedError: "file_expired" });
-        await client.checkStatus();
+        await client.waitForExport();
         try {
             await client.downloadFileAt(0);
         } catch (err) {
@@ -1453,7 +1518,7 @@ describe("File Downloading", function() {
     it ("Does not download more data if the 'm' parameter is used", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", databaseMultiplier: 3, resourcesPerFile: 10 });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         expect(lines.length).to.equal(10);
     });
@@ -1461,7 +1526,7 @@ describe("File Downloading", function() {
     it ("Does not prefix IDs on the first page", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", databaseMultiplier: 2, resourcesPerFile: 100 });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         lines.forEach(line => {
             if (/^p\d+\-/.test(JSON.parse(line).id)) {
@@ -1473,7 +1538,7 @@ describe("File Downloading", function() {
     it ("Can go to virtual second page if multiplier allows it", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", databaseMultiplier: 2, resourcesPerFile: 100 });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(1);
         expect(lines.length).to.equal(100);
         lines.forEach(line => {
@@ -1484,7 +1549,7 @@ describe("File Downloading", function() {
     it ("Can go to virtual third page if multiplier allows it", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", databaseMultiplier: 3, resourcesPerFile: 100 });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(2);
         expect(lines.length).to.equal(100);
         lines.forEach(line => {
@@ -1495,7 +1560,7 @@ describe("File Downloading", function() {
     it ("Does not fetch data beyond the limits", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", databaseMultiplier: 3, resourcesPerFile: 100 });
-        await client.checkStatus();
+        await client.waitForExport();
         client.downloadFileAt(3).then(() => {
             throw new Error("Should have failed");
         }, noop);
@@ -1508,7 +1573,7 @@ describe("File Downloading", function() {
             usePOST: true,
             patient: "6c5d9ca9-54d7-42f5-bfae-a7c19cd217f2, 58c297c4-d684-4677-8024-01131d93835e"
         });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         // console.log(lines)
         // expect(lines.length).to.equal(2);
@@ -1623,7 +1688,7 @@ describe("File Downloading", function() {
     it("Retrieval of referenced files on an open endpoint", async () => {
         const client = new Client();
         await client.kickOff({ _type: "DocumentReference" });
-        await client.checkStatus();
+        await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         for (const line of lines) {
             const doc = JSON.parse(line);
@@ -1638,7 +1703,7 @@ describe("File Downloading", function() {
     it("Retrieval of referenced files on an open endpoint with deletions", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Device", _since: "2010-01-01T12:00:00Z", del: 10 });
-        const status = await client.checkStatus();
+        const status = await client.waitForExport();
 
         const deleted = status.body.deleted
         assert(Array.isArray(deleted))
@@ -1652,7 +1717,7 @@ describe("File Downloading", function() {
         const { access_token } = await lib.authorize();
         const client = new Client();
         await client.kickOff({ _type: "DocumentReference", accessToken: access_token });
-        await client.checkStatus({ accessToken: access_token });
+        await client.waitForExport({ accessToken: access_token });
         const { lines } = await client.downloadFileAt(0, access_token);
         for (const line of lines) {
             const doc = JSON.parse(line);
@@ -1787,13 +1852,14 @@ describe("File Downloading", function() {
 //     });
 // });
 
-describe("Groups", () => {
+describe("Groups", function() {
+    this.timeout(5000)
     it ("Blue Cross Blue Shield should have 27 patients in the test DB", async function() {
         this.timeout(10000);
 
         const client = new Client();
         await client.kickOff({ _type: "Patient", group: BlueCCrossBlueShieldId });
-        await client.checkStatus();
+        await client.waitForExport();
         expect(client.statusResponse.body.output, "statusResponse.body.output must be an array").to.be.instanceOf(Array);
         expect(client.statusResponse.body.output.length, "Wrong number of links returned").to.equal(1);
         expect(client.statusResponse.body.output[0].url).to.match(/\/1\.Patient\.ndjson$/);

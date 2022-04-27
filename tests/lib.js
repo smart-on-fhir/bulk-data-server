@@ -246,6 +246,16 @@ function authorize(options = {}) {
     });
 }
 
+/**
+ * @param {number} ms 
+ * @returns 
+ */
+function wait(ms) {
+    return new Promise(resolve => {
+        setTimeout(resolve, ms)
+    });
+}
+
 module.exports = {
     buildUrl,
     requestPromise,
@@ -256,5 +266,6 @@ module.exports = {
     buildSystemUrl,
     buildGroupUrl,
     expectErrorOutcome,
-    authorize
+    authorize,
+    wait
 }

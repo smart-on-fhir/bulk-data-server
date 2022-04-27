@@ -81,6 +81,7 @@ function deleteFileIfExists(path)
     return true;
 }
 
+const ABORT_CONTROLLERS = new Map();
 
 class ExportManager
 {
@@ -219,6 +220,31 @@ class ExportManager
     kickoffErrors;
 
     /**
+     * Percent complete (0 to 100)
+     */
+    progress = 0;
+
+    statusMessage = "Please wait...";
+
+    /**
+     * @type {Record<string, any> | null}
+     */
+    manifest = null;
+
+    tooManyFiles = false;
+
+    // fsPromise = Promise.resolve();
+
+    getAbortController() {
+        let ctl = ABORT_CONTROLLERS.get(this.id)
+        if (!ctl) {
+            ctl = new AbortController()
+            ABORT_CONTROLLERS.set(this.id, ctl)
+        }
+        return ctl
+    }
+
+    /**
      * 
      * @param {string} id 
      * @returns {Promise<ExportManager>}
@@ -326,7 +352,8 @@ class ExportManager
 
         ["resourceTypes", "fhirElements", "id", "requestStart", "secure", "patients",
          "outputFormat", "request", "fileError","jobStatus", "extended", "createdAt",
-        "ignoreTransientError"].forEach(key => {
+        "ignoreTransientError", "progress", "statusMessage", "manifest", "tooManyFiles"]
+        .forEach(key => {
             if (key in options) {
                 this[key] = options[key];
             }
@@ -339,17 +366,25 @@ class ExportManager
         this.save()
     }
 
-    save()
+    async save()
     {
-        fs.writeFileSync(
-            `${__dirname}/jobs/${this.id}.json`,
-            JSON.stringify(this.toJSON(), null, 4)
-        );
+        // DO NOT RE-CREATE THE FILE IF ALREADY ABORTED
+        if (!ABORT_CONTROLLERS.has(this.id)) {
+            return true;
+        }
+
+        const path = `${__dirname}/jobs/${this.id}.json`;
+        const data = JSON.stringify(this.toJSON(), null, 4);
+        fs.writeFileSync(path, data, "utf8");
+        return true;
     }
 
     delete()
     {
-        deleteFileIfExists(`${__dirname}/jobs/${this.id}.json`);
+        const path = `${__dirname}/jobs/${this.id}.json`;
+        this.getAbortController().abort();
+        deleteFileIfExists(path);
+        ABORT_CONTROLLERS.delete(this.id);
     }
 
     toJSON()
@@ -380,6 +415,10 @@ class ExportManager
             simulateDeletedPct     : this.simulateDeletedPct,
             kickoffErrors          : this.kickoffErrors,
             typeFilter             : this.typeFilter.toString(),
+            progress               : this.progress,
+            statusMessage          : this.statusMessage,
+            manifest               : this.manifest,
+            tooManyFiles           : this.tooManyFiles
         };
     }
 
@@ -487,7 +526,16 @@ class ExportManager
         );
 
         this.jobStatus = "STARTED";
-        this.save();
+
+        const abortSignal = this.getAbortController().signal;
+
+        await this.save();
+
+        lib.abortablePromise(this.buildManifest(abortSignal), abortSignal).catch(e => {
+            if (!(e instanceof lib.AbortError)) {
+                console.error(e)
+            }
+        });
 
         // Instead of generating the response, and then returning it, the server
         // returns a 202 Accepted header, and a Content-Location at which the
@@ -497,100 +545,218 @@ class ExportManager
         lib.outcomes.exportAccepted(res, url);
     }
 
-    async handleStatus(req, res) {
-
-        if (this.secure && !req.headers.authorization) {
-            return lib.operationOutcome(res, "Not authorized", { httpCode: 401 });
-        }
-    
-        if (this.jobStatus === "EXPORTED") {
-            return lib.outcomes.cancelCompleted(res);
-        }
-
-        if (!this.ignoreTransientError && this.simulatedError == "transient_error") {
-            this.ignoreTransientError = true;
-            this.save();
-            return lib.operationOutcome(res, "An unknown error ocurred (transient_error). Please try again.", {
-                httpCode : 500,
-                issueCode: "transient"
-            });
-        }
-    
-        // ensure requestStart param is present
-        let requestStart = moment(this.requestStart);
-    
-        // check if the user should (continue to) wait
-        let endTime = moment(requestStart).add(this.simulatedExportDuration, "seconds");
-        let now = moment();
-    
-        // If waiting - show progress and exit
-        if (endTime.isAfter(now, "second")) {
-            let diff = (+now - +requestStart)/1000;
-            let pct = Math.round((diff / this.simulatedExportDuration) * 100);
-            return res.set({
-                "X-Progress" : pct + "%",
-                "Retry-After": Math.ceil(this.simulatedExportDuration - diff)
-            }).status(202).end();
-        }
-    
-        // ---------------------------------------------------------------------
-        // Now the simulated file generation is complete!
-        // ---------------------------------------------------------------------
-
-        this.jobStatus = "EXPORTED";
-        this.save();
-    
-        // Count all the requested resources in the database.
-        let builder = new QueryBuilder({
+    /**
+     * Finds all the resource types included in this export and their count
+     * @returns {Promise<{ fhir_type: string, rowCount: number }[]>}
+     */
+    async getResourceTypes() {
+        const builder = new QueryBuilder({
             type       : this.resourceTypes,
             patients   : this.patients,
             group      : this.group,
             systemLevel: this.systemLevel,
             start      : this.since
         });
-        let { sql, params } = builder.compileCount();
+        const { sql, params } = builder.compileCount();
         const DB = getDB(this.stu);
-        DB.promise("all", sql, params).then(rows => {
-            // console.log(sql, rows, this)
-            // Finally generate those download links
-            let len = rows.length;
-            let linksArr   = [];
-            let errorArr   = [...this.kickoffErrors];
-            let deletedArr = [];
-            let linksLen   = 0;
-            let baseUrl    = config.baseUrl //+ req.originalUrl.split("?").shift().replace(/\/[^/]+\/fhir\/.*/, "");
-            
-            for(let y = 0; y < len; y++ ) { // for each selected resource
-                let row = rows[y];
-                let n = Math.ceil((row.rowCount * this.databaseMultiplier)/this.resourcesPerFile); // how many files for this resource
-                for (let i = 0; i < n; i++) { // generate each file path
+        return DB.promise("all", sql, params);
+    }
+
+    /**
+     * Creates and returns a ReadableStream of JSON FHIR resources
+     * @param {string} resourceType 
+     * @returns {fhirStream}
+     */
+    getStreamForResource(resourceType, limit) {
+        return new fhirStream({
+            types      : [resourceType],
+            stu        : this.stu,
+            databaseMultiplier: this.databaseMultiplier,
+            extended   : this.extended,
+            group      : this.group,
+            since      : this.since,
+            systemLevel: this.systemLevel,
+            patients   : this.patients,
+            offset     : 0,
+            filter     : this.typeFilter.get("_filter"),
+            limit
+        });
+    }
+
+    async getCountsForResourceType(resourceType, limit) {
+        return new Promise((resolve, reject) => {
+            let input = this.getStreamForResource(resourceType, limit);
+            input.init().then(() => {
+                let count = 0;
+                input.once("error", reject)
+                input.once("close", () => resolve(count))
+                input.on("data", () => { count += 1; })
+            }, reject);
+        });
+    }
+
+    /**
+     * @param {AbortSignal} signal
+     */
+    async buildManifest(signal) {
+
+        let requestStart = moment(this.requestStart);
+
+        /** @type {any} */
+        const manifest = {
     
-                    if (linksLen > config.maxFiles) {
-                        return res.status(413).send("Too many files");
+            // a FHIR instant type that indicates the server's time when the
+            // query is run. No resources that have a modified data after this
+            // instant should be in the response.
+            "transactionTime": requestStart + "",
+
+            // the full url of the original bulk data kick-off request
+            "request" : this.request,
+
+            // boolean value indicating whether downloading the generated files
+            // will require an authentication token. Note: This may be false in
+            // the case of signed S3 urls or an internal file server within an
+            // organization's firewall.
+            "requiresAccessToken": this.secure,
+
+            // array of bulk data file items with one entry for each generated
+            // file. Note: If no data is returned from the kick-off request,
+            // the server should return an empty array.
+            "output" : [],
+
+            // When a _since timestamp is supplied in the export request,
+            // this array SHALL be populated with output files containing
+            // FHIR Transaction Bundles that indicate which FHIR resources
+            // would have been returned, but have been deleted subsequent to
+            // that date. If no resources have been deleted or the _since
+            // parameter was not supplied, the server MAY omit this key
+            // or MAY return an empty array.
+            "deleted": [],
+
+            // If no errors occurred, the server should return an empty array
+            "error": []
+        };
+
+        try {
+            var resourceTypes = await lib.abortablePromise(this.getResourceTypes(), signal);
+        } catch (e) {
+            if (!(e instanceof lib.AbortError)) {
+                console.error(e)
+            }
+            return null
+        }
+
+        const totalResourceCount = resourceTypes.reduce((prev, cur) => prev + cur.rowCount, 0) * this.databaseMultiplier;
+
+        /**
+         * @param {number} index Zero-based file index
+         * @param {string} resourceType 
+         * @param {number} count
+         * @param {number} offset
+         */
+        const addDeleted = (index, resourceType, count, offset, filteredCount) => {
+            manifest.deleted.push({
+                type: resourceType,
+                count: filteredCount,
+                url: lib.buildUrlPath(
+                    config.baseUrl,
+                    base64url.encode(JSON.stringify({
+                        id    : this.id,
+                        limit : count,
+                        del   : 1,
+                        secure: this.secure,
+                        offset
+                    })),
+                    "/fhir/bulkfiles/",
+                    `${index + 1}.${resourceType}.${this.outputFormat}`
+                )
+            }); 
+        }
+
+        /**
+         * @param {number} index Zero-based file index
+         * @param {string} resourceType 
+         * @param {string} error 
+         */
+        const addError = (index, resourceType, error) => {
+            manifest.error.push({
+                type : "OperationOutcome",
+                url: lib.buildUrlPath(
+                    config.baseUrl,
+                    base64url.encode(JSON.stringify({
+                        id: this.id,
+                        secure: this.secure,
+                        fileError: error
+                    })),
+                    "/fhir/bulkfiles/",
+                    `${index + 1}.${resourceType}.${this.outputFormat}`
+                )
+            });
+        };
+
+        /**
+         * @param {number} index Zero-based file index
+         * @param {string} resourceType 
+         * @param {number} count
+         * @param {number} offset 
+         */
+        const addFile = (index, resourceType, count, offset, filteredCount) => {
+            manifest.output.push({
+                type: resourceType,
+                count: filteredCount,
+                url: lib.buildUrlPath(
+                    config.baseUrl,
+                    base64url.encode(JSON.stringify({
+                        id    : this.id,
+                        offset,
+                        limit : count,
+                        secure: this.secure,
+                    })),
+                    "/fhir/bulkfiles/",
+                    `${index + 1}.${resourceType}.${this.outputFormat}`
+                )
+            });
+        };
+
+        for (const { fhir_type, rowCount } of resourceTypes) {
+            
+            if (signal.aborted) {
+                return null;
+            }
+
+            this.statusMessage = `currenly processing ${fhir_type} resources`;
+            await this.save()
+
+            let resourceCount = rowCount * this.databaseMultiplier;
+            let filteredCount = resourceCount;
+
+            // If a filter is used we need to actualy loop tru, filter and count how many
+            // resorces would remain after the dilter
+            if (this.typeFilter.get("_filter")) {
+                try {
+                    filteredCount = await lib.abortablePromise(this.getCountsForResourceType(fhir_type, resourceCount), signal);
+                } catch (e) {
+                    if (!(e instanceof lib.AbortError)) {
+                        console.error(e)
+                        return null
+                    }
+                }
+            }
+
+            if (filteredCount > 0) {
+                const numFiles = Math.ceil(filteredCount / this.resourcesPerFile);
+                for (let i = 0; i < numFiles; i++) {
+
+                    // ~ half of the links might fail if such error is requested
+                    if (this.simulatedError == "some_file_generation_failed" && i % 2) {
+                        addError(i, fhir_type, `Failed to export ${i + 1}.${fhir_type}.${this.outputFormat}`);
                     }
 
-                    // console.log(y, y % 2, this.simulatedError)
-                    if (this.simulatedError == "some_file_generation_failed" && i % 2) {
-                        errorArr.push({
-                            type : "OperationOutcome",
-                            url: lib.buildUrlPath(
-                                baseUrl,
-                                base64url.encode(JSON.stringify({
-                                    id: this.id,
-                                    secure: this.secure,
-                                    fileError: `Failed to export ${i + 1}.${row.fhir_type}.${this.outputFormat}`
-                                })),
-                                "/fhir/bulkfiles/",
-                                `${i + 1}.${row.fhir_type}.${this.outputFormat}`
-                            )
-                        });
-                    }
+                    // Add normal download link
                     else {
                         let offset = this.resourcesPerFile * i;
-                        let count = Math.min(
-                            this.resourcesPerFile,
-                            row.rowCount * this.databaseMultiplier - offset
-                        );
+                        let count = Math.min(this.resourcesPerFile, filteredCount - offset);
+                        
 
                         // Here we know we have a list of {count} resources that
                         // we can put into a file by generating the proper link
@@ -599,83 +765,120 @@ class ExportManager
                         // "deleted" array instead!
                         if (this.simulateDeletedPct && this.since) {
                             let cnt = Math.round(count/100 * this.simulateDeletedPct);
-                            
-                            cnt && deletedArr.push({
-                                type: row.fhir_type,
-                                count: cnt,
-                                url: lib.buildUrlPath(
-                                    baseUrl,
-                                    base64url.encode(JSON.stringify({
-                                        id    : this.id,
-                                        limit : cnt,
-                                        del   : 1,
-                                        secure: this.secure,
-                                        offset
-                                    })),
-                                    "/fhir/bulkfiles/",
-                                    `${i + 1}.${row.fhir_type}.${this.outputFormat}`
-                                )
-                            });
-
-                            count  -= cnt;
-                            offset += cnt;
+                            if (cnt) {
+                                addDeleted(
+                                    i,
+                                    fhir_type,
+                                    cnt,
+                                    offset,
+                                    Math.min(this.resourcesPerFile, Math.abs(filteredCount - offset))
+                                );
+                                count  -= cnt;
+                                offset += cnt;
+                            }
                         }
 
-                        linksLen = linksArr.push({
-                            type: row.fhir_type,
-                            count: count,
-                            url: lib.buildUrlPath(
-                                baseUrl,
-                                base64url.encode(JSON.stringify({
-                                    id    : this.id,
-                                    offset,
-                                    limit : count,
-                                    secure: this.secure,
-                                })),
-                                "/fhir/bulkfiles/",
-                                `${i + 1}.${row.fhir_type}.${this.outputFormat}`
-                            )
-                        });
+                        addFile(
+                            i,
+                            fhir_type,
+                            count,
+                            offset,
+                            Math.max(Math.min(this.resourcesPerFile, filteredCount - offset), 0)
+                        );
+                    }
+
+                    // Limit the manifest size based on total number of file links
+                    if (manifest.output.length + manifest.error.length + manifest.deleted.length > config.maxFiles) {
+                        this.tooManyFiles = true;
+                        await this.save();
+                        return null;
                     }
                 }
             }
-    
-            res.set({
-                "Expires": new Date(this.createdAt + config.maxExportAge * 60000).toUTCString()
-            }).json({
-    
-                // a FHIR instant type that indicates the server's time when the
-                // query is run. No resources that have a modified data after this
-                // instant should be in the response.
-                "transactionTime": requestStart,
-    
-                // the full url of the original bulk data kick-off request
-                "request" : this.request,
-    
-                // boolean value indicating whether downloading the generated files
-                // will require an authentication token. Note: This may be false in
-                // the case of signed S3 urls or an internal file server within an
-                // organization's firewall.
-                "requiresAccessToken": this.secure,
-    
-                // array of bulk data file items with one entry for each generated
-                // file. Note: If no data is returned from the kick-off request,
-                // the server should return an empty array.
-                "output" : linksArr,
 
-                // When a _since timestamp is supplied in the export request,
-                // this array SHALL be populated with output files containing
-                // FHIR Transaction Bundles that indicate which FHIR resources
-                // would have been returned, but have been deleted subsequent to
-                // that date. If no resources have been deleted or the _since
-                // parameter was not supplied, the server MAY omit this key
-                // or MAY return an empty array.
-                "deleted": deletedArr,
+            this.progress += (rowCount * this.databaseMultiplier / totalResourceCount * 100)
+            // console.log(`Progress =======> ${this.progress}%`);
+            await this.save()
+        }
 
-                // If no errors occurred, the server should return an empty array
-                "error": errorArr
-            }).end();
-        });
+        this.manifest = manifest
+        await this.save()
+        return manifest
+    }
+
+    async handleStatus(req, res) {
+
+        if (this.secure && !req.headers.authorization) {
+            return lib.operationOutcome(res, "Not authorized", { httpCode: 401 });
+        }
+
+        if (this.tooManyFiles) {
+            return res.status(413).send("Too many files");
+        }
+
+        // const signal = this.getAbortController().signal
+
+        if (!this.ignoreTransientError && this.simulatedError == "transient_error") {
+            this.ignoreTransientError = true;
+            await this.save();
+            return lib.operationOutcome(
+                res,
+                "An unknown error ocurred (transient_error). Please try again.",
+                {
+                    httpCode : 500,
+                    issueCode: "transient"
+                }
+            );
+        }
+
+        if (this.jobStatus === "EXPORTED") {
+            return lib.outcomes.cancelCompleted(res);
+        }
+
+        // ensure requestStart param is present
+        // let requestStart = moment(this.requestStart);
+
+        // If waiting - show progress and exit
+        if (this.typeFilter.get("_filter") || this.simulatedExportDuration <= 0) {
+            if (Math.round(this.progress) < 100) {
+                return res.set({
+                    "X-Progress" : Math.round(this.progress) + "% complete, " + this.statusMessage,
+                    "Retry-After": 1
+                }).status(202).end();
+            }
+        } 
+        else {
+            // check if the user should (continue to) wait
+            let requestStart = moment(this.requestStart);
+            let endTime = moment(requestStart).add(this.simulatedExportDuration, "seconds");
+            let now = moment();
+        
+            // If waiting - show progress and exit
+            if (endTime.isAfter(now, "second")) {
+                let diff = (+now - +requestStart)/1000;
+                let pct = Math.round((diff / this.simulatedExportDuration) * 100);
+                return res.set({
+                    "X-Progress" : pct + "% complete, " + this.statusMessage,
+                    "Retry-After": 2//Math.ceil(this.simulatedExportDuration - diff)
+                }).status(202).end();
+            }
+        }
+
+        
+
+        if (!this.manifest) {
+            return lib.operationOutcome(res, "Failed to build export manifest.", {
+                httpCode : 400,
+                // issueCode: "transient"
+            });
+        }
+
+        this.jobStatus = "EXPORTED";
+        await this.save()
+
+        res.set({
+            "Expires": new Date(this.createdAt + config.maxExportAge * 60000).toUTCString()
+        }).json(this.manifest);
     };
 
     async download(req, res)
