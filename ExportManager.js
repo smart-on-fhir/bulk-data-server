@@ -274,10 +274,10 @@ class ExportManager
     static cleanUp()
     {
         return lib.forEachFile({
-            dir: __dirname + "/jobs/",
+            dir: __dirname + "/jobs",
             filter: path => path.endsWith(".json")
         }, (path, fileStats, next) => {
-            return lib.readJSON(path).then(state => {
+            lib.readJSON(path).then(state => {
                 if (state && /*state.jobStatus === "EXPORTED" &&*/ Date.now() - state.createdAt > config.maxExportAge * 60000) {
                     fs.unlink(path, err => {
                         /* istanbul ignore if */
@@ -290,7 +290,7 @@ class ExportManager
                 else {
                     next();
                 }
-            }).catch(console.log);
+            });
         }).then(() => {
             /* istanbul ignore if */
             if (process.env.NODE_ENV != "test") {
@@ -725,7 +725,7 @@ class ExportManager
         } 
 
         let input = new fhirStream({
-            fileName   : req.params.file,
+            types      : [req.params.file.split(".")[1]],
             stu        : this.stu,
             databaseMultiplier: this.databaseMultiplier,
             extended   : this.extended,

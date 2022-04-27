@@ -1,4 +1,4 @@
-const FS         = require("fs");
+const FS         = require("fs").promises;
 const Path       = require("path");
 const Walker     = require("walk");
 const jwt        = require("jsonwebtoken");
@@ -105,23 +105,6 @@ function getRequestedParams(req, paramName = "sim") {
 }
 
 /**
- * Promisified version of readFile
- * @param {String} path 
- * @param {Object} options 
- */
-async function readFile(path, options = null)
-{
-    return new Promise((resolve, reject) => {
-        FS.readFile(path, options, (error, result) => {
-            if (error) {
-                return reject(error);
-            }
-            resolve(result);
-        });
-    });
-}
-
-/**
  * Parses the given json string into a JSON object. Internally it uses the
  * JSON.parse() method but adds three things to it:
  * 1. Returns a promise
@@ -180,12 +163,11 @@ async function stringifyJSON(json, indentation)
 /**
  * Read a file and parse it as JSON.
  * @param path
- * @param {Object} options The options for readFile
  * @return {Promise<Object>} Promises the JSON object
  */
-async function readJSON(path, options = null)
+async function readJSON(path)
 {
-    return readFile(path, options).then(parseJSON);
+    return FS.readFile(path, "utf8").then(parseJSON);
 }
 
 async function forEachFile(options, cb)
@@ -737,7 +719,6 @@ class AbortError extends Error {
 
 module.exports = {
     htmlEncode,
-    readFile,
     parseJSON,
     stringifyJSON,
     readJSON,

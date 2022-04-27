@@ -62,3 +62,4 @@ typings/
 import/database.*.imports.db
 jobs/*
 !.gitkeep
+.DS_Store

@@ -14,16 +14,16 @@ class FhirStream extends Readable
 {
     /**
      * 
-     * @param {object} options
-     * @param {number} options.stu
-     * @param {string} options.fileName
-     * @param {number} [options.limit]
-     * @param {number} [options.databaseMultiplier]
-     * @param {number} [options.offset]
-     * @param {boolean} [options.extended]
-     * @param {string} [options.group]
-     * @param {string} [options.since]
-     * @param {boolean} [options.systemLevel]
+     * @param {object}        options
+     * @param {number}        options.stu
+     * @param {string[]}      options.types
+     * @param {number}        [options.limit]
+     * @param {number}        [options.databaseMultiplier]
+     * @param {number}        [options.offset]
+     * @param {boolean}       [options.extended]
+     * @param {string}        [options.group]
+     * @param {string}        [options.since]
+     * @param {boolean}       [options.systemLevel]
      * @param {string[]|null} [options.patients]
      */
     constructor(options)
@@ -39,7 +39,7 @@ class FhirStream extends Readable
         this.patients   = options.patients || null;
         this.group      = options.group || "";
         this.start      = options.since || "";
-        this.types      = [options.fileName.split(".")[1]];
+        this.types      = options.types;
         this.params     = {};
         this.cache      = [];
         this.statement  = null;
@@ -66,7 +66,11 @@ class FhirStream extends Readable
         this.getNextRow  = this.getNextRow .bind(this);
 
         this._read = () => {
-            this.timer = setTimeout(this.getNextRow, config.throttle || 0);
+            if (config.throttle) {
+                this.timer = setTimeout(this.getNextRow, config.throttle);    
+            } else {
+                this.getNextRow()
+            }
         };
     }
 

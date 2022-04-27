@@ -108,10 +108,9 @@ module.exports = function(sim = {}) {
                     }
                 }
 
-                this.push(row);
-                setImmediate(next);
+                next(null, row);
             } catch (error) {
-                setImmediate(next, error);
+                next(error);
             }
         }
     });
