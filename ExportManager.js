@@ -175,6 +175,12 @@ class ExportManager
     since;
 
     /**
+     * The _typeFilter parameter
+     * @type {URLSearchParams}
+     */
+    typeFilter;
+
+    /**
      * true for system-level exports and false otherwise
      * @type {boolean}
      */
@@ -315,7 +321,8 @@ class ExportManager
             .setGroup(options.group)
             // .setPatients(options.patients)
             .setSimulateDeletedPct(options.simulateDeletedPct)
-            .setSince(options.since);
+            .setSince(options.since)
+            .setTypeFilter(options.typeFilter);
 
         ["resourceTypes", "fhirElements", "id", "requestStart", "secure", "patients",
          "outputFormat", "request", "fileError","jobStatus", "extended", "createdAt",
@@ -371,7 +378,8 @@ class ExportManager
             createdAt              : this.createdAt,
             ignoreTransientError   : this.ignoreTransientError,
             simulateDeletedPct     : this.simulateDeletedPct,
-            kickoffErrors          : this.kickoffErrors
+            kickoffErrors          : this.kickoffErrors,
+            typeFilter             : this.typeFilter.toString(),
         };
     }
 
@@ -427,17 +435,14 @@ class ExportManager
             this.kickoffErrors.push(outcome);
         }
 
-        if (_typeFilter) {
-            const outcome = lib.createOperationOutcome(`The "_typeFilter" parameter is not supported by this server`);
-            if (!isLenient) {
-                this.delete();
-                return res.status(400).json(outcome);
-            }
-            this.kickoffErrors.push(outcome);
-        }
-
         if (_patient && req.method != "POST") {
             return lib.operationOutcome(res, `The "patient" parameter is only available in POST requests`, { httpCode: 400 });
+        }
+
+        try {
+            this.setTypeFilter(_typeFilter)
+        } catch (ex) {
+            return lib.operationOutcome(res, ex.message, { httpCode: 400 });
         }
 
         try {
@@ -734,7 +739,8 @@ class ExportManager
             offset     : req.sim.offset,
             since      : this.since,
             systemLevel: this.systemLevel,
-            patients   : this.patients
+            patients   : this.patients,
+            filter     : this.typeFilter.get("_filter")
         });
         
         input.on("error", error => {
@@ -926,6 +932,16 @@ class ExportManager
     setSince(since = "")
     {
         this.since = since ? lib.fhirDateTime(since, true) : "";
+        return this;
+    }
+
+    /**
+     * Sets the _typeFilter parameter
+     * @param {string} _typeFilter
+     */
+    setTypeFilter(_typeFilter = "")
+    {
+        this.typeFilter = new URLSearchParams(_typeFilter);
         return this;
     }
 
