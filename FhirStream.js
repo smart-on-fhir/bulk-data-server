@@ -1,4 +1,5 @@
 const { Readable } = require("stream");
+const fhirFilter   = require("fhir-filter/dist");
 const config       = require("./config");
 const Lib          = require("./lib");
 const QueryBuilder = require("./QueryBuilder");
@@ -25,6 +26,7 @@ class FhirStream extends Readable
      * @param {string}        [options.since]
      * @param {boolean}       [options.systemLevel]
      * @param {string[]|null} [options.patients]
+     * @param {string|null}   [options.filter]
      */
     constructor(options)
     {
@@ -47,8 +49,11 @@ class FhirStream extends Readable
         this.total      = 0;
         this.rowIndex   = 0;
         this.overflow   = 0;
+        this.filter     = options.filter ? fhirFilter.create(options.filter) : null;
 
         this.timer = null
+
+        this.count = 0
 
         this.builder = new QueryBuilder({
             limit      : this.limit,
@@ -155,11 +160,16 @@ class FhirStream extends Readable
     getNextRow()
     {
         // If we have read enough rows already - exit
-        if (this.rowIndex >= this.limit) {
+        if (this.count >= this.limit) {
             return this.push(null);
         }
 
-        const row = this.cache.length ? this.cache.shift() : null;
+        let row = this.cache.length ? this.cache.shift() : null;
+
+        if (row && this.filter && !this.filter(JSON.parse(row.resource_json))) {
+            this.rowIndex += 1;
+            return this.getNextRow()
+        }
 
         // If there is no row returned - check why
         if (!row) {
@@ -220,7 +230,7 @@ class FhirStream extends Readable
         }
         
         this.push(row);
-
+        this.count += 1;
         this.rowIndex += 1;
     }
 }
