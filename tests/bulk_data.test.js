@@ -1,4 +1,3 @@
-/** @type {any} */
 const assert        = require("assert");
 const base64url     = require("base64-url");
 const moment        = require("moment");
@@ -36,52 +35,6 @@ function cleanUp() {
             fs.unlinkSync(basePath + "/" + file);
         }
     });
-}
-
-// added in node v10
-async function rejects(block, error, message) {
-    return assert.rejects(block, error, message);
-    // let promise = block;
-    // if (typeof block == "function") {
-    //     try {
-    //         promise = block();
-    //     } catch (ex) {
-    //         return Promise.reject(ex);
-    //     }
-    // }
-    // if (!promise || typeof promise.then != "function") {
-    //     return Promise.reject(new Error(
-    //         "The first argument must be a Promise or a function " +
-    //         "that returns a promise"
-    //     ));
-    // }
-
-    // let result;
-    // try {
-    //     result = await promise;
-    // } catch (ex) {
-    //     if (error) {
-    //         if (typeof error == "function") {
-    //             if (!(ex instanceof error)) {
-    //                 return Promise.reject(new Error(
-    //                     `Expected block to reject with an instance of ${error.name}`    
-    //                 ));
-    //             }
-    //         //     else if ()
-    //         }
-    //         else if (typeof error == "object") {
-    //             for (let key in error) {
-    //                 expect(error[key]).to.equal(
-    //                     ex[key],
-    //                     `Expected the rejection error to have a "${key}" ` +
-    //                     `property equal to '${error[key]}'`
-    //                 );
-    //             }
-    //         }
-    //     }
-    //     return Promise.resolve();
-    // }
-    // return Promise.reject(new Error(message || "The provided block did not reject"));
 }
 
 class Client
@@ -331,7 +284,9 @@ class Client
      * Starts an export and waits for it. Then downloads the file at the given
      * index. NOTE: this method assumes that the index exists and will throw
      * otherwise.
-     * @param {Number} index The index of the file in the status list
+     * @param {number} index The index of the file in the status list
+     * @param {string|null} [accessToken=null]
+     * @param {string|null} [fileError=null]
      */
     async downloadFileAt(index, accessToken = null, fileError = null) {
         if (!this.statusResponse || !this.statusResponse.body) {
@@ -351,9 +306,12 @@ class Client
      * index. NOTE: this method assumes that the index exists and will throw
      * otherwise.
      * @param {string} fileUrl The index of the file in the status list
+     * @param {string|null} [accessToken=null]
+     * @param {string|null} [fileError=null]
      */
     async downloadFile(fileUrl, accessToken = null, fileError = null) {
         if (fileError) {
+            // @ts-ignore
             let sim = fileUrl.match(/^http\:\/\/.*?\/(.*?)\/fhir/)[1];
             sim = base64url.decode(sim);
             sim = JSON.parse(sim);
@@ -448,11 +406,11 @@ describe("Conformance Statement", () => {
         ].forEach(mime => {
             it (`/fhir/metadata?_format=${mime}`, () => {
                 let url = lib.buildUrl([`/fhir/metadata?_format=${encodeURIComponent(mime)}`]);
-                return rejects(lib.requestPromise({ url }));
+                return assert.rejects(lib.requestPromise({ url }));
             });
 
             it (`/fhir/metadata using accept:${mime}`, () => {
-                return rejects(
+                return assert.rejects(
                     lib.requestPromise({
                         url: lib.buildUrl(["/fhir/metadata"]),
                         headers: { accept: mime }
@@ -506,19 +464,19 @@ describe("Authentication", () => {
         );
     });
 
-    it ("rejects due to request_invalid_token error", () => rejects(async() => {
+    it ("rejects due to request_invalid_token error", () => assert.rejects(async() => {
         const { access_token } = await lib.authorize({ err: "request_invalid_token" });
         const client = new Client();
         await client.kickOff({ secure: true, accessToken: access_token });
     }));
 
-    it ("rejects due to request_expired_token error", () => rejects(async() => {
+    it ("rejects due to request_expired_token error", () => assert.rejects(async() => {
         const { access_token } = await lib.authorize({ err: "request_expired_token" });
         const client = new Client();
         await client.kickOff({ secure: true, accessToken: access_token });
     }));
 
-    // it ("rejects due to bad base64 token encoding", () => rejects(async() => {
+    // it ("rejects due to bad base64 token encoding", () => assert.rejects(async() => {
     //     // const { access_token } = await lib.authorize({ err: "request_expired_token" });
     //     const client = new Client();
     //     await client.kickOff({ secure: true, accessToken: "a.b.c" });
@@ -795,15 +753,15 @@ describe("Bulk Data Kick-off Request", function() {
         describe(meta.description, () => {
 
             describe("Accept header", () => {
-                it ("Requires 'accept' header", () => rejects(new Client().kickOff({ ...meta.options, accept: null })));
-                it ("Works with 'accept: */*' header", () => rejects(new Client().kickOff({ ...meta.options, accept: "*/*" })));
-                it ("Rejects bad accept headers", () => rejects(new Client().kickOff({ ...meta.options, accept: "x" })));
+                it ("Requires 'accept' header", () => assert.rejects(new Client().kickOff({ ...meta.options, accept: null })));
+                it ("Works with 'accept: */*' header", () => assert.rejects(new Client().kickOff({ ...meta.options, accept: "*/*" })));
+                it ("Rejects bad accept headers", () => assert.rejects(new Client().kickOff({ ...meta.options, accept: "x" })));
                 it ("Accepts application/fhir+json", () => new Client().kickOff({ ...meta.options, accept: "application/fhir+json" }));
             });
 
             describe("Prefer header", () => {
-                it ("must be provided", () => rejects(new Client().kickOff({ ...meta.options, prefer: null })));
-                it ("must be 'respond-async'", () => rejects(new Client().kickOff({ ...meta.options, prefer: "x" })));
+                it ("must be provided", () => assert.rejects(new Client().kickOff({ ...meta.options, prefer: null })));
+                it ("must be 'respond-async'", () => assert.rejects(new Client().kickOff({ ...meta.options, prefer: "x" })));
                 it ("works if valid", async () => new Client().kickOff({ ...meta.options, prefer: "respond-async" }));
             });
 
@@ -816,14 +774,14 @@ describe("Bulk Data Kick-off Request", function() {
                     it(method + " accepts ndjson", async () => new Client().kickOff({ ...options, _outputFormat: "ndjson" }));
                     it(method + " accepts text/csv", async () => new Client().kickOff({ ...options, _outputFormat: "text/csv" }));
                     it(method + " accepts csv", async () => new Client().kickOff({ ...options, _outputFormat: "csv" }));
-                    it(method + " rejects unknown", () => rejects(new Client().kickOff({ ...options, _outputFormat: "x" })));
+                    it(method + " rejects unknown", () => assert.rejects(new Client().kickOff({ ...options, _outputFormat: "x" })));
                 });
             });
 
             describe("_type parameter", () => {
                 ["GET", "POST"].forEach(method => {
                     const options = { ...meta.options, usePOST: method === "POST" };
-                    it (method + " rejects invalid", () => rejects(new Client().kickOff({ ...options, _type: "x,y" })));
+                    it (method + " rejects invalid", () => assert.rejects(new Client().kickOff({ ...options, _type: "x,y" })));
                     it (method + " accepts valid", async () => new Client().kickOff({ ...options, _type: "Patient,Observation" }));
                 });
             });
@@ -831,7 +789,7 @@ describe("Bulk Data Kick-off Request", function() {
             describe("_since parameter", () => {
                 ["GET", "POST"].forEach(method => {
                     const options = { ...meta.options, usePOST: method === "POST" };
-                    it (method + " Rejects future _since", () => rejects(new Client().kickOff({ ...options, _since: "2092-01-01T01:01:01+00:00" })));
+                    it (method + " Rejects future _since", () => assert.rejects(new Client().kickOff({ ...options, _since: "2092-01-01T01:01:01+00:00" })));
                     it (method + " handles partial start dates like 2010", async () => new Client().kickOff({ ...options, _since: "2010" }));
                     it (method + " handles partial start dates like 2010-01", async () => new Client().kickOff({ ...options, _since: "2010-01" }));
                 })
@@ -840,9 +798,9 @@ describe("Bulk Data Kick-off Request", function() {
             describe("_elements parameter", () => {
                 ["GET", "POST"].forEach(method => {
                     const options = { ...meta.options, usePOST: method === "POST" };
-                    it (method + " Rejects a.b.c", () => rejects(new Client().kickOff({ ...options, _elements: "a.b.c" })));
-                    it (method + " Rejects x.id", () => rejects(new Client().kickOff({ ...options, _elements: "x.id" })));
-                    it (method + " Rejects x-y", () => rejects(new Client().kickOff({ ...options, _elements: "x-y" })));
+                    it (method + " Rejects a.b.c", () => assert.rejects(new Client().kickOff({ ...options, _elements: "a.b.c" })));
+                    it (method + " Rejects x.id", () => assert.rejects(new Client().kickOff({ ...options, _elements: "x.id" })));
+                    it (method + " Rejects x-y", () => assert.rejects(new Client().kickOff({ ...options, _elements: "x-y" })));
                     it (method + " Accepts Patient.id", () => new Client().kickOff({ ...options, _elements: "Patient.id" }));
                     it (method + " Accepts Patient.id,meta", () => new Client().kickOff({ ...options, _elements: "Patient.id,meta" }));
                     it (method + " Accepts meta", () => new Client().kickOff({ ...options, _elements: "meta" }));
@@ -850,9 +808,9 @@ describe("Bulk Data Kick-off Request", function() {
             });
 
             describe("patient parameter", () => {
-                it ("Rejects patient param on GET", () => rejects(new Client().kickOff({ ...meta.options, patient: "a,b,c" })));
+                it ("Rejects patient param on GET", () => assert.rejects(new Client().kickOff({ ...meta.options, patient: "a,b,c" })));
                 if (meta.options.systemLevel) {
-                    it ("Rejects a,b,c", () => rejects(new Client().kickOff({ ...meta.options, usePOST: true, patient: "a,b,c" })));
+                    it ("Rejects a,b,c", () => assert.rejects(new Client().kickOff({ ...meta.options, usePOST: true, patient: "a,b,c" })));
                 } else {
                     it ("Accepts a,b,c", () => new Client().kickOff({ ...meta.options, usePOST: true, patient: "a,b,c" }));
                     it ("Ignores invalid patient references", () => new Client().kickOff({
@@ -869,13 +827,13 @@ describe("Bulk Data Kick-off Request", function() {
             });
 
             describe("POST requests", () => {
-                it ("Rejects without body", () => rejects(new Client().kickOff({ ...meta.options, usePOST: true, body: undefined })));
-                it ("Rejects empty body", () => rejects(new Client().kickOff({ ...meta.options, usePOST: true, body: {} })));
-                it ("Rejects invalid body", () => rejects(new Client().kickOff({ ...meta.options, usePOST: true, body: { resourceType: "whatever" } })));
+                it ("Rejects without body", () => assert.rejects(new Client().kickOff({ ...meta.options, usePOST: true, body: undefined })));
+                it ("Rejects empty body", () => assert.rejects(new Client().kickOff({ ...meta.options, usePOST: true, body: {} })));
+                it ("Rejects invalid body", () => assert.rejects(new Client().kickOff({ ...meta.options, usePOST: true, body: { resourceType: "whatever" } })));
             });
 
             describe("Access token", () => {
-                it ("rejects invalid auth token", () => rejects(new Client().kickOff({ ...meta.options, accessToken: "badToken" })));
+                it ("rejects invalid auth token", () => assert.rejects(new Client().kickOff({ ...meta.options, accessToken: "badToken" })));
 
                 it ("accepts valid auth token", async () => {
                     const { access_token } = await lib.authorize();
@@ -941,7 +899,7 @@ describe("Bulk Data Kick-off Request", function() {
                     );
                 });
 
-                it ("Rejects invalid stu", () => rejects(new Client().kickOff({ ...meta.options, stu: 9 })));
+                it ("Rejects invalid stu", () => assert.rejects(new Client().kickOff({ ...meta.options, stu: 9 })));
             });
 
             describe("_typeFilter parameter", () => {
@@ -982,30 +940,30 @@ describe("Bulk Data Kick-off Request", function() {
 });
 
 describe("Token endpoint", () => {
-    it ("rejects missing scopes", () => rejects(lib.authorize({ scope: undefined })));
+    it ("rejects missing scopes", () => assert.rejects(lib.authorize({ scope: undefined })));
     
     it ("rejects invalid V1 scopes", async () => {
-        await rejects(lib.authorize({ scope: "system/Patient.revoke" }))
-        await rejects(lib.authorize({ scope: "bad/Patient.*" }))
-        await rejects(lib.authorize({ scope: "user/missing.read" }))
-        await rejects(lib.authorize({ scope: "*/*.*" }))
+        await assert.rejects(lib.authorize({ scope: "system/Patient.revoke" }))
+        await assert.rejects(lib.authorize({ scope: "bad/Patient.*" }))
+        await assert.rejects(lib.authorize({ scope: "user/missing.read" }))
+        await assert.rejects(lib.authorize({ scope: "*/*.*" }))
     });
 
     it ("rejects invalid v2 scopes", async () => {
-        await rejects(lib.authorize({ scope: "system/ResourceType.rsx" }))
-        await rejects(lib.authorize({ scope: "bad/ResourceType.rs" }))
-        await rejects(lib.authorize({ scope: "user/missing.sd" }))
-        await rejects(lib.authorize({ scope: "system/ResourceType.*" }))
+        await assert.rejects(lib.authorize({ scope: "system/ResourceType.rsx" }))
+        await assert.rejects(lib.authorize({ scope: "bad/ResourceType.rs" }))
+        await assert.rejects(lib.authorize({ scope: "user/missing.sd" }))
+        await assert.rejects(lib.authorize({ scope: "system/ResourceType.*" }))
     });
     
-    it ("does not reject valid v1 scopes", () => !rejects(lib.authorize({ scope: "system/ResourceType.read" })));
+    it ("does not reject valid v1 scopes", () => !assert.rejects(lib.authorize({ scope: "system/ResourceType.read" })));
     
     it ("does not reject valid v2 scopes", async () => {
         const response = await lib.authorize({ scope: "system/Patient.rs" })
         expect(response.scope).to.equal("system/Patient.rs")
     });
 
-    it ("rejects due to bad base64 token encoding", () => rejects(async() => {
+    it ("rejects due to bad base64 token encoding", () => assert.rejects(async() => {
         await lib.requestPromise({
             method: "POST",
             uri   : config.baseUrl + "/auth/token",
@@ -1019,7 +977,7 @@ describe("Token endpoint", () => {
         });
     }));
 
-    it ("rejects due to missing alg", () => rejects(async() => {
+    it ("rejects due to missing alg", () => assert.rejects(async() => {
         await lib.requestPromise({
             method: "POST",
             uri   : config.baseUrl + "/auth/token",
@@ -1037,7 +995,7 @@ describe("Token endpoint", () => {
         });
     }));
 
-    it ("rejects due to missing kid", () => rejects(async() => {
+    it ("rejects due to missing kid", () => assert.rejects(async() => {
         await lib.requestPromise({
             method: "POST",
             uri   : config.baseUrl + "/auth/token",
@@ -1055,7 +1013,7 @@ describe("Token endpoint", () => {
         });
     }));
 
-    it ("rejects due to missing typ", () => rejects(async() => {
+    it ("rejects due to missing typ", () => assert.rejects(async() => {
         await lib.requestPromise({
             method: "POST",
             uri   : config.baseUrl + "/auth/token",
@@ -1073,7 +1031,7 @@ describe("Token endpoint", () => {
         });
     }));
 
-    it ("rejects due to invalid typ", () => rejects(async() => {
+    it ("rejects due to invalid typ", () => assert.rejects(async() => {
         await lib.requestPromise({
             method: "POST",
             uri   : config.baseUrl + "/auth/token",
@@ -1091,7 +1049,7 @@ describe("Token endpoint", () => {
         });
     }));
 
-    it ("rejects due to bad token body", () => rejects(async() => {
+    it ("rejects due to bad token body", () => assert.rejects(async() => {
         await lib.requestPromise({
             method: "POST",
             uri   : config.baseUrl + "/auth/token",
@@ -1153,7 +1111,7 @@ describe("Canceling", () => {
     });
 
     it ("cleanUp", async () => {
-        const path = __dirname + "/../jobs/test.json";
+        const path = config.jobsPath + "/test.json";
         fs.writeFileSync(path, `{"createdAt":${ Date.now() - config.maxExportAge * 6002 }}`, "utf8");
         expect(fs.statSync(path).isFile()).to.equal(true);
         await ExportManager.cleanUp();
@@ -1164,7 +1122,7 @@ describe("Canceling", () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
         const { id } = client.getState();
-        fs.unlinkSync(`${__dirname}/../jobs/${id}.json`);
+        fs.unlinkSync(`${config.jobsPath}/${id}.json`);
         return client.cancel().catch(({response}) => {
             expect(response.statusCode).to.equal(404);
         });
@@ -1174,7 +1132,7 @@ describe("Canceling", () => {
 describe("Progress Updates", function() {
     this.timeout(15000)
 
-    it ("rejects invalid auth token", () => rejects(async () => {
+    it ("rejects invalid auth token", () => assert.rejects(async () => {
         const client = new Client();
         await client.kickOff();
         await client.checkStatus({ accessToken: "badToken" });
@@ -1187,7 +1145,7 @@ describe("Progress Updates", function() {
         await client.checkStatus({ accessToken: access_token });
     });
 
-    it ("requires an auth token if kicked off with auth", () => rejects(async () => {
+    it ("requires an auth token if kicked off with auth", () => assert.rejects(async () => {
         const { access_token } = await lib.authorize();
         const client = new Client();
         await client.kickOff({ accessToken: access_token });
@@ -1257,7 +1215,7 @@ describe("Progress Updates", function() {
         expect(client2.statusResponse.body.output[3].count).to.equal(30);
     });
 
-    it ("rejects further calls on completed exports", () => rejects(async () => {
+    it ("rejects further calls on completed exports", () => assert.rejects(async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
         await client.waitForExport();
@@ -1296,7 +1254,7 @@ describe("Progress Updates", function() {
         expect(client.statusResponse.body.error).to.deep.equal([]);
     });
 
-    it ("Rejects status checks on canceled exports", () => rejects(async () => {
+    it ("Rejects status checks on canceled exports", () => assert.rejects(async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
         await client.cancel();
@@ -1328,7 +1286,7 @@ describe("File Downloading", function() {
     
     this.timeout(15000);
 
-    it ("rejects invalid auth token", () => rejects(async () => {
+    it ("rejects invalid auth token", () => assert.rejects(async () => {
         const { access_token } = await lib.authorize();
         const client = new Client();
         await client.kickOff({ _type: "Patient", accessToken: access_token });
@@ -1336,7 +1294,7 @@ describe("File Downloading", function() {
         await client.downloadFileAt(0, "bad-token");
     }));
 
-    it ("requires an auth token if kicked off with auth", () => rejects(async () => {
+    it ("requires an auth token if kicked off with auth", () => assert.rejects(async () => {
         const { access_token } = await lib.authorize();
         const client = new Client();
         await client.kickOff({ _type: "Patient", accessToken: access_token });
@@ -1428,7 +1386,7 @@ describe("File Downloading", function() {
         expect(lines.length).to.equal(8);
     });
 
-    it ("rejects downloads from canceled exports", () => rejects(async () => {
+    it ("rejects downloads from canceled exports", () => assert.rejects(async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
         await client.checkStatus();
