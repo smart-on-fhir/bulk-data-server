@@ -233,8 +233,6 @@ class ExportManager
 
     tooManyFiles = false;
 
-    // fsPromise = Promise.resolve();
-
     getAbortController() {
         let ctl = ABORT_CONTROLLERS.get(this.id)
         if (!ctl) {
