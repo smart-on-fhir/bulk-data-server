@@ -22,18 +22,18 @@ before(next => {
 });
 
 after(next => {
-    server.unref().close(next);
     cleanUp();
+    server.unref().close(next);
 });
 
 function noop() {}
 
 function cleanUp() {
-    const basePath = __dirname + "/../jobs/";
+    const basePath = config.jobsPath;
     const files = fs.readdirSync(basePath);
     files.forEach(file => {
-        if (file !== ".gitkeep") {
-            fs.unlinkSync(basePath + file);
+        if (file.endsWith(".json")) {
+            fs.unlinkSync(basePath + "/" + file);
         }
     });
 }
@@ -307,7 +307,7 @@ class Client
             );
         }
 
-        const path = `../jobs/${args[2]}`;
+        const path = `${config.jobsPath}/${args[2]}`;
         return require(path);
     }
 
@@ -781,7 +781,7 @@ describe("Bulk Data Kick-off Request", function() {
                         throw new Error("Invalid content-location returned: " + JSON.stringify(res.headers, null, 4) + "\n\n" + res.body);
                     }
 
-                    const path = `../jobs/${args[2]}`;
+                    const path = `${config.jobsPath}/${args[2]}`;
                     const state = require(path);
 
                     for (const key in expected) {

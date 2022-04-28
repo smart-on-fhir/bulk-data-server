@@ -28,9 +28,11 @@ module.exports = {
     rowsPerChunk: 500,
 
     // In minutes! Files created after export are deleted after 60 minutes.
-    maxExportAge: process.env.NODE_ENV === "test" ? 1 : 60,
+    maxExportAge: 60,
 
     jwtSecret: process.env.SECRET || "this-is-our-big-secret",
+
+    jobsPath: process.env.NODE_ENV === "test" ? __dirname + "/jobs/test" : __dirname + "/jobs",
 
     errors: {
         "missing_parameter"               : "Missing %s parameter",

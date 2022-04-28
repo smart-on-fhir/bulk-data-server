@@ -251,7 +251,7 @@ class ExportManager
      */
     static find(id)
     {
-        return lib.readJSON(`${__dirname}/jobs/${id}.json`).then(
+        return lib.readJSON(`${config.jobsPath}/${id}.json`).then(
             state => new ExportManager(state || {})
         );
     }
@@ -306,24 +306,13 @@ class ExportManager
     static cleanUp()
     {
         return lib.forEachFile({
-            dir: __dirname + "/jobs",
+            dir: config.jobsPath,
             filter: path => path.endsWith(".json")
-        }, (path, fileStats, next) => {
-            lib.readJSON(path).then(state => {
-                if (state && /*state.jobStatus === "EXPORTED" &&*/ Date.now() - state.createdAt > config.maxExportAge * 60000) {
-                    fs.unlink(path, err => {
-                        /* istanbul ignore if */
-                        if (err) {
-                            console.error(err);
-                        }
-                        next();
-                    });
-                }
-                else {
-                    next();
-                }
-            });
-        }).then(() => {
+        }, path => lib.readJSON(path).then(state => {
+            if (state && Date.now() - state.createdAt > config.maxExportAge * 60000) {
+                return fs.promises.unlink(path);
+            }
+        })).then(() => {
             /* istanbul ignore if */
             if (process.env.NODE_ENV != "test") {
                 setTimeout(ExportManager.cleanUp, 5000).unref();
@@ -373,7 +362,7 @@ class ExportManager
             return true;
         }
 
-        const path = `${__dirname}/jobs/${this.id}.json`;
+        const path = `${config.jobsPath}/${this.id}.json`;
         const data = JSON.stringify(this.toJSON(), null, 4);
         fs.writeFileSync(path, data, "utf8");
         return true;
@@ -381,7 +370,7 @@ class ExportManager
 
     delete()
     {
-        const path = `${__dirname}/jobs/${this.id}.json`;
+        const path = `${config.jobsPath}/${this.id}.json`;
         this.getAbortController().abort();
         deleteFileIfExists(path);
         ABORT_CONTROLLERS.delete(this.id);
