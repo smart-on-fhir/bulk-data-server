@@ -1,7 +1,5 @@
 (function($, Lib, moment, Prism) {
 
-    let TIMER;
-
     const fhirVersions = {
         2: "FHIR DSTU2",
         3: "FHIR STU3",
@@ -17,6 +15,7 @@
         patients        : null,
         _since          : null,
         _elements       : null,
+        _typeFilter     : null,
         group           : null,
         httpMethod      : "GET",
         exportType      : "",
@@ -25,7 +24,6 @@
         path            : "/Patient/$export",
         showRequest     : false,
         progressValue   : 0,
-        progressDuration: 0,
         progressVisible : false,
         progressMessage : "Preparing files. Please wait...",
         statusUrl       : null,
@@ -155,7 +153,7 @@
             $fileList.html(
                 files.map(function(f) {
                     var url = f.url;
-                    return '<a class="download-link text-success" rel="download" href="' + url + '">' +
+                    return '<a class="download-link" rel="download" href="' + url + '">' +
                         '<i class="fa fa-file-text-o" aria-hidden="true"></i>' + 
                         '<span>' + url.split("/").pop() + '&nbsp;</span><b class="badge">' + formatNumber(f.count) + '</b></a>';
                 }).join("")
@@ -178,7 +176,7 @@
         $fileList.html(
             files.map(function(f) {
                 var url = f.url;
-                return '<a class="download-link text-success" rel="download" href="' + url + '">' +
+                return '<a class="download-link" rel="download" href="' + url + '">' +
                     '<i class="fa fa-file-text-o" aria-hidden="true"></i>' + 
                     '<span>' + url.split("/").pop() + '&nbsp;</span><b class="badge">' + formatNumber(f.count) + '</b></a>';
             }).join("")
@@ -209,7 +207,7 @@
         $fileList.html(
             fileErrors.map(function(f) {
                 var url = f.url;
-                return '<a class="download-link text-danger" target="_blank" href="' + url + '">' +
+                return '<a class="download-link" target="_blank" href="' + url + '">' +
                     '<i class="fa fa-file-text-o"></i>' + url.split("/").pop() + '</a>';
             }).join("")
         );
@@ -469,13 +467,13 @@
 
         const q = new URLSearchParams();
 
-        // _since --------------------------------------------------------------
+        // _since -------------------------------------------------------------
         const _since = MODEL.get("_since");
         if (_since) {
             q.append("_since", _since);
         }
 
-        // _type ---------------------------------------------------------------
+        // _type --------------------------------------------------------------
         let allTypes      = [...MODEL.get("resourceCounts")];
         let selectedTypes = [...MODEL.get("selectedTypes")];
 
@@ -489,10 +487,16 @@
             q.append("_type", selectedTypes.join(","));
         }
 
-        // _elements -----------------------------------------------------------
+        // _elements ----------------------------------------------------------
         const _elements = MODEL.get("_elements");
         if (_elements) {
             q.append("_elements", _elements);
+        }
+
+        // _typeFilter --------------------------------------------------------
+        const _typeFilter = MODEL.get("_typeFilter");
+        if (_typeFilter) {
+            q.append("_typeFilter", _typeFilter);
         }
 
         return q.toString();
@@ -506,6 +510,7 @@
             return null;
         }
 
+        /** @type {any} */
         const payload = {
             resourceType: "Parameters",
             parameter: []
@@ -545,6 +550,15 @@
             payload.parameter.push({
                 name: "_elements",
                 valueString: _elements
+            });
+        }
+
+        // _typeFilter --------------------------------------------------------
+        const _typeFilter = MODEL.get("_typeFilter");
+        if (_typeFilter) {
+            payload.parameter.push({
+                name: "_typeFilter",
+                valueString: _typeFilter
             });
         }
 
@@ -618,12 +632,11 @@
             const statusUrl = MODEL.get("statusUrl");
 
             if (!statusUrl) {
-                return resolve();
+                return resolve(true);
             }
 
             MODEL.set({
                 progressMessage : "Canceling previous export...",
-                progressDuration: 0.2,
                 progressValue   : 0,
                 progressVisible : true,
                 statusUrl       : ""
@@ -644,7 +657,7 @@
                         deletedFiles   : null,
                         fileErrors     : null
                     });
-                    resolve();
+                    resolve(true);
                 }, 600);
             });
         });
@@ -655,7 +668,6 @@
         return cancelExport().then(() => {
             MODEL.set({
                 error           : "",
-                progressDuration: 0,
                 progressValue   : 0,
                 progressMessage : "Starting the kick-off request...",
                 progressVisible : true
@@ -692,7 +704,6 @@
                 else {
                     MODEL.set({
                         error: getAjaxError(xhr, `Requesting '${url}' returned: `),
-                        progressDuration: 0,
                         progressValue   : 0,
                         progressMessage : "",
                         progressVisible : false
@@ -701,7 +712,6 @@
             }, xhr => {
                 MODEL.set({
                     error: getAjaxError(xhr, `Requesting '${url}' returned: `),
-                    progressDuration: 0,
                     progressValue   : 0,
                     progressMessage : "",
                     progressVisible : false
@@ -710,52 +720,85 @@
         });
     }
 
+    function roundToPrecision(n, precision) {
+        n = parseFloat(n + "");
+    
+        if ( isNaN(n) || !isFinite(n) ) {
+            return NaN;
+        }
+    
+        if ( !precision || isNaN(precision) || !isFinite(precision) || precision < 1 ) {
+            n = Math.round( n );
+        }
+        else {
+            const q = Math.pow(10, precision);
+            n = Math.round( n * q ) / q;
+        }
+    
+        return n;
+    }
+
     function waitForFiles() {
         const url = MODEL.get("statusUrl");
         $.ajax({ url }).then(function(body, resultCode, xhr) {
             var dur = uInt(xhr.getResponseHeader("retry-after"));
 
+            // When the export manifast is finally available, animate progress
+            // to 100%, then hide it and render the files
             if (xhr.status == 200) {
-                
-                if (dur) {
-                    MODEL.set("progressDuration", 0);
-                    MODEL.set("progressValue", 100);
-                    if (TIMER) clearTimeout(TIMER);
-                    TIMER = setTimeout(function() {
-                        MODEL.set({
-                            progressVisible : false,
-                            files           : body.output,
-                            deletedFiles    : body.deleted,
-                            fileErrors      : body.error,
-                            inTransientError: false
-                        });
-                    }, 100);
-                } else {
-                    MODEL.set({
-                        progressVisible : false,
-                        files           : body.output,
-                        deletedFiles    : body.deleted,
-                        fileErrors      : body.error,
-                        inTransientError: false
-                    });
-                }
+
+                $({ x: MODEL.get("progressValue") }).animate({ x: 100 }, {
+                    duration: 600,
+                    easing: "linear",
+                    step(now) {
+                        MODEL.set("progressValue", now);
+                    },
+                    complete() {
+                        if (body.output) {
+                            MODEL.set({
+                                progressVisible : false,
+                                files           : body.output,
+                                deletedFiles    : body.deleted,
+                                fileErrors      : body.error,
+                                inTransientError: false
+                            });
+                        }
+                    }
+                })
             }
+
+            // If still waiting
             else if (xhr.status == 202) {
-                var pct = parseInt(xhr.getResponseHeader("x-progress"), 10);
+                var progressHeader = xhr.getResponseHeader("x-progress") || "";
+                var match = progressHeader.match(/^(\d+)%\s*(.+)$/);
+                var pct = uInt(match[1]);
                 if (!isNaN(pct) && isFinite(pct)) {
-                    MODEL.set("progressDuration", dur);
-                    MODEL.set("progressValue", 100);
-                    if (pct < 100) {
-                        if (TIMER) clearTimeout(TIMER);
-                        TIMER = setTimeout(function() {
-                            waitForFiles();
-                        }, dur * 1000);
+
+                    // -1% could mean "canceled"
+                    if (pct === -1) {
+                        MODEL.set("progressValue", 0);
+                        MODEL.set("progressMessage", "Canceled");    
+                    } else {
+                        MODEL.set("progressMessage", match[2]);
+
+                        $({ x: MODEL.get("progressValue") }).animate({ x: pct }, {
+                            duration: dur * 1000,
+                            easing: "linear",
+                            step(now) {
+                                MODEL.set("progressValue", now);
+                            },
+                            complete() {
+                                if (pct < 100) {
+                                    waitForFiles();
+                                }
+                            }
+                        });
                     }
                 }
             }
             else {
-                MODEL.set("progressDuration", 0);
                 MODEL.set("progressValue", 100);
+                MODEL.set("progressMessage", "");
                 MODEL.set("error", getAjaxError(xhr, `Requesting '${url}' returned: `));
             }
         }, xhr => {
@@ -772,12 +815,14 @@
     {
         var code = $("#request-code")[0];
         const selection = window.getSelection();
-        const range = document.createRange();
-        selection.removeAllRanges();
-        range.selectNodeContents(code);
-        selection.addRange(range);
-        document.execCommand('copy');
-        selection.removeAllRanges();
+        if (selection) {
+            const range = document.createRange();
+            selection.removeAllRanges();
+            range.selectNodeContents(code);
+            selection.addRange(range);
+            document.execCommand('copy');
+            selection.removeAllRanges();
+        }
     }
 
     function main()
@@ -831,9 +876,8 @@
         MODEL.on("change:group change:exportType", onExportTypeOrGroupChange);
         MODEL.on("change:error", onErrorChange);
         MODEL.on("change:progressVisible", onProgressToggle);
-        MODEL.on("change:progressDuration", e => $(".progress-bar").css("transitionDuration", (e.data.newValue || 0) + "s"));
-        MODEL.on("change:progressValue", e => $(".progress-bar").css("width", e.data.newValue + "%"));
-        MODEL.on("change:progressMessage", e => $(".preparing-progress label").text(e.data.newValue));
+        MODEL.on("change:progressValue", e => { $(".progress-bar").css("width", e.data.newValue + "%");$(".preparing-progress .progress-value").text(roundToPrecision(e.data.newValue, 1).toFixed(1) + "%"); });
+        MODEL.on("change:progressMessage", e => $(".preparing-progress .progress-message").text(e.data.newValue));
         MODEL.on("change:statusUrl", onStatusUrlChange);
         MODEL.on("change:codeType", onCodeTypeChange);
         MODEL.on("change:inTransientError", onTransientErrorChange);
@@ -849,6 +893,7 @@
         $(document).on("change", '[name="code-type"]', e => MODEL.set("codeType", e.target.value));
         $("#show-request").on("change", e => MODEL.set("showRequest", e.target.checked));
         $("#_elements").on("input change", e => MODEL.set("_elements", e.target.value.split(",").map(x => x.trim()).filter(Boolean).join(",")));
+        $("#_typeFilter").on("input change", e => MODEL.set("_typeFilter", e.target.value));
         $("form").on("submit", onFormSubmit);
         $("#delete-export, #cancel-btn").on("click", cancelExport);
         $(".copy-btn").on("click", copyToClipboard);

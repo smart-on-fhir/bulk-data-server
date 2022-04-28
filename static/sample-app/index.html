@@ -73,7 +73,7 @@
             .download-link:hover {
                 background: #EEE;
                 text-decoration: none;
-                box-shadow: 0 0 2px -1px #000 inset; 
+                box-shadow: 0 0 0px 1px #ddd inset; 
             }
             .download-link > .fa {
                 margin-right: 6px;
@@ -292,23 +292,17 @@
 
             .badge {
                 text-shadow: none;
-                font-weight: 300;
+                font-weight: 400;
             }
 
             .file-list .badge, .del-file-list .badge {
-                background-color: rgba(0, 0, 0, 0.05);
-                color: #999;
+                background-color: transparent;
+                color: #888;
             }
 
             .copy-btn {
                 vertical-align: top;
                 margin: 3px 0 0 6px;
-                /* position: absolute;
-                top: 6px;
-                right: 6px;
-                user-select: none; */
-                /* opacity: 0; */
-                /* transition: opacity 0.6s; */
             }
             #request-code:hover .copy-btn {
                 opacity: 1;
@@ -316,6 +310,21 @@
             .btn:disabled, .btn:disabled:hover {
                 background-color: #999;
                 border-color: #888;
+            }
+
+            .progress {
+                border: 1px solid #888;
+                padding: 0px;
+                border-radius: 20px;
+                height: 11px;
+            }
+            .progress-bar {
+                max-width: 100%;
+                transition: none 0s ease 0s;
+                border-radius: 0px;
+                background: #5bb65b;
+                border: 0 none;
+                box-shadow: 0 0 0 1px #888, 0 2px 10px -5px #fff inset;
             }
             
         </style>
@@ -418,6 +427,19 @@
                         <br/>
                     </div>
                 </div>
+                <div class="row">
+                    <div class="col-sm-12">
+                        <label class="text-success" for="_typeFilter">
+                            <i class="fa fa-filter" aria-hidden="true"></i> _typeFilter
+                        </label>
+                        <input type="text" class="form-control" id="_typeFilter">
+                        <p class="small text-muted help-block">
+                            Currently only the <code>_filter</code> parameter is supported
+                            (<a href="https://www.hl7.org/fhir/search_filter.html" rel="noopener noreferrer" target="_blank">docs</a>).
+                        </p>
+                        <br/>
+                    </div>
+                </div>
                 <div class="form-control" readonly style="height: auto;padding:6px">
                     <div class="pull-right">
                         <button class="btn btn-success"><span> Start Export </span>&nbsp; <i class="fa fa-play" aria-hidden="true"></i> </button>
@@ -443,10 +465,10 @@
                 <br/>
                 <div class="hidden preparing-progress">
                     <label class="text-success">
-                        Preparing files. Please wait...
+                        <b class="progress-value">0%</b> <b class="progress-message"></b>
                     </label>
                     <div class="progress">
-                        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%; transition: width 2s linear;min-width:3px">
+                        <div class="progress-bar progress-bar-success" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%">
                             <span class="sr-only">0% Complete</span>
                         </div>
                     </div>
