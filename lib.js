@@ -1,6 +1,5 @@
 const FS         = require("fs").promises;
 const Path       = require("path");
-const Walker     = require("walk");
 const jwt        = require("jsonwebtoken");
 const moment     = require("moment");
 const config     = require("./config");
@@ -8,6 +7,7 @@ const base64url  = require("base64-url");
 const request    = require("request");
 const getDB      = require("./db");
 const { format } = require("util");
+const { Dirent } = require("fs");
 
 
 
@@ -170,42 +170,32 @@ async function readJSON(path)
     return FS.readFile(path, "utf8").then(parseJSON);
 }
 
-async function forEachFile(options, cb)
-{
-    options = Object.assign({
-        dir        : ".",
-        filter     : null,
-        followLinks: false,
-        limit      : 0
-    }, options);
-
-    return new Promise((resolve, reject) => {
-        const walker = Walker.walk(options.dir, {
-            followLinks: options.followLinks
-        });
-
+/**
+ * @param {object} options 
+ * @param {string} options.dir 
+ * @param {number | undefined} [options.limit] 
+ * @param {(path: string, dirent: Dirent) => boolean | undefined} [options.filter]
+ * @param {(path: string, dirent: Dirent) => any} cb 
+ */
+async function forEachFile(options, cb) {
+    try {
+        const dir = await FS.opendir(options.dir);
         let i = 0;
-
-        walker.on("errors", (root, nodeStatsArray, next) => {
-            reject(
-                new Error("Error: " + nodeStatsArray.map(e => e.error).join(";") + ";" + root + " - ")
-            );
-            next();
-        });
-
-        walker.on("end", () => resolve(true) );
-
-        walker.on("file", (root, fileStats, next) => {
-            let path = Path.resolve(root, fileStats.name);
-            if (options.filter && !options.filter(path)) {
-                return next();
-            }
+        for await (const dirent of dir) {
             if (options.limit && ++i > options.limit) {
-                return next();
+                continue;
             }
-            cb(path, fileStats, next);
-        });
-    });
+            if (dirent.isFile()) {
+                const path = Path.join(options.dir, dirent.name);
+                if (options.filter && !options.filter(path, dirent)) {
+                    continue;
+                }    
+                await cb(path, dirent);
+            }
+        }
+    } catch (err) {
+        console.error(err);
+    }
 }
 
 /**

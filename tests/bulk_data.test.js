@@ -84,19 +84,6 @@ async function rejects(block, error, message) {
     // return Promise.reject(new Error(message || "The provided block did not reject"));
 }
 
-function downloadPatients(options) {
-    let url = lib.buildDownloadUrl("1.Patient.ndjson", options);
-    return lib.requestPromise({ url })
-        .then(res => res.body.split("\n").filter(r => !!r).map(row => {
-            try {
-                return JSON.parse(row)
-            } catch (ex) {
-                console.log("rows: '" + res.body + "'");
-                throw ex;
-            }
-        }));
-}
-
 class Client
 {
 
@@ -168,8 +155,10 @@ class Client
 
         if (options.usePOST) {
             json = true;
+
             body = {
                 resourceType: "Parameters",
+                /** @type {any[]} */
                 parameter: []
             };
 
@@ -258,6 +247,8 @@ class Client
                 // }
             }
         }
+
+        return this.kickOffResponse
     }
 
     /**

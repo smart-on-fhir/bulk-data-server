@@ -123,7 +123,7 @@ function createGroup({ name, id = "", members = [], type = "person" })
 /**
  * Walks the app input directory, filters json files only, parses them and calls
  * the callback with that JSON as argument
- * @param {(json: object) => any} callback 
+ * @param {(path: string, dirent: fs.Dirent) => any} callback 
  */
 function loopFiles(callback)
 {
@@ -154,14 +154,14 @@ function updateUrnMap(resource)
  */
 function buildUrnMap()
 {
-    return loopFiles((path, fileStats, next) => {
-        Lib.readJSON(path).then(json => {
+    return loopFiles(path => {
+        return Lib.readJSON(path).then(json => {
             if (json.resourceType == "Bundle") {
                 updateUrnMap(json);
             } else {
                 URN_MAP[`urn:uuid:${json.id}`] = `${json.resourceType}/${json.id}`;
             }
-        }).then(next, next);
+        });
     });
 }
 
@@ -282,16 +282,16 @@ async function insertBundle(json, path, num)
 function insertBundles()
 {
     let i = 0;
-    return loopFiles((path, fileStats, next) => {
-        Lib.readJSON(path).then(json => {
+    return loopFiles((path, dirent) => {
+        return Lib.readJSON(path).then(json => {
             i++;
             if (json.resourceType == "Bundle") {
-                return insertBundle(json, fileStats.name, i);
+                return insertBundle(json, dirent.name, i);
             }
             else {
-                console.log(`===> Skipping file "${fileStats.name}" (not a bundle)`.red);
+                console.log(`===> Skipping file "${dirent.name}" (not a bundle)`.red);
             }
-        }).then(next, console.error);
+        });
     });
 }
 
