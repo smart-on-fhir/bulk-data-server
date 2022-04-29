@@ -468,7 +468,12 @@ class ExportManager
         try {
             this.setTypeFilter(_typeFilter)
         } catch (ex) {
-            return lib.operationOutcome(res, ex.message, { httpCode: 400 });
+            const outcome = lib.createOperationOutcome(ex.message);
+            if (!isLenient) {
+                this.delete();
+                return res.status(400).json(outcome);
+            }
+            this.kickoffErrors.push(outcome);
         }
 
         try {
