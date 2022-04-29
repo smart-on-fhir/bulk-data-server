@@ -1,45 +1,73 @@
-const lib = require("./lib");
-const config = require("./config");
+import * as lib from "./lib"
+import config   from "./config"
+
+interface QueryBuilderOptions {
+    columns    ?: string[]
+    type       ?: string | string[]
+    start      ?: string
+    limit      ?: number
+    offset     ?: number
+    group      ?: string
+    systemLevel?: boolean
+    patients   ?: string | string[] | null
+}
 
 /**
  * Very simple SQL query builder. This is custom builder to ONLY handle the few
  * things we need!
  */
-class QueryBuilder {
+export default class QueryBuilder {
+
+    /** 
+     * The name of the table that we select from
+     */
+    private _table: string = "data";
+
+    /** 
+     * The columns to select from the table
+     */
+    private _columns: string[] = ["*"];
+
+    /** 
+     * The types of fhir resources to include in the output
+     */
+    private _fhirTypes: string[] = [];
+
+    /** 
+     * The oldest possible modified date of the included resources
+     */
+    private _startTime: string | null = null;
+
+    /** 
+     * The SQL limit
+     */
+    private _limit: number | null = null;
+
+    /** 
+     * The SQL offset
+     */
+    private _offset: number | null = null;
+
+    /** 
+     * In case we want to filter by group
+     */
+    private _groupId: string | null = null;
+
+    /** 
+     * If true the system level resources (like Group) are also considered
+     */
+    private _systemLevel = false;
+
+    /** 
+     * List of patient IDs
+     */
+    private _patients: string[] = [];
     
-    constructor(options = {}) {
-
-        // The name of the table that we select from
-        this._table = "data";
-
-        // The columns to select from the table
-        this._columns = ["*"];
-
-        // The types of fhir resources to include in the output
-        this._fhirTypes = [];
-
-        // The oldest possible modified date of the included resources
-        this._startTime = null;
-
-        // The SQL limit
-        this._limit = null;
-
-        // The SQL offset
-        this._offset = null;
-
-        // In case we want to filter by group
-        this._groupId = null;
-
-        // If true the system level resources (like Group) are also considered
-        this._systemLevel = false;
-
-        // List of patient IDs
-        this._patients = [];
-
+    constructor(options: QueryBuilderOptions = {}) {
         this.setOptions(options);
     }
 
-    setOptions(options) {
+    setOptions(options: QueryBuilderOptions) {
         if (options.columns) {
             this.setColumns(options.columns);
         }
@@ -67,9 +95,9 @@ class QueryBuilder {
     }
 
     compile() {
-        let sql  = "SELECT ";
-        let params = {};
-        let where  = this.compileWhere();
+        let sql = "SELECT ";
+        let params: Record<string, any> = {};
+        let where = this.compileWhere();
 
         // TODO: validate, sanitize
         sql += this._columns.join(", ");
@@ -98,8 +126,8 @@ class QueryBuilder {
 
     compileCount(countColumnAlias = "rowCount") {
         let sql = `SELECT "fhir_type", COUNT(*) as "${countColumnAlias}" FROM "data"`;
-        let where  = this.compileWhere();
-        let params = {};
+        let where = this.compileWhere();
+        let params: Record<string, any> = {};
 
         if (where.sql) {
             sql += " " + where.sql;
@@ -114,7 +142,7 @@ class QueryBuilder {
     compileWhere() {
         let sql = "";
         let where = [];
-        let params = {};
+        let params: Record<string, any> = {};
         let len = 0;
         
         if (this._fhirTypes.length) {
@@ -146,34 +174,31 @@ class QueryBuilder {
         return { sql, params };
     }
 
-    setFhirTypes(types = []) {
+    setFhirTypes(types: string | string[] = []) {
         this._fhirTypes = lib.makeArray(types)
             .map(t => String(t || "").trim()).filter(Boolean);
     }
 
-    setColumns(cols = []) {
-        // TODO: validate, sanitize
+    setColumns(cols: string[] = []) {
         this._columns = lib.makeArray(cols).filter(Boolean).map(String);
     }
 
-    setStartTime(dateTime) {
+    setStartTime(dateTime: string) {
         this._startTime = lib.fhirDateTime(dateTime);
     }
 
-    setLimit(n) {
+    setLimit(n: number) {
         this._limit = lib.uInt(n, config.defaultPageSize);
     }
 
-    setOffset(n) {
+    setOffset(n: number) {
         this._offset = lib.uInt(n);
     }
 
-    setGroupId(gId) {
+    setGroupId(gId: string) {
         let id = String(gId).trim();
         if (id) {
             this._groupId = id;
         }
     }
 }
-
-module.exports = QueryBuilder;

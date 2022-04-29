@@ -9,7 +9,7 @@ const { expect }    = require("chai");
 const fs            = require("fs");
 const { server }    = require("../index");
 const config        = require("../config");
-const ExportManager = require("../ExportManager");
+const ExportManager = require("../ExportManager").default;
 const { wait }      = require("../lib");
 const lib           = require("./lib");
 
@@ -566,50 +566,21 @@ describe("Authentication", () => {
             });
         }
 
-        it ("Local JWKS", () => {
+        it ("Local JWKS", async () => {
             
-            const state = {};
-
-            return Promise.resolve()
+            const jwks = { keys: [
+                ...(await generateKeyPair("ES384")).keys,
+                ...(await generateKeyPair("RS384")).keys
+            ] }
             
-            // Generate ES384 JWKS key pair
-            .then(() => generateKeyPair("ES384"))
+            const clientId = (await register(jwks)).body
+            const jwtToken = generateAuthToken(clientId)
 
-            // add the ES384 keys to our local JWKS
-            .then(jwks => state.jwks = jwks)
-
-            // Generate RS384 JWKS key pair
-            .then(() => generateKeyPair("RS384"))
-
-            // add the RS384 keys to our local JWKS
-            .then(jwks => state.jwks.keys = state.jwks.keys.concat(jwks.keys))
+            const RS384AccessToken = await authenticate(sign(jwks, "RSA", jwtToken))
+            const ES384AccessToken = await authenticate(sign(jwks, "EC" , jwtToken))
             
-            // Now register a client with that augmented JWKS
-            .then(() => register(state.jwks))
-
-            // Save the newly generated client id to the state
-            .then(res => state.clientId = res.body)
-
-            // Generate the authentication token
-            .then(() => state.jwtToken = generateAuthToken(state.clientId))
-
-            // Find the RS384 private key, sign with it and authenticate
-            .then(() => authenticate(sign(state.jwks, "RSA", state.jwtToken)))
-
-            // Save the RS384 access token to the state
-            .then(resp => state.RS384AccessToken = resp.body)
-
-            // Now find the ES384 private key, sign with it and authenticate
-            .then(() => authenticate(sign(state.jwks, "EC", state.jwtToken)))
-
-            // Save the ES384 access token to the state
-            .then(resp => state.ES384AccessToken = resp.body)
-            
-            // Make some checks
-            .then(resp => {
-                expect(!!state.RS384AccessToken).to.equal(true, "RS384AccessToken should exist");
-                expect(!!state.ES384AccessToken).to.equal(true, "ES384AccessToken should exist");
-            });
+            expect(!!RS384AccessToken.body).to.equal(true, "RS384AccessToken should exist")
+            expect(!!ES384AccessToken.body).to.equal(true, "ES384AccessToken should exist")
 
         });
 

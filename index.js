@@ -1,6 +1,5 @@
 const express        = require("express");
 const http           = require("http");
-const bodyParser     = require("body-parser");
 const morgan         = require("morgan");
 const cors           = require("cors");
 const config         = require("./config");
@@ -31,10 +30,10 @@ app.use((req, res, next) => {
 
 // backend services authorization
 app.options("/auth/token", cors({ origin: true }));
-app.post("/auth/token", cors({ origin: true }), bodyParser.urlencoded({ extended: false }), tokenHandler);
+app.post("/auth/token", cors({ origin: true }), express.urlencoded({ extended: false }), tokenHandler);
 
 // backend services registration
-app.post("/auth/register", bodyParser.urlencoded({ extended: false }), register);
+app.post("/auth/register", express.urlencoded({ extended: false }), register);
 
 // Used as JWKS generator
 app.use("/generator", generator);

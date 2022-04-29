@@ -1,9 +1,9 @@
-const { Readable } = require("stream");
-const fhirFilter   = require("fhir-filter/dist");
-const config       = require("./config");
-const Lib          = require("./lib");
-const QueryBuilder = require("./QueryBuilder");
-const getDB        = require("./db");
+import { Readable } from "stream"
+import QueryBuilder from "./QueryBuilder"
+import fhirFilter   from "fhir-filter/dist"
+import config       from "./config"
+import * as Lib     from "./lib"
+import getDB        from "./db"
 
 const HEX    = "[a-fA-F0-9]"
 const RE_UID = new RegExp(
@@ -11,24 +11,44 @@ const RE_UID = new RegExp(
     "g"
 );
 
-class FhirStream extends Readable
+interface FhirStreamOptions {
+    stu                : number
+    types              : string[]
+    limit             ?: number
+    offset            ?: number
+    extended          ?: boolean
+    group             ?: string
+    since             ?: string
+    systemLevel       ?: boolean
+    patients          ?: string[]|null
+    filter            ?: string|null
+    databaseMultiplier?: number
+}
+
+export default class FhirStream extends Readable
 {
-    /**
-     * 
-     * @param {object}        options
-     * @param {number}        options.stu
-     * @param {string[]}      options.types
-     * @param {number}        [options.limit]
-     * @param {number}        [options.databaseMultiplier]
-     * @param {number}        [options.offset]
-     * @param {boolean}       [options.extended]
-     * @param {string}        [options.group]
-     * @param {string}        [options.since]
-     * @param {boolean}       [options.systemLevel]
-     * @param {string[]|null} [options.patients]
-     * @param {string|null}   [options.filter]
-     */
-    constructor(options)
+    limit: number;
+    multiplier: number;
+    offset: number;
+    extended: boolean;
+    patients: string[] | null;
+    group: string;
+    start: string;
+    types: string[];
+    params: Record<string, any>;
+    cache: any[];
+    statement: any;
+    page: number;
+    total: number;
+    rowIndex: number;
+    overflow: number;
+    filter: any;
+    count: number;
+    timer: NodeJS.Timeout | null;
+    builder: QueryBuilder;
+    db: any;
+
+    constructor(options: FhirStreamOptions)
     {
         super({ objectMode: true });
 
@@ -79,12 +99,12 @@ class FhirStream extends Readable
         };
     }
 
-    _destroy(err, callback)
+    _destroy(error: Error | null, callback: (error?: Error | null) => void): void
     {
         if (this.timer) {
             clearTimeout(this.timer);
         }
-        callback && callback(err);
+        callback && callback(error);
     }
 
     init()
@@ -101,14 +121,13 @@ class FhirStream extends Readable
 
     /**
      * Prepares the select statement and stores it on the instance.
-     * @returns {Promise<FhirStream>} Resolves with the instance
      */
-    prepare()
+    async prepare(): Promise<FhirStream>
     {
         let { sql, params } = this.builder.compile();
         this.params = params;
         return new Promise((resolve, reject) => {
-            this.statement = this.db.prepare(sql, params, prepareError => {
+            this.statement = this.db.prepare(sql, params, (prepareError: Error) => {
                 if (prepareError) {
                     return reject(prepareError);
                 }
@@ -123,14 +142,13 @@ class FhirStream extends Readable
      *      total    - the total rows
      *      page     - the page number we are currently in
      *      overflow - the number of rewinds
-     * @returns {Promise<FhirStream>} Resolves with the instance
      */
-    countRecords()
+    async countRecords(): Promise<FhirStream>
     {
         // SELECT "fhir_type", COUNT(*) as "totalRows" FROM "data"
         // WHERE "fhir_type" IN("Patient") GROUP BY "fhir_type"
         let { sql, params } = this.builder.compileCount();
-        return this.db.promise("get", sql, params).then(row => {
+        return this.db.promise("get", sql, params).then((row: { rowCount: number }) => {
             this.total = row && row.rowCount ? row.rowCount || 0 : 0;
             this.page = Math.floor(this.offset / this.limit) + 1;
             this.overflow = Math.floor(this.offset/this.total);
@@ -146,7 +164,7 @@ class FhirStream extends Readable
     {
         return new Promise((resolve, reject) => {
             this.params.$_limit = Math.min(config.rowsPerChunk, this.limit);
-            this.statement.all(this.params, (err, rows) => {
+            this.statement.all(this.params, (err: Error, rows: any[]) => {
                 if (err) {
                     return reject(err);
                 }
@@ -157,7 +175,7 @@ class FhirStream extends Readable
         });
     }
 
-    getNextRow()
+    getNextRow(): any
     {
         // If we have read enough rows already - exit
         if (this.count >= this.limit) {
@@ -213,7 +231,7 @@ class FhirStream extends Readable
 
 
         // Compute an ID prefix to make sure all records are unique
-        let prefix = [], l = 0;
+        let prefix: string[] = [], l = 0;
 
         if (this.overflow) {
             l = prefix.push(`o${this.overflow}`);
@@ -234,5 +252,3 @@ class FhirStream extends Readable
         this.rowIndex += 1;
     }
 }
-
-module.exports = FhirStream;

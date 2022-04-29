@@ -1,8 +1,9 @@
-// const crypto = require("crypto");
-const moment = require("moment");
-const config = require("../config");
-const lib    = require("../lib");
-const pkg    = require("../package.json");
+import { Request, Response } from "express";
+import moment                from "moment"
+import config                from "../config"
+import { replyWithError }    from "../lib"
+import pkg                   from "../package.json"
+import { RequestWithSim }    from "../types";
 
 const SERVER_START_TIME = moment().format("YYYY-MM-DDTHH:mm:ssZ");
 
@@ -30,7 +31,7 @@ const FHIR_VERSION_TO_CONTENT_TYPE = {
     2: "application/json; charset=utf-8"
 };
 
-function getFhirVersion(stu) {
+function getFhirVersion(stu: number): string {
     switch (+stu) {
         case 2:
             return "1.0.2";
@@ -45,9 +46,8 @@ class CapabilityStatement
 {
     /**
      * Numeric FHIR version
-     * @type {2|3|4}
      */
-    #stu;
+    private stu: number;
 
     constructor(stu = 4)
     {
@@ -197,23 +197,24 @@ class CapabilityStatement
     }
 }
 
-module.exports = (req, res) => {
-
-    const { query, sim: { stu = 4 } } = req;
+export default function(req: Request, res: Response) {
+    const stu = (req as RequestWithSim).sim.stu || 4
+    const { query } = req
 
     if (query._format) {
         let format = query._format.toLowerCase();
         if (!SUPPORTED_FORMATS.some(mime => format.indexOf(mime) === 0)) {
-            return lib.replyWithError(res, "only_json_supported", 400);
+            return replyWithError(res, "only_json_supported", 400);
         }
     }
 
     const accept = String(req.headers.accept || "*/*").toLowerCase().split(/\s*[;,]\s*/).shift();
     if (!SUPPORTED_ACCEPT_MIME_TYPES.some(f => f === accept)) {
-        return lib.replyWithError(res, "only_json_supported", 400);
+        return replyWithError(res, "only_json_supported", 400);
     }
 
     const statement = new CapabilityStatement(stu);
 
-    res.set("content-type", FHIR_VERSION_TO_CONTENT_TYPE[stu]).send(JSON.stringify(statement.toJSON(), null, 4));
-};
+    const key = stu as keyof typeof FHIR_VERSION_TO_CONTENT_TYPE
+    res.set("content-type", FHIR_VERSION_TO_CONTENT_TYPE[key]).send(JSON.stringify(statement.toJSON(), null, 4));
+}

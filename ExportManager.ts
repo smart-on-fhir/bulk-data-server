@@ -1,16 +1,19 @@
-const crypto       = require("crypto");
-const moment       = require("moment");
-const fs           = require("fs");
-const base64url    = require("base64-url");
-const zlib         = require("zlib");
-const config       = require("./config");
-const lib          = require("./lib");
-const QueryBuilder = require("./QueryBuilder");
-const getDB        = require("./db");
-const toNdjson     = require("./transforms/dbRowToNdjson");
-const toCSV        = require("./transforms/dbRowToCSV");
-const fhirStream   = require("./FhirStream");
-const translator   = require("./transforms/dbRowTranslator");
+import crypto        from "crypto"
+import moment        from "moment"
+import fs            from "fs"
+import base64url     from "base64-url"
+import zlib          from "zlib"
+import config        from "./config"
+import * as lib      from "./lib";
+import QueryBuilder  from "./QueryBuilder"
+import getDB         from "./db"
+import toNdjson      from "./transforms/dbRowToNdjson"
+import toCSV         from "./transforms/dbRowToCSV"
+import fhirStream    from "./FhirStream"
+import translator    from "./transforms/dbRowTranslator"
+import { ExportManifest, RequestWithSim }        from "./types"
+import { OperationOutcome, ParametersParameter } from "fhir/r4"
+import { NextFunction, Request, Response }       from "express"
 
 const supportedFormats = {
     "application/fhir+ndjson" : "ndjson",
@@ -22,29 +25,30 @@ const supportedFormats = {
 
 const exportTypes = {
     ndjson: {
-        fileExtension: "ndjson",
-        contentType  : "application/fhir+ndjson",
-        transform    : toNdjson
+        fileExtension : "ndjson",
+        contentType   : "application/fhir+ndjson",
+        transform     : toNdjson
     },
     csv: {
-        fileExtension: "csv",
-        contentType  : "text/csv; charset=UTF-8; header=present",
-        transform    : toCSV
+        fileExtension : "csv",
+        contentType   : "text/csv; charset=UTF-8; header=present",
+        transform     : toCSV
     }
 };
 
-function getExportParam(req, name)
+function getExportParam(req: Request, name: string)
 {
     if (req.method == "GET") {
         return req.query[name];
     }
     
     if (req.method == "POST") {
-        const out = [];
-        (req.body.parameter || []).forEach(x => {
+        const out: any[] = [];
+        (req.body.parameter || []).forEach((x: ParametersParameter) => {
             if (x.name === name) {
-                const valueX = Object.keys(x).find(key => key.indexOf("value") === 0);
+                const valueX = Object.keys(x).find(key => key.startsWith("value"));
                 if (valueX) {
+                    // @ts-ignore
                     out.push(x[valueX]);
                 }
             }
@@ -58,7 +62,7 @@ function getExportParam(req, name)
     return null;
 }
 
-function isFile(path)
+function isFile(path: string)
 {
     try {
         const stat = fs.statSync(path);
@@ -68,7 +72,7 @@ function isFile(path)
     }
 }
 
-function deleteFileIfExists(path)
+function deleteFileIfExists(path: string)
 {
     try {
         if (isFile(path)) {
@@ -83,121 +87,134 @@ function deleteFileIfExists(path)
 
 const ABORT_CONTROLLERS = new Map();
 
+interface JobState {
+    createdAt               : number
+    simulatedError         ?: string
+    simulatedExportDuration?: number
+    databaseMultiplier     ?: number
+    stu                    ?: number
+    resourcesPerFile       ?: number
+    accessTokenLifeTime    ?: number
+    resourceTypes          ?: string[]
+    fhirElements           ?: string[]
+    id                     ?: string
+    requestStart           ?: number
+    secure                 ?: boolean
+    outputFormat           ?: string
+    group                  ?: string
+    request                ?: string
+    since                  ?: string
+    systemLevel            ?: boolean
+    patients               ?: string[]
+    fileError              ?: string
+    jobStatus              ?: string
+    extended               ?: boolean
+    ignoreTransientError   ?: boolean
+    simulateDeletedPct     ?: number
+    kickoffErrors          ?: OperationOutcome[]
+    typeFilter             ?: string
+    progress               ?: number
+    statusMessage          ?: string
+    manifest               ?: ExportManifest
+    tooManyFiles           ?: boolean
+};
+
 class ExportManager
 {
     /**
      * Simulated error (if any)
-     * @type {string}
      */
     simulatedError = "";
 
     /**
      * Simulated export duration
-     * @type {number}
      */
-    simulatedExportDuration;
+    simulatedExportDuration = 10;
 
     /**
      * Database size multiplier
-     * @type {number}
      */
     databaseMultiplier = 1;
 
     /**
      * FHIR version as integer (2|3|4)
-     * @type {number}
      */
     stu = 4;
 
     /**
      * How many FHIR resources to include in one file
-     * @type {number}
      */
     resourcesPerFile = config.defaultPageSize;
 
     /**
      * Access Token LifeTime in minutes
-     * @type {number}
      */
     accessTokenLifeTime = config.defaultTokenLifeTime;
 
     /**
      * An array of resourceTypes (from the _type parameter)
-     * @type {string[]}
      */
-    resourceTypes;
+    resourceTypes: string[] = [];
 
     /**
      * An array of FHIR element paths (from the _elements parameter)
-     * @type {string[]}
      */
-    fhirElements;
+    fhirElements: string[] = [];
 
     /**
      * Unique ID for this job
-     * @type {string}
      */
-    id;
+    id: string = "";
 
     /**
      * When was the export started? JS timestamp.
-     * @type {number}
      */
-    requestStart;
+    requestStart: number = 0;
 
     /**
      * True if an authorization header has been passed to kick-off
-     * @type {boolean}
      */
-    secure;
+    secure: boolean = false;
 
     /**
      * File extension (ndjson|csv). Based on the _outputFormat parameter.
-     * @type {string}
      */
-    outputFormat;
+    outputFormat: keyof typeof exportTypes = "ndjson";
 
     /**
      * The group ID (if any)
-     * @type {string}
      */
-    group;
+    group: string = "";
 
     /**
      * The kick-off request URL
-     * @type {string}
      */
-    request;
+    request: string = "";
 
     /**
      * The modified since FHIR instant (the _since parameter)
-     * @type {string}
      */
-    since;
+    since: string = "";
 
     /**
      * The _typeFilter parameter
-     * @type {URLSearchParams}
      */
-    typeFilter;
+    typeFilter: URLSearchParams = new URLSearchParams();
 
     /**
      * true for system-level exports and false otherwise
-     * @type {boolean}
      */
-    systemLevel;
+    systemLevel: boolean = false;
 
     /**
      * Array of patient IDs to filter by (from the patient parameter)
-     * @type {string[]}
      */
-    patients;
+    patients: string[] = [];
 
     /**
      * Generated file download error (if any)
-     * @type {string}
      */
-    fileError;
+    fileError: string = "";
 
     /**
      * The status of this job
@@ -217,7 +234,7 @@ class ExportManager
      * An array to hold kickoff errors that should be included in the errors
      * payload property if lenient handling is preferred
      */
-    kickoffErrors;
+    kickoffErrors: OperationOutcome[] = [];
 
     /**
      * Percent complete (0 to 100)
@@ -226,12 +243,13 @@ class ExportManager
 
     statusMessage = "Please wait...";
 
-    /**
-     * @type {Record<string, any> | null}
-     */
-    manifest = null;
+    manifest?: ExportManifest;
 
     tooManyFiles = false;
+
+    createdAt: number = 0;
+
+    ignoreTransientError?: boolean;
 
     getAbortController() {
         let ctl = ABORT_CONTROLLERS.get(this.id)
@@ -242,39 +260,32 @@ class ExportManager
         return ctl
     }
 
-    /**
-     * 
-     * @param {string} id 
-     * @returns {Promise<ExportManager>}
-     */
-    static find(id)
-    {
-        return lib.readJSON(`${config.jobsPath}/${id}.json`).then(
-            state => new ExportManager(state || {})
-        );
-    }
-
     static createKickOffHandler(system = false)
     {
-        return function(req, res) {
-            const job = new ExportManager({
-                simulatedError         : req.sim.err,
-                simulatedExportDuration: req.sim.dur,
-                databaseMultiplier     : req.sim.m,
-                // stu                    : req.sim.stu,
-                resourcesPerFile       : req.sim.page,
-                accessTokenLifeTime    : req.sim.tlt,
-                fileError              : req.sim.fileError,
-                simulateDeletedPct     : req.sim.del
-            });
-            job.kickOff(req, res, system);
+        return function(req: Request, res: Response) {
+            const sim = (req as RequestWithSim).sim
+            ExportManager.create(
+                {
+                    simulatedError         : sim.err,
+                    simulatedExportDuration: sim.dur,
+                    databaseMultiplier     : sim.m,
+                    stu                    : sim.stu,
+                    resourcesPerFile       : sim.page,
+                    accessTokenLifeTime    : sim.tlt,
+                    fileError              : sim.fileError,
+                    simulateDeletedPct     : sim.del
+                }
+            ).then(
+                job => job.kickOff(req, res, system),
+                err => lib.operationOutcome(res, err.message, { httpCode: 400 })
+            );
         }
     }
 
     static createCancelHandler()
     {
-        return function cancelFlow(req, res) {
-            return ExportManager.find(req.params.id).then(
+        return function cancelFlow(req: Request, res: Response) {
+            return ExportManager.load(req.params.id).then(
                 job => job.cancel(res),
                 () => lib.outcomes.cancelNotFound(res)
             );
@@ -283,8 +294,8 @@ class ExportManager
 
     static createStatusHandler()
     {
-        return function handleStatus(req, res) {
-            return ExportManager.find(req.params.id).then(
+        return function handleStatus(req: Request, res: Response) {
+            return ExportManager.load(req.params.id).then(
                 job => job.handleStatus(req, res),
                 err => lib.operationOutcome(res, err.message, { httpCode: 400 })
             );
@@ -293,20 +304,21 @@ class ExportManager
 
     static createDownloadHandler()
     {
-        return function handleFileDownload(req, res, next) {
-            ExportManager.find(req.sim.id).then(
+        return function handleFileDownload(req: Request, res: Response, next: NextFunction) {
+            const sim = (req as RequestWithSim).sim
+            ExportManager.load(sim.id).then(
                 job => job.download(req, res).catch(next),
                 () => lib.outcomes.exportDeleted(res)
             );
         }
     }
 
-    static cleanUp()
+    static async cleanUp()
     {
         return lib.forEachFile({
             dir: config.jobsPath,
             filter: path => path.endsWith(".json")
-        }, path => lib.readJSON(path).then(state => {
+        }, path => lib.readJSON<JobState>(path).then(state => {
             if (state && Date.now() - state.createdAt > config.maxExportAge * 60000) {
                 return fs.promises.unlink(path);
             }
@@ -317,11 +329,25 @@ class ExportManager
             }
         });
     }
-    
-    constructor(options = {})
-    {
-        this.id = crypto.randomBytes(16).toString("hex");
 
+    // ========================================================================
+    static async create(options: Partial<JobState>) {
+        const instance = new ExportManager()
+        instance.id = crypto.randomBytes(16).toString("hex");
+        instance.createdAt = Date.now();
+        instance.setOptions(options);
+        await instance.save()
+        return instance;
+    }
+
+    static async load(id: string) {
+        const options = await lib.readJSON<JobState>(`${config.jobsPath}/${id}.json`);
+        const instance = new ExportManager();
+        instance.setOptions(options);
+        return instance;
+    }
+
+    setOptions(options: Partial<JobState>) {
         this.kickoffErrors = options.kickoffErrors || [];
 
         this.setSimulatedError(options.simulatedError)
@@ -336,22 +362,19 @@ class ExportManager
             .setSimulateDeletedPct(options.simulateDeletedPct)
             .setSince(options.since)
             .setTypeFilter(options.typeFilter);
-
-        ["resourceTypes", "fhirElements", "id", "requestStart", "secure", "patients",
-         "outputFormat", "request", "fileError","jobStatus", "extended", "createdAt",
-        "ignoreTransientError", "progress", "statusMessage", "manifest", "tooManyFiles"]
-        .forEach(key => {
+        
+        ["resourceTypes", "fhirElements", "id", "requestStart", "secure",
+        "patients", "outputFormat", "request", "fileError","jobStatus",
+        "extended", "createdAt", "ignoreTransientError", "progress",
+        "statusMessage", "manifest", "tooManyFiles"].forEach(key => {
             if (key in options) {
+                // @ts-ignore
                 this[key] = options[key];
             }
         });
-
-        if (!this.createdAt) {
-            this.createdAt = Date.now();
-        }
-
-        this.save()
     }
+
+    // ========================================================================
 
     async save()
     {
@@ -374,7 +397,7 @@ class ExportManager
         ABORT_CONTROLLERS.delete(this.id);
     }
 
-    toJSON()
+    toJSON(): JobState
     {
         return {
             simulatedError         : this.simulatedError,
@@ -409,8 +432,9 @@ class ExportManager
         };
     }
 
-    async kickOff(req, res, system)
+    async kickOff(req: Request, res: Response, system: boolean)
     {
+        const sim = (req as RequestWithSim).sim
 
         const isLenient = !!String(req.headers.prefer || "").match(/\bhandling\s*=\s*lenient\b/i);
 
@@ -434,15 +458,15 @@ class ExportManager
         }
 
         try {
-            this.setSTU(req.sim.stu);
+            this.setSTU(sim.stu);
         } catch (ex) {
-            return lib.operationOutcome(res, ex.message, { httpCode: 400 });
+            return lib.operationOutcome(res, (ex as Error).message, { httpCode: 400 });
         }
 
         this.setGroup(req.params.groupId);
         this.setSystemLevel(system);
 
-        this.extended = !!req.sim.extended;
+        this.extended = !!sim.extended;
 
         const _type         = getExportParam(req, "_type")         || "";
         const _patient      = getExportParam(req, "patient")       || "";
@@ -468,19 +492,19 @@ class ExportManager
         try {
             this.setTypeFilter(_typeFilter)
         } catch (ex) {
-            return lib.operationOutcome(res, ex.message, { httpCode: 400 });
+            return lib.operationOutcome(res, (ex as Error).message, { httpCode: 400 });
         }
 
         try {
             await this.setResourceTypes(_type);
         } catch (ex) {
-            return lib.operationOutcome(res, ex.message, { httpCode: 400 });
+            return lib.operationOutcome(res, (ex as Error).message, { httpCode: 400 });
         }
 
         try {
             this.setPatients(_patient);
         } catch (ex) {
-            return lib.operationOutcome(res, ex.message, { httpCode: 400 });
+            return lib.operationOutcome(res, (ex as Error).message, { httpCode: 400 });
         }
 
         try {
@@ -492,13 +516,13 @@ class ExportManager
         try {
             await this.setFHIRElements(_elements);
         } catch (ex) {
-            return lib.operationOutcome(res, ex.message, { httpCode: 400 });
+            return lib.operationOutcome(res, (ex as Error).message, { httpCode: 400 });
         }
 
         if (!supportedFormats.hasOwnProperty(_outputFormat)) {
             return lib.operationOutcome(res, `The "${_outputFormat}" _outputFormat is not supported`, { httpCode: 400 });
         }
-        this.outputFormat = supportedFormats[_outputFormat];
+        this.outputFormat = supportedFormats[_outputFormat as keyof typeof supportedFormats] as keyof typeof exportTypes;
 
         this.requestStart = Date.now();
         this.secure = !!req.headers.authorization;
@@ -507,7 +531,7 @@ class ExportManager
         this.request = proto + "://" + req.headers.host + req.originalUrl;
 
         // Prepare the status URL
-        let url = config.baseUrl + req.originalUrl.split("?").shift().replace(
+        let url = config.baseUrl + req.originalUrl.split("?").shift()!.replace(
             /(\/[^/]+)?\/fhir\/.*/,
             `/fhir/bulkstatus/${this.id}`
         );
@@ -534,9 +558,8 @@ class ExportManager
 
     /**
      * Finds all the resource types included in this export and their count
-     * @returns {Promise<{ fhir_type: string, rowCount: number }[]>}
      */
-    async getResourceTypes() {
+    async getResourceTypes(): Promise<{ fhir_type: string, rowCount: number }[]> {
         const builder = new QueryBuilder({
             type       : this.resourceTypes,
             patients   : this.patients,
@@ -551,10 +574,8 @@ class ExportManager
 
     /**
      * Creates and returns a ReadableStream of JSON FHIR resources
-     * @param {string} resourceType 
-     * @returns {fhirStream}
      */
-    getStreamForResource(resourceType, limit) {
+    getStreamForResource(resourceType: string, limit: number) {
         return new fhirStream({
             types      : [resourceType],
             stu        : this.stu,
@@ -570,7 +591,7 @@ class ExportManager
         });
     }
 
-    async getCountsForResourceType(resourceType, limit) {
+    async getCountsForResourceType(resourceType: string, limit: number): Promise<number> {
         return new Promise((resolve, reject) => {
             let input = this.getStreamForResource(resourceType, limit);
             input.init().then(() => {
@@ -582,15 +603,11 @@ class ExportManager
         });
     }
 
-    /**
-     * @param {AbortSignal} signal
-     */
-    async buildManifest(signal) {
+    async buildManifest(signal: AbortSignal) {
 
         let requestStart = moment(this.requestStart);
 
-        /** @type {any} */
-        const manifest = {
+        const manifest: ExportManifest = {
     
             // a FHIR instant type that indicates the server's time when the
             // query is run. No resources that have a modified data after this
@@ -635,15 +652,9 @@ class ExportManager
 
         const totalResourceCount = resourceTypes.reduce((prev, cur) => prev + cur.rowCount, 0) * this.databaseMultiplier;
 
-        /**
-         * @param {number} index Zero-based file index
-         * @param {string} resourceType 
-         * @param {number} count
-         * @param {number} offset
-         */
-        const addDeleted = (index, resourceType, count, offset, filteredCount) => {
-            manifest.deleted.push({
-                type: resourceType,
+        const addDeleted = (index: number, resourceType: string, count: number, offset: number, filteredCount: number) => {
+            manifest.deleted!.push({
+                type: "Bundle",
                 count: filteredCount,
                 url: lib.buildUrlPath(
                     config.baseUrl,
@@ -660,12 +671,7 @@ class ExportManager
             }); 
         }
 
-        /**
-         * @param {number} index Zero-based file index
-         * @param {string} resourceType 
-         * @param {string} error 
-         */
-        const addError = (index, resourceType, error) => {
+        const addError = (index: number, resourceType: string, error: string) => {
             manifest.error.push({
                 type : "OperationOutcome",
                 url: lib.buildUrlPath(
@@ -681,13 +687,7 @@ class ExportManager
             });
         };
 
-        /**
-         * @param {number} index Zero-based file index
-         * @param {string} resourceType 
-         * @param {number} count
-         * @param {number} offset 
-         */
-        const addFile = (index, resourceType, count, offset, filteredCount) => {
+        const addFile = (index: number, resourceType: string, count: number, offset: number, filteredCount: number) => {
             manifest.output.push({
                 type: resourceType,
                 count: filteredCount,
@@ -721,7 +721,7 @@ class ExportManager
             // resorces would remain after the dilter
             if (this.typeFilter.get("_filter")) {
                 try {
-                    filteredCount = await lib.abortablePromise(this.getCountsForResourceType(fhir_type, resourceCount), signal);
+                    filteredCount = await lib.abortablePromise<number>(this.getCountsForResourceType(fhir_type, resourceCount), signal);
                 } catch (e) {
                     if (!(e instanceof lib.AbortError)) {
                         console.error(e)
@@ -775,7 +775,7 @@ class ExportManager
                     }
 
                     // Limit the manifest size based on total number of file links
-                    if (manifest.output.length + manifest.error.length + manifest.deleted.length > config.maxFiles) {
+                    if (manifest.output.length + manifest.error.length + manifest.deleted!.length > config.maxFiles) {
                         this.tooManyFiles = true;
                         await this.save();
                         return null;
@@ -793,7 +793,7 @@ class ExportManager
         return manifest
     }
 
-    async handleStatus(req, res) {
+    async handleStatus(req: Request, res: Response) {
 
         if (this.secure && !req.headers.authorization) {
             return lib.operationOutcome(res, "Not authorized", { httpCode: 401 });
@@ -868,8 +868,10 @@ class ExportManager
         }).json(this.manifest);
     };
 
-    async download(req, res)
+    async download(req: Request, res: Response)
     {
+        const sim = (req as RequestWithSim).sim
+
         if (this.secure && !req.headers.authorization) {
             return lib.operationOutcome(res, "Not authorized", { httpCode: 401 });
         }
@@ -888,7 +890,7 @@ class ExportManager
         }
 
         // console.log(req.sim, this)
-        const fileError = req.sim.fileError;
+        const fileError = sim.fileError;
 
         // early exit in case simulated errors
         if (this.simulatedError == "file_expired") {
@@ -898,10 +900,10 @@ class ExportManager
         // early exit in case simulated file errors
         if (fileError) {
             return res.set({ "Content-Type": "application/fhir+ndjson" })
-                .end(JSON.stringify(lib.createOperationOutcome(req.sim.fileError)));
+                .end(JSON.stringify(lib.createOperationOutcome(sim.fileError!)));
         }
 
-        const acceptEncoding = req.headers["accept-encoding"] || "";
+        const acceptEncoding = String(req.headers["accept-encoding"] || "");
         const shouldDeflate  = (/\bdeflate\b/.test(acceptEncoding));
         const shouldGzip     = (/\bgzip\b/.test(acceptEncoding));
 
@@ -925,8 +927,8 @@ class ExportManager
             databaseMultiplier: this.databaseMultiplier,
             extended   : this.extended,
             group      : this.group,
-            limit      : req.sim.limit,
-            offset     : req.sim.offset,
+            limit      : sim.limit,
+            offset     : sim.offset,
             since      : this.since,
             systemLevel: this.systemLevel,
             patients   : this.patients,
@@ -942,7 +944,7 @@ class ExportManager
             let pipeline = input.pipe(translator({
                 _elements  : this.fhirElements,
                 err        : this.fileError,
-                deleted    : !!req.sim.del,
+                deleted    : !!sim.del,
                 secure     : this.secure
             }));
 
@@ -976,7 +978,7 @@ class ExportManager
      * polling location, the server SHALL return a 404 error and an associated
      * FHIR OperationOutcome in JSON format. 
      */
-    cancel(res)
+    cancel(res: Response)
     {
         this.delete();
         return lib.outcomes.cancelAccepted(res);
@@ -985,9 +987,6 @@ class ExportManager
     // SETTERS
     // -------------------------------------------------------------------------
 
-    /**
-     * @param {string} errorId 
-     */
     setSimulatedError(errorId = "")
     {
         this.simulatedError = String(errorId || "").trim();
@@ -996,7 +995,6 @@ class ExportManager
 
     /**
      * Sets the simulated file generation duration in seconds
-     * @param {number} duration 
      */
     setSimulatedExportDuration(duration = config.defaultWaitTime)
     {
@@ -1006,7 +1004,6 @@ class ExportManager
 
     /**
      * Sets the database size multiplier
-     * @param {number} multiplier 
      */
     setDatabaseMultiplier(multiplier = 1)
     {
@@ -1016,7 +1013,6 @@ class ExportManager
 
     /**
      * Sets the numeric FHIR version
-     * @param {number} version 
      */
     setSTU(version = 4)
     {
@@ -1030,7 +1026,6 @@ class ExportManager
 
     /**
      * Sets the resourcesPerFile
-     * @param {number} count 
      */
     setResourcesPerFile(count = config.defaultPageSize)
     {
@@ -1040,7 +1035,6 @@ class ExportManager
 
     /**
      * Sets the Access Token LifeTime in minutes
-     * @param {number} minutes 
      */
     setAccessTokenLifeTime(minutes = config.defaultTokenLifeTime)
     {
@@ -1050,7 +1044,6 @@ class ExportManager
 
     /**
      * Set what percentage of the output resources should be reported as deleted
-     * @param {number} pct 
      */
     setSimulateDeletedPct(pct = 0)
     {
@@ -1058,20 +1051,12 @@ class ExportManager
         return this;
     }
 
-    /**
-     * 
-     * @param {boolean} isSystemLevel 
-     */
-    setSystemLevel(isSystemLevel)
+    setSystemLevel(isSystemLevel?: boolean)
     {
         this.systemLevel = lib.bool(isSystemLevel);
         return this;
     }
 
-    /**
-     * 
-     * @param {string} groupId 
-     */
     setGroup(groupId = "")
     {
         this.group = String(groupId || "").trim();
@@ -1080,9 +1065,9 @@ class ExportManager
 
     /**
      * Sets the array of resource types to be exported
-     * @param {string|string[]} types Comma-separated list or array of strings
+     * @param types Comma-separated list or array of strings
      */
-    async setResourceTypes(types)
+    async setResourceTypes(types: string | string[])
     {
         const requestedTypes = lib.makeArray(types || "").map(t => String(t || "").trim()).filter(Boolean);
         const availableTypes = await lib.getAvailableResourceTypes(this.stu);
@@ -1097,11 +1082,7 @@ class ExportManager
         this.resourceTypes = requestedTypes;
     }
 
-    /**
-     * 
-     * @param {{reference:string}[]} patients 
-     */
-    setPatients(patients)
+    setPatients(patients: {reference:string}[])
     {
         const arr = lib.makeArray(patients).filter(Boolean);
         if (this.systemLevel && arr.length) {
@@ -1117,7 +1098,7 @@ class ExportManager
 
     /**
      * Sets the _since moment and makes sure it is in the future
-     * @param {string} since FHIR Instant 
+     * @param since FHIR Instant 
      */
     setSince(since = "")
     {
@@ -1127,7 +1108,6 @@ class ExportManager
 
     /**
      * Sets the _typeFilter parameter
-     * @param {string} _typeFilter
      */
     setTypeFilter(_typeFilter = "")
     {
@@ -1135,11 +1115,7 @@ class ExportManager
         return this;
     }
 
-    /**
-     * 
-     * @param {string|string[]} elements 
-     */
-    async setFHIRElements(elements)
+    async setFHIRElements(elements: string|string[])
     {
         const _elements = lib.makeArray(elements || "").map(t => String(t || "").trim()).filter(Boolean);
         const availableTypes = await lib.getAvailableResourceTypes(this.stu);
@@ -1161,9 +1137,9 @@ class ExportManager
     }
 };
 
-module.exports = ExportManager;
-
 /* istanbul ignore if */
 if (process.env.NODE_ENV != "test") {
     ExportManager.cleanUp();
 }
+
+export default ExportManager

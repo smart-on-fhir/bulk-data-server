@@ -1,8 +1,10 @@
-const DB  = require("../db");
-const Lib = require("../lib");
+import { Request, Response }  from "express"
+import DB                     from "../db"
+import { getRequestedParams } from "../lib"
 
-module.exports = (req, res) => { // $get-resource-counts
-    let sim = Lib.getRequestedParams(req);
+
+export default function getResourceCounts(req: Request, res: Response) { // $get-resource-counts
+    let sim = getRequestedParams(req);
     let multiplier = sim.m || 1;
     let stu = +(sim.stu || 3);
     DB(stu).all(
@@ -11,7 +13,7 @@ module.exports = (req, res) => { // $get-resource-counts
             COUNT(*)  AS "resourcesCount"
         FROM "data"
         GROUP BY fhir_type`,
-        (error, rows) => {
+        (error: Error, rows: any[]) => {
             if (error) {
                 return res.send(error);
             }
@@ -24,4 +26,4 @@ module.exports = (req, res) => { // $get-resource-counts
             });
         }
     );
-};
+}

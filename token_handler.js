@@ -1,7 +1,6 @@
 const jwt       = require("jsonwebtoken");
 const jwkToPem  = require("jwk-to-pem");
 const config    = require("./config");
-const { scopeSet } = require("./lib");
 const Lib       = require("./lib");
 const { validateScopesForBulkDataExport, ScopeList } = require("./scope");
 

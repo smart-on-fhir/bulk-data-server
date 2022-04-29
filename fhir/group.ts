@@ -1,14 +1,27 @@
-const crypto = require("crypto");
-const moment = require("moment");
-const DB     = require("../db");
-const config = require("../config");
-const lib    = require("../lib");
+import { Bundle, BundleEntry, Group } from "fhir/r4"
+import { Request, Response }          from "express"
+import crypto                         from "crypto"
+import moment                         from "moment"
+import DB                             from "../db"
+import config                         from "../config"
+import {
+    htmlEncode,
+    getRequestedParams,
+    operationOutcome
+} from "../lib"
+
+
+interface Row {
+    resource_json: string
+    id: string
+    quantity: number
+}
 
 const SERVER_START_TIME = moment().format("YYYY-MM-DD HH:mm:ss");
 
-function resourceCreator(multiplier) {
-    return function resource(group) {
-        const json = JSON.parse(group.resource_json);
+function resourceCreator(multiplier: number) {
+    return function resource(group: Row) {
+        const json = JSON.parse(group.resource_json) as Group;
         return {
             fullUrl: `${config.baseUrl}/fhir/Group/${json.id}`,
             resource: {
@@ -24,7 +37,7 @@ function resourceCreator(multiplier) {
                 name: json.name,
                 text: {
                     status: "generated",
-                    div: `<div xmlns="http://www.w3.org/1999/xhtml">${lib.htmlEncode(json.name)}</div>`
+                    div: `<div xmlns="http://www.w3.org/1999/xhtml">${htmlEncode(json.name!)}</div>`
                 },
                 type: "person",
                 actual: true
@@ -33,9 +46,9 @@ function resourceCreator(multiplier) {
     }
 }
 
-function bundle(items, multiplier) {
+function bundle(items: Row[], multiplier: number) {
     const len = items.length;
-    const bundle = {
+    const bundle: Bundle = {
         "resourceType": "Bundle",
         "id"  : crypto.randomBytes(32).toString("hex"),
         "meta": {
@@ -52,14 +65,14 @@ function bundle(items, multiplier) {
     };
 
     if (len) {
-        bundle.entry = items.map(resourceCreator(multiplier));
+        bundle.entry = items.map(resourceCreator(multiplier)) as BundleEntry[];
     }
 
     return bundle;
 }
 
-module.exports = (req, res) => {
-    const sim = lib.getRequestedParams(req);
+export default function(req: Request, res: Response) {
+    const sim = getRequestedParams(req);
     let multiplier = sim.m || 1;
     let stu = sim.stu || 3;
 
@@ -70,12 +83,12 @@ module.exports = (req, res) => {
         WHERE g.fhir_type = "Group"
         AND d.fhir_type = "Patient"
         GROUP BY d.group_id`,
-        (error, rows) => {
+        (error: Error, rows: Row[]) => {
             if (error) {
                 console.error(error);
-                return lib.operationOutcome(res, "DB query error");
+                return operationOutcome(res, "DB query error");
             }
             res.json(bundle(rows, multiplier));
         }
     );
-};
+}

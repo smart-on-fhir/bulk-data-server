@@ -1,14 +1,16 @@
-const FS         = require("fs").promises;
-const Path       = require("path");
-const jwt        = require("jsonwebtoken");
-const moment     = require("moment");
-const config     = require("./config");
-const base64url  = require("base64-url");
-const request    = require("request");
-const getDB      = require("./db");
-const { format } = require("util");
-const { Dirent } = require("fs");
-
+import { NextFunction, Request, Response } from "express"
+import FS            from "fs/promises"
+import Path          from "path"
+import jwt           from "jsonwebtoken"
+import moment        from "moment"
+import base64url     from "base64-url"
+import request       from "request"
+import { format }    from "util"
+import config        from "./config"
+import getDB         from "./db"
+import { JSONValue } from "./types"
+import { Dirent }    from "fs"
+import FHIR, { OperationOutcome } from "fhir/r4"
 
 
 const RE_GT    = />/g;
@@ -18,11 +20,11 @@ const RE_QUOT  = /"/g;
 const RE_FALSE = /^(0|no|false|off|null|undefined|NaN|)$/i;
 
 
-function bool(x) {
+export function bool(x: any): boolean {
     return !RE_FALSE.test(String(x).trim());
 }
 
-function htmlEncode(html) {
+export function htmlEncode(html: string): string {
     return String(html)
         .trim()
         .replace(RE_AMP , "&amp;")
@@ -31,16 +33,27 @@ function htmlEncode(html) {
         .replace(RE_QUOT, "&quot;");
 }
 
-function operationOutcome(res, message, options = {}) {
+export function operationOutcome(
+    res: Response,
+    message: string,
+    options: {
+        httpCode?: number,
+        severity?: "fatal" | "error" | "warning" | "information",
+        issueCode?: string
+    } = {})
+{
     return res.status(options.httpCode || 500).json(
         createOperationOutcome(message, options)
     );
 }
 
-function createOperationOutcome(message, {
+export function createOperationOutcome(message: string, {
         issueCode = "processing", // http://hl7.org/fhir/valueset-issue-type.html
         severity  = "error"       // fatal | error | warning | information
-    } = {})
+    }: {
+        issueCode?: string
+        severity?: "fatal" | "error" | "warning" | "information"
+    } = {}): OperationOutcome
 {
     return {
         "resourceType": "OperationOutcome",
@@ -61,7 +74,10 @@ function createOperationOutcome(message, {
     };
 }
 
-function makeArray(x) {
+export function makeArray(x: any[]): typeof x;
+export function makeArray(x: string): any[];
+export function makeArray(x: any): [typeof x];
+export function makeArray(x: any): any[] {
     if (Array.isArray(x)) {
         return x;
     }
@@ -76,8 +92,8 @@ function makeArray(x) {
  * @param {String} inputString Base64url-encoded string
  * @returns {Object}
  */
-function decodeArgs(inputString) {
-    let args;
+export function decodeArgs(inputString: string): Record<string, any> {
+    let args: any = {};
     try {
         args = JSON.parse(base64url.decode(inputString));
     }
@@ -97,10 +113,8 @@ function decodeArgs(inputString) {
  * fragment. Given a request object and a paramName, this function will look for
  * route parameter with that name and parse it to JSON and return the result
  * object. If anything goes wrong, an empty object will be returned.
- * @param {Object} req 
- * @param {String} paramName
  */
-function getRequestedParams(req, paramName = "sim") {
+export function getRequestedParams(req: Request, paramName = "sim") {
     return decodeArgs(req.params[paramName]);
 }
 
@@ -110,23 +124,18 @@ function getRequestedParams(req, paramName = "sim") {
  * 1. Returns a promise
  * 2. Ensures async result
  * 3. Catches errors and rejects the promise
- * @param {String} json The JSON input string
- * @return {Promise<Object>} Promises an object
- * @todo Investigate if we can drop the try/catch block and rely on the built-in
- *       error catching.
  */
-async function parseJSON(json)
+export async function parseJSON<T=JSONValue>(json: string): Promise<T>
 {
     return new Promise((resolve, reject) => {
         setImmediate(() => {
-            let out;
             try {
-                out = JSON.parse(json || "null");
+                var out = JSON.parse(json || "null");
             }
             catch (error) {
                 return reject(error);
             }
-            resolve(out);
+            resolve(out as T);
         });
     });
 }
@@ -137,20 +146,13 @@ async function parseJSON(json)
  * 1. Returns a promise
  * 2. Ensures async result
  * 3. Catches errors and rejects the promise
- * @param {Object} json The JSON input object
- * @param {Number|String} [indentation] The The JSON.stringify indentation
- * @return {Promise<String>} Promises a string
- * @todo Investigate if we can drop the try/catch block and rely on the built-in
- *       error catching.
- * @param json 
  */
-async function stringifyJSON(json, indentation)
+export async function stringifyJSON(json: JSONValue, indentation?: string | number): Promise<string>
 {
     return new Promise((resolve, reject) => {
         setImmediate(() => {
-            let out;
             try {
-                out = JSON.stringify(json, null, indentation);
+                var out = JSON.stringify(json, null, indentation);
             }
             catch (error) {
                 return reject(error);
@@ -162,22 +164,17 @@ async function stringifyJSON(json, indentation)
 
 /**
  * Read a file and parse it as JSON.
- * @param path
- * @return {Promise<Object>} Promises the JSON object
  */
-async function readJSON(path)
+export async function readJSON<T=JSONValue>(path: string): Promise<T>
 {
-    return FS.readFile(path, "utf8").then(parseJSON);
+    return FS.readFile(path, "utf8").then(json => parseJSON<T>(json));
 }
 
-/**
- * @param {object} options 
- * @param {string} options.dir 
- * @param {number | undefined} [options.limit] 
- * @param {(path: string, dirent: Dirent) => boolean | undefined} [options.filter]
- * @param {(path: string, dirent: Dirent) => any} cb 
- */
-async function forEachFile(options, cb) {
+export async function forEachFile(options: {
+    dir    : string,
+    limit ?: number,
+    filter?: (path: string, dirent: Dirent) => boolean | undefined
+}, cb: (path: string, dirent: Dirent) => any) {
     try {
         const dir = await FS.opendir(options.dir);
         let i = 0;
@@ -203,29 +200,28 @@ async function forEachFile(options, cb) {
  * provided path. This function is very simple so it intentionally does not
  * support any argument polymorphism, meaning that the path can only be a
  * dot-separated string. If the path is invalid returns undefined.
- * @param {Object} obj The object (or Array) to walk through
- * @param {String} path The path (eg. "a.b.4.c")
- * @returns {*} Whatever is found in the path or undefined
+ * @param obj The object (or Array) to walk through
+ * @param path The path (eg. "a.b.4.c")
+ * @returns Whatever is found in the path or undefined
  */
-function getPath(obj, path = "")
+export function getPath(obj: any, path = ""): any
 {
     return path.split(".").reduce((out, key) => out ? out[key] : undefined, obj)
 }
 
 // require a valid auth token if there is an auth token
-function checkAuth(req, res, next)
+export function checkAuth(req: Request, res: Response, next: NextFunction)
 {
     if (req.headers.authorization) {
-        let token;
         try {
-            token = jwt.verify(
+            var token = jwt.verify(
                 req.headers.authorization.split(" ")[1],
                 config.jwtSecret
             );
         } catch (e) {
             return operationOutcome(
                 res,
-                "Invalid token " + e.message,
+                "Invalid token " + (e as Error).message,
                 { httpCode: 401 }
             );
         }
@@ -236,7 +232,7 @@ function checkAuth(req, res, next)
         }
     }
     else {
-        if (req.sim && req.sim.secure) {
+        if ((req as any).sim && (req as any).sim.secure) {
             return operationOutcome(
                 res,
                 "Authentication is required",
@@ -248,17 +244,21 @@ function checkAuth(req, res, next)
     next();
 }
 
-function getErrorText(name, ...rest)
+export function getErrorText(name: string, ...rest: any[])
 {
     return format(config.errors[name], ...rest);
 }
 
-function replyWithError(res, name, code = 500, ...params)
+export function replyWithError(res: Response, name: string, code = 500, ...params: any[])
 {
     return res.status(code).send(getErrorText(name, ...params));
 }
 
-function replyWithOAuthError(res, name, options = {})
+export function replyWithOAuthError(res: Response, name: string, options: {
+    code?: number
+    message?: string
+    params?: any[]
+} = {})
 {
     const code   = options.code   || 400;
     const params = options.params || [];
@@ -285,7 +285,7 @@ function replyWithOAuthError(res, name, options = {})
     });
 }
 
-function buildUrlPath(...segments)
+export function buildUrlPath(...segments: string[])
 {
     return segments.map(
         s => String(s)
@@ -294,22 +294,21 @@ function buildUrlPath(...segments)
     ).join("\/");
 }
 
-function parseToken(token)
+export function parseToken(t: string)
 {
-    if (typeof token != "string") {
+    if (typeof t != "string") {
         throw new Error("The token must be a string");
     }
 
-    token = token.split(".");
+    let token = t.split(".");
 
     if (token.length != 3) {
         throw new Error("Invalid token structure. Must contain 3 parts.");
     }
 
     // Token header ------------------------------------------------------------
-    let header;
     try {
-        header = JSON.parse(Buffer.from(token[0], "base64").toString("utf8"));
+        var header = JSON.parse(Buffer.from(token[0], "base64").toString("utf8"));
     } catch (ex) {
         throw new Error("Invalid token structure. Cannot parse the token header.");
     }
@@ -338,9 +337,8 @@ function parseToken(token)
     }
 
     // Token body --------------------------------------------------------------
-    let body;
     try {
-        body = JSON.parse(Buffer.from(token[1], "base64").toString("utf8"));
+        var body = JSON.parse(Buffer.from(token[1], "base64").toString("utf8"));
     } catch (ex) {
         throw new Error("Invalid token structure. Cannot parse the token body.");
     }
@@ -348,11 +346,7 @@ function parseToken(token)
     return body;
 }
 
-/**
- * @param {import("express").Request} req 
- * @returns {{system: string, resource: string, action: string}[]}
- */
-function getGrantedScopes(req) {
+export function getGrantedScopes(req: Request): {system: string, resource: string, action: string}[] {
     try {
         const accessToken = jwt.verify((req.headers.authorization || "").replace(/^bearer\s+/i, ""), config.jwtSecret)
         // @ts-ignore jwt.verify returns string | object but for JWK we know it is an object
@@ -362,13 +356,11 @@ function getGrantedScopes(req) {
     }
 }
 
-/**
- * @param {{system: string, resource: string, action: string}[]} grantedScopes 
- * @param {string} resourceType 
- * @param {"read"|"write"|"*"} [access="read"]
- * @returns {boolean}
- */
-function hasAccessToResourceType(grantedScopes, resourceType, access = "read") {
+export function hasAccessToResourceType(
+    grantedScopes: {system: string, resource: string, action: string}[],
+    resourceType: string,
+    access = "read"
+): boolean {
     return grantedScopes.some(scope => (
         (scope.system === "*" || scope.system === "system") &&
         (scope.resource === "*" || scope.resource === resourceType) &&
@@ -376,13 +368,13 @@ function hasAccessToResourceType(grantedScopes, resourceType, access = "read") {
     ))
 }
 
-function wait(ms = 0) {
+export function wait(ms = 0) {
     return new Promise(resolve => {
         setTimeout(resolve, uInt(ms));
     });
 }
 
-function uInt(x, defaultValue = 0) {
+export function uInt(x: any, defaultValue = 0): number {
     x = parseInt(x + "", 10);
     if (isNaN(x) || !isFinite(x) || x < 0) {
         x = uInt(defaultValue, 0);
@@ -391,6 +383,7 @@ function uInt(x, defaultValue = 0) {
 }
 
 /**
+ * @param dateTime Either a date/dateTime string or a timestamp number
  * @see https://momentjs.com/docs/#/parsing/ for the possible date-time
  * formats.
  * 
@@ -405,9 +398,8 @@ function uInt(x, defaultValue = 0) {
  *  now
  *  DDDDDDDDDD
  */
-function fhirDateTime(dateTime, noFuture) {
-    let t;
-
+export function fhirDateTime(dateTime: string | number, noFuture?: boolean) {
+    
     dateTime = String(dateTime || "").trim();
 
     // YYYY (FHIR)
@@ -417,10 +409,10 @@ function fhirDateTime(dateTime, noFuture) {
     else if (/^\d{4}-\d{2}$/.test(dateTime)) dateTime += "-01";
 
     // TIMESTAMP
-    else if (/^\d{9,}(\.\d+)?/.test(dateTime)) dateTime *= 1;
+    else if (/^\d{9,}(\.\d+)?/.test(dateTime)) dateTime = +dateTime;
 
     // Parse
-    t = moment(dateTime);
+    let t = moment(dateTime);
 
     if (!t.isValid()) {
         throw new Error(`Invalid dateTime "${dateTime}"`);
@@ -433,7 +425,7 @@ function fhirDateTime(dateTime, noFuture) {
     return t.format("YYYY-MM-DD HH:mm:ss");
 }
 
-function fetchJwks(url) {
+export function fetchJwks(url: string): Promise<any> {
     return new Promise((resolve, reject) => {
         request({ url, json: true }, (error, resp, body) => {
             if (error) {
@@ -460,11 +452,8 @@ function fetchJwks(url) {
 /**
  * Simple Express middleware that will require the request to have "accept"
  * header set to "application/fhir+ndjson".
- * @param {Object} req
- * @param {Object} res
- * @param {Function} next
  */
-function requireFhirJsonAcceptHeader(req, res, next) {
+export function requireFhirJsonAcceptHeader(req: Request, res: Response, next: NextFunction) {
     if (req.headers.accept != "application/fhir+json") {
         return outcomes.requireAcceptFhirJson(res);
     }
@@ -474,11 +463,8 @@ function requireFhirJsonAcceptHeader(req, res, next) {
 /**
  * Simple Express middleware that will require the request to have "prefer"
  * header set to "respond-async".
- * @param {Object} req
- * @param {Object} res
- * @param {Function} next
  */
-function requireRespondAsyncHeader(req, res, next) {
+export function requireRespondAsyncHeader(req: Request, res: Response, next: NextFunction) {
     const tokens = String(req.headers.prefer || "").trim().split(/\s*[,;]\s*/);
     if (!tokens.includes("respond-async")) {
         return outcomes.requirePreferAsync(res);
@@ -489,53 +475,24 @@ function requireRespondAsyncHeader(req, res, next) {
 /**
  * Simple Express middleware that will require the request to have "Content-Type"
  * header set to "application/json".
- * @param {Object} req
- * @param {Object} res
- * @param {Function} next
  */
-function requireJsonContentTypeHeader(req, res, next) {
+export function requireJsonContentTypeHeader(req: Request, res: Response, next: NextFunction) {
     if (!req.is("application/json")) {
         return outcomes.requireJsonContentType(res);
     }
     next();
 }
 
-// /**
-//  * Returns the absolute base URL of the given request
-//  * @param {object} request 
-//  */
-// function getBaseUrl(request) {
-    
-//     // protocol
-//     let proto = request.headers["x-forwarded-proto"];
-//     if (!proto) {
-//         proto = request.socket.encrypted ? "https" : "http";
-//     }
-
-//     // host
-//     let host = request.headers.host;
-//     if (request.headers["x-forwarded-host"]) {
-//         host = request.headers["x-forwarded-host"];
-//         if (request.headers["x-forwarded-port"]) {
-//             host += ":" + request.headers["x-forwarded-port"];
-//         }
-//     }
-
-//     return proto + "://" + host;
-// }
-
 /**
  * Get a list of all the resource types present in the database
- * @param {number} fhirVersion 
- * @returns {Promise<string[]>}
  */
-function getAvailableResourceTypes(fhirVersion) {
+export function getAvailableResourceTypes(fhirVersion: number): Promise<string[]> {
     const DB = getDB(fhirVersion);
     return DB.promise("all", 'SELECT DISTINCT "fhir_type" FROM "data"')
-        .then(rows => rows.map(row => row.fhir_type));
+        .then((rows: any[]) => rows.map(row => row.fhir_type));
 }
 
-function tagResource(resource, code, system = "https://smarthealthit.org/tags")
+export function tagResource(resource: Partial<FHIR.Resource>, code: string, system = "https://smarthealthit.org/tags")
 {
     if (!resource.meta) {
         resource.meta = {};
@@ -556,10 +513,8 @@ function tagResource(resource, code, system = "https://smarthealthit.org/tags")
 /**
  * Parses a scopes string and returns an array of {system, resource, action}
  * objects
- * @param {string} scopes 
- * @returns {{system: string, resource: string, action: string}[]}
  */
-function scopeSet(scopes) {
+export function scopeSet(scopes: string): {system: string, resource: string, action: string}[] {
     return scopes.trim().split(/\s+/).map(s => {
         const [system, resource, action] = s.split(/\/|\./)
         return {
@@ -576,15 +531,15 @@ function scopeSet(scopes) {
 /**
  * Checks if the given scopes string is valid for use by backend services.
  * This will only accept system scopes and will also reject empty scope.
- * @param {String} scopes The scopes to check
- * @param {number} [fhirVersion] The FHIR version that this scope should be
+ * @param scopes The scopes to check
+ * @param [fhirVersion] The FHIR version that this scope should be
  * validated against. If provided, the scope should match one of the resource
  * types available in the database for that version (or *). Otherwise no
  * check is performed.
- * @returns {Promise<string>} The invalid scope or empty string on success
+ * @returns The invalid scope or empty string on success
  * @static
  */
-async function getInvalidSystemScopes(scopes, fhirVersion) {
+export async function getInvalidSystemScopes(scopes: string, fhirVersion: number): Promise<string> {
     scopes = String(scopes || "").trim();
 
     if (!scopes) {
@@ -607,76 +562,76 @@ async function getInvalidSystemScopes(scopes, fhirVersion) {
 }
 
 // Errors as operationOutcome responses
-const outcomes = {
-    fileExpired: res => operationOutcome(
+export const outcomes = {
+    fileExpired: (res: Response) => operationOutcome(
         res,
         "Access to the target resource is no longer available at the server " +
         "and this condition is likely to be permanent because the file " +
         "expired",
         { httpCode: 410 }
     ),
-    invalidAccept: (res, accept) => operationOutcome(
+    invalidAccept: (res: Response, accept: string) => operationOutcome(
         res,
         `Invalid Accept header "${accept}". Currently we only recognize ` +
         `"application/fhir+ndjson" and "application/fhir+json"`,
         { httpCode: 400 }
     ),
-    invalidSinceParameter: (res, value) => operationOutcome(
+    invalidSinceParameter: (res: Response, value: any) => operationOutcome(
         res,
         `Invalid _since parameter "${value}". It must be valid FHIR instant and ` +
         `cannot be a date in the future"`,
         { httpCode: 400 }
     ),
-    requireJsonContentType: res => operationOutcome(
+    requireJsonContentType: (res: Response) => operationOutcome(
         res,
         "The Content-Type header must be application/json",
         { httpCode: 400 }
     ),
-    requireAcceptFhirJson: res => operationOutcome(
+    requireAcceptFhirJson: (res: Response) => operationOutcome(
         res,
         "The Accept header must be application/fhir+json",
         { httpCode: 400 }
     ),
-    requirePreferAsync: res => operationOutcome(
+    requirePreferAsync: (res: Response) => operationOutcome(
         res,
         "The Prefer header must be respond-async",
         { httpCode: 400 }
     ),
-    fileGenerationFailed: res => operationOutcome(
+    fileGenerationFailed: (res: Response) => operationOutcome(
         res,
         getErrorText("file_generation_failed")
     ),
-    cancelAccepted: res => operationOutcome(
+    cancelAccepted: (res: Response) => operationOutcome(
         res,
         "The procedure was canceled",
         { severity: "information", httpCode: 202 /* Accepted */ }
     ),
-    cancelCompleted: res => operationOutcome(
+    cancelCompleted: (res: Response) => operationOutcome(
         res,
         "The export was already completed",
         { httpCode: 404 }
     ),
-    cancelNotFound: res => operationOutcome(
+    cancelNotFound: (res: Response) => operationOutcome(
         res,
         "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled",
         { httpCode: 404 /* Not Found */ }
     ),
-    importAccepted: (res, location) => operationOutcome(
+    importAccepted: (res: Response, location: string) => operationOutcome(
         res,
         `Your request has been accepted. You can check its status at "${location}"`,
         { httpCode: 202, severity: "information" }
     ),
-    exportAccepted: (res, location) => operationOutcome(
+    exportAccepted: (res: Response, location: string) => operationOutcome(
         res,
         `Your request has been accepted. You can check its status at "${location}"`,
         { httpCode: 202, severity: "information" }
     ),
-    exportDeleted: res => operationOutcome(
+    exportDeleted: (res: Response) => operationOutcome(
         res,
         "The exported resources have been deleted",
         { httpCode: 404 }
     ),
-    exportNotCompleted: res => operationOutcome(
+    exportNotCompleted: (res: Response) => operationOutcome(
         res,
         "The export is not completed yet",
         { httpCode: 404 }
@@ -685,11 +640,8 @@ const outcomes = {
 
 /**
  * Make Promise abortable with the given signal.
- * @param {Promise<any>} p
- * @param {AbortSignal} signal
- * @returns {Promise<any>}
  */
-function abortablePromise(p, signal) {
+export function abortablePromise<T=any>(p: Promise<T>, signal: AbortSignal): Promise<T> {
     if (signal.aborted) {
         return Promise.reject(new AbortError("Already aborted"));
     }
@@ -701,46 +653,8 @@ function abortablePromise(p, signal) {
     });
 }
 
-class AbortError extends Error {
+export class AbortError extends Error {
     constructor(message = "Aborted") {
         super(message)
     }
 }
-
-module.exports = {
-    htmlEncode,
-    parseJSON,
-    stringifyJSON,
-    readJSON,
-    forEachFile,
-    getPath,
-    operationOutcome,
-    checkAuth,
-    getErrorText,
-    buildUrlPath,
-    replyWithError,
-    replyWithOAuthError,
-    parseToken,
-    bool,
-    wait,
-    uInt,
-    decodeArgs,
-    getRequestedParams,
-    fhirDateTime,
-    createOperationOutcome,
-    fetchJwks,
-    makeArray,
-    outcomes,
-    requireRespondAsyncHeader,
-    requireFhirJsonAcceptHeader,
-    requireJsonContentTypeHeader,
-    // getBaseUrl,
-    getAvailableResourceTypes,
-    getInvalidSystemScopes,
-    tagResource,
-    scopeSet,
-    getGrantedScopes,
-    hasAccessToResourceType,
-    abortablePromise,
-    AbortError
-};

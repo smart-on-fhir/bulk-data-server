@@ -1,6 +1,6 @@
-const Transform = require("stream").Transform;
+import { Transform } from "stream"
 
-function csvEscape(value) {
+function csvEscape(value: string) {
     const type = typeof value;
     if (type == "number" || type == "boolean" || !value) {
         return String(value);
@@ -18,7 +18,7 @@ function csvEscape(value) {
     return out;
 }
 
-module.exports = function(options = {}) {
+export default function(options: { extended?: boolean } = {}) {
     let _hasHeader = false;
     return new Transform({
         writableObjectMode: true,
@@ -35,9 +35,8 @@ module.exports = function(options = {}) {
                 this.push(keys.map(key => csvEscape(obj[key])).join(",") + "\r\n");
                 setImmediate(next);
             } catch (error) {
-                setImmediate(next, error);
+                setImmediate(next, error as Error);
             }
         }
     });
-};
-
+}

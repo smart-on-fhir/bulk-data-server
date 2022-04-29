@@ -4,11 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha tests/*.test.js",
-    "test:watch": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha -w tests/*.test --watch-ignore jobs tests/*.test.js",
-    "test:import": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha tests/import.test.js",
+    "test": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha --require ts-node/register    tests/*.test.js",
+    "test:watch": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha --require ts-node/register -w tests/*.test.js",
+    "test:import": "NODE_ENV=test nyc --cache false --reporter text --reporter html -x jobs mocha --require ts-node/register    tests/import.test.js",
     "coverage": "nyc npm run test",
-    "start": "node ."
+    "start": "ts-node --transpile-only .",
+    "start:dev": "ts-node ."
   },
   "repository": {
     "type": "git",
@@ -29,11 +30,10 @@
   "homepage": "https://github.com/smart-on-fhir/bulk-data-server#readme",
   "dependencies": {
     "base64-url": "^2.0.1",
-    "body-parser": "^1.18.3",
     "colors": "^1.4.0",
     "commander": "^2.12.2",
     "cors": "^2.8.5",
-    "express": "^4.16.2",
+    "express": "^4.18.0",
     "fhir-filter": "github:smart-on-fhir/fhir-filter",
     "jsonwebtoken": "^8.1.0",
     "jwk-lite": "^0.1.2",
@@ -42,12 +42,16 @@
     "moment": "^2.19.4",
     "morgan": "^1.10.0",
     "request": "^2.88.2",
-    "sqlite3": "^5.0.5"
+    "sqlite3": "^5.0.5",
+    "ts-node": "^10.7.0",
+    "typescript": "^4.6.3"
   },
   "devDependencies": {
     "@types/base64-url": "^2.2.0",
     "@types/chai": "^4.2.12",
+    "@types/cors": "^2.8.12",
     "@types/express": "^4.17.4",
+    "@types/fhir": "^0.0.34",
     "@types/jsonwebtoken": "^8.5.0",
     "@types/jwk-to-pem": "^2.0.0",
     "@types/mocha": "^7.0.2",
