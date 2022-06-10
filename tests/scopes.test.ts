@@ -1,5 +1,5 @@
-const { expect } = require("chai");
-const { ScopeV2, ScopeV1, Scope, ScopeList } = require("../scope");
+import { expect } from "chai"
+import { ScopeV2, ScopeV1, Scope, ScopeList } from "../scope"
 
 describe("Scopes", () => {
 
@@ -86,7 +86,7 @@ describe("Scopes", () => {
 
     describe("Scope", () => {
         it ('parses v2 scopes', () => {
-            const scope = Scope.fromString("system/Observation.rsd?a=b&c=d");
+            const scope = Scope.fromString("system/Observation.rsd?a=b&c=d") as ScopeV2;
             expect(scope.verson).to.equal("2")
             expect(scope).to.have.property("level", "system")
             expect(scope).to.have.property("resource", "Observation")

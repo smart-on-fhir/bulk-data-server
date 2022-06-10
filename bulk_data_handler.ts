@@ -107,4 +107,4 @@ router.use("/OperationDefinition", cors({ origin: true }), OpDef);
 router.use('/attachments', cors({ origin: true }), extractSim, Lib.checkAuth, express.static(__dirname + "/attachments"));
 
 
-module.exports = router;
+export default router;

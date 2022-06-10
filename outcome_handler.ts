@@ -1,5 +1,7 @@
-const router                = require("express").Router({ mergeParams: true });
-const { operationOutcome }  = require("./lib");
+import express from "express"
+import { operationOutcome } from "./lib"
+
+const router = express.Router({ mergeParams: true });
 
 // Results of DownloadTaskCollection contain encoded URL 
 // for each attempted file import at this "/outcome" endpoint:
@@ -12,4 +14,4 @@ router.get("/", (req, res) => {
     return operationOutcome(res, message, { httpCode, issueCode, severity });
 })
 
-module.exports = router;
+export default router;

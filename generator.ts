@@ -1,16 +1,17 @@
-const router = require("express").Router({ mergeParams: true });
-const crypto = require("crypto");
-const jwk    = require("jwk-lite");
+import express from "express"
+import crypto  from "crypto"
+import jwk     from "jwk-lite"
 
-module.exports = router;
+const router = express.Router({ mergeParams: true });
+
 
 router.get("/jwks", (req, res) => {
     let alg = String(req.query.alg || "").toUpperCase();
     if (["RS384", "ES384"].indexOf(alg) == -1) {
         alg = "RS384";
     }
-
-    jwk.generateKey(alg).then(result => {
+    
+    jwk.generateKey(alg).then((result: any) => {
         Promise.all([
             jwk.exportKey(result.publicKey),
             jwk.exportKey(result.privateKey)
@@ -27,3 +28,5 @@ router.get("/jwks", (req, res) => {
         });
     });
 });
+
+export default router

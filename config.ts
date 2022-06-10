@@ -1,7 +1,7 @@
 const ENV  = process.env.NODE_ENV || "production";
-const PORT = process.env.PORT || (ENV == "test" ? 9444 : 9443);
+const PORT = +(process.env.PORT || (ENV == "test" ? 9444 : 9443));
 
-module.exports = {
+export default {
 
     baseUrl: process.env.BASE_URL || `http://localhost:${PORT}`,
 

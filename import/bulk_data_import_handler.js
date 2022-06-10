@@ -1,5 +1,5 @@
 const express                = require("express");
-const config                 = require("../config");
+const config                 = require("../config").default;
 const Lib                    = require("../lib");
 const DownloadTaskCollection = require("./DownloadTaskCollection");
 const TaskManager            = require("./TaskManager");

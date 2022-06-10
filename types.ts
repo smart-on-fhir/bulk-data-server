@@ -145,3 +145,36 @@ export interface ExportManifestFile<Type = string> {
      */
     count?: number
 }
+
+export interface JWK {
+    alg: Algorithm
+    [key: string]: any
+}
+
+export interface JWKS {
+    keys: JWK[]
+}
+
+export interface TokenResponse {
+    access_token: string
+}
+
+export interface JWT {
+    iss: string
+    sub: string
+    aud: string
+    exp: number
+    jti: string
+}
+
+// export type StatusResponse<T=ExportManifest | OperationOutcome | void> = Response<T>
+
+export interface KickOfParams {
+    _since               ?: string
+    _outputFormat        ?: string
+    patient              ?: (number|string) | (number|string)[]
+    _type                ?: string | string[]
+    _elements            ?: string | string[]
+    includeAssociatedData?: string | string[]
+    _typeFilter          ?: string | string[]
+}

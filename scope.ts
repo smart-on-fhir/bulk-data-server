@@ -37,48 +37,48 @@ export abstract class Scope
         throw new Error(`Invalid scope "${scopeString}"`);
     }
 
-    hasAccessTo(resourceType: string, access:string, level: "*"|"system"|"patient"|"user"): boolean {
-        if (this.level !== "*" && this.level !== level) {
-            return false;
-        }
+    // hasAccessTo(resourceType: string, access:string, level: "*"|"system"|"patient"|"user"): boolean {
+    //     if (this.level !== "*" && this.level !== level) {
+    //         return false;
+    //     }
 
-        if (this.resource !== "*" && this.resource !== resourceType) {
-            return false;
-        }
+    //     if (this.resource !== "*" && this.resource !== resourceType) {
+    //         return false;
+    //     }
 
-        const create  = !!this.actions.get("create");
-        const read    = !!this.actions.get("read");
-        const update  = !!this.actions.get("update");
-        const destroy = !!this.actions.get("delete");
-        const search  = !!this.actions.get("search");
+    //     const create  = !!this.actions.get("create");
+    //     const read    = !!this.actions.get("read");
+    //     const update  = !!this.actions.get("update");
+    //     const destroy = !!this.actions.get("delete");
+    //     const search  = !!this.actions.get("search");
 
-        if (access === "*") {
-            return create && destroy && read && search && update;
-        }
+    //     if (access === "*") {
+    //         return create && destroy && read && search && update;
+    //     }
 
-        if (access === "read") {
-            return read && search;
-        }
+    //     if (access === "read") {
+    //         return read && search;
+    //     }
 
-        if (access === "write") {
-            return create && destroy && update;
-        }
+    //     if (access === "write") {
+    //         return create && destroy && update;
+    //     }
 
-        if (!(/^[cruds]$/).test(access)) {
-            console.error(`Invalid access "${access}" requested`)
-            return false
-        }
+    //     if (!(/^[cruds]$/).test(access)) {
+    //         console.error(`Invalid access "${access}" requested`)
+    //         return false
+    //     }
 
-        return access.split("").every(letter => {
-            switch (letter) {
-                case "c": return create;
-                case "r": return read;
-                case "u": return update;
-                case "d": return destroy;
-                case "s": return search;
-            }
-        });
-    }
+    //     return access.split("").every(letter => {
+    //         switch (letter) {
+    //             case "c": return create;
+    //             case "r": return read;
+    //             case "u": return update;
+    //             case "d": return destroy;
+    //             case "s": return search;
+    //         }
+    //     });
+    // }
 }
 
 export class ScopeV1 extends Scope

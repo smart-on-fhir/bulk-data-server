@@ -1,14 +1,14 @@
-const express        = require("express");
-const http           = require("http");
-const morgan         = require("morgan");
-const cors           = require("cors");
-const config         = require("./config");
-const generator      = require("./generator");
-const tokenHandler   = require("./token_handler");
-const register       = require("./registration_handler");
-const bulkData       = require("./bulk_data_handler");
-const env            = require("./env");
-const encodedOutcome = require("./outcome_handler");
+import express, { NextFunction, Request, Response } from "express"
+import http           from "http"
+import morgan         from "morgan"
+import cors           from "cors"
+import config         from "./config"
+import generator      from "./generator"
+import tokenHandler   from "./token_handler"
+import register       from "./registration_handler"
+import bulkData       from "./bulk_data_handler"
+import env            from "./env"
+import encodedOutcome from "./outcome_handler"
 
 const app = express();
 
@@ -28,11 +28,12 @@ app.use((req, res, next) => {
     next();
 });
 
-// backend services authorization
+// @ts-ignore backend services authorization
 app.options("/auth/token", cors({ origin: true }));
+// @ts-ignore 
 app.post("/auth/token", cors({ origin: true }), express.urlencoded({ extended: false }), tokenHandler);
 
-// backend services registration
+// @ts-ignore backend services registration
 app.post("/auth/register", express.urlencoded({ extended: false }), register);
 
 // Used as JWKS generator
@@ -61,7 +62,7 @@ app.use(express.static("static"));
 
 // global error handler
 /* istanbul ignore next */
-app.use(function (err, req, res, next) {
+app.use(function (err: Error, req: Request, res: Response, next: NextFunction) {
     console.error(err.stack);
     res.status(500).send('Something broke!');
 });

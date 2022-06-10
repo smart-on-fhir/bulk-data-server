@@ -244,17 +244,17 @@ export function checkAuth(req: Request, res: Response, next: NextFunction)
     next();
 }
 
-export function getErrorText(name: string, ...rest: any[])
+export function getErrorText(name: keyof typeof config.errors, ...rest: any[])
 {
     return format(config.errors[name], ...rest);
 }
 
-export function replyWithError(res: Response, name: string, code = 500, ...params: any[])
+export function replyWithError(res: Response, name: keyof typeof config.errors, code = 500, ...params: any[])
 {
     return res.status(code).send(getErrorText(name, ...params));
 }
 
-export function replyWithOAuthError(res: Response, name: string, options: {
+export function replyWithOAuthError(res: Response, name: keyof typeof config.oauthErrors, options: {
     code?: number
     message?: string
     params?: any[]
@@ -271,7 +271,9 @@ export function replyWithOAuthError(res: Response, name: string, options: {
 
     let message = defaultDescription;
     if (options.message) {
+        // @ts-ignore
         if (config.errors[options.message]) {
+            // @ts-ignore
             message = getErrorText(options.message, ...params);
         }
         else {

@@ -492,7 +492,7 @@ class ExportManager
         try {
             this.setTypeFilter(_typeFilter)
         } catch (ex) {
-            const outcome = lib.createOperationOutcome(ex.message);
+            const outcome = lib.createOperationOutcome((ex as Error).message);
             if (!isLenient) {
                 this.delete();
                 return res.status(400).json(outcome);

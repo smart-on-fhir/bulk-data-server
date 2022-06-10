@@ -1,9 +1,11 @@
 import { Transform } from "stream"
 import base64url from "base64-url"
 import { tagResource, buildUrlPath, getPath } from "../lib"
-import { baseUrl, requiredElements } from "../config"
+import config from "../config"
 import { Resource } from "fhir/r4";
 
+
+const { baseUrl, requiredElements } = config;
 
 /**
  * When provided, the server SHOULD omit unlisted, non-mandatory elements from

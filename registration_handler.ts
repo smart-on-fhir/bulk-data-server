@@ -1,9 +1,10 @@
-const jwt    = require("jsonwebtoken");
-const config = require("./config");
-const Lib    = require("./lib");
+import { Request, Response } from "express";
+import jwt      from "jsonwebtoken"
+import config   from "./config"
+import * as Lib from "./lib"
 
 
-module.exports = (req, res) => {
+export default (req: Request, res: Response) => {
         
     // Require "application/x-www-form-urlencoded" POSTs
     if (!req.headers["content-type"] || req.headers["content-type"].indexOf("application/x-www-form-urlencoded") !== 0) {
@@ -31,7 +32,7 @@ module.exports = (req, res) => {
     }
 
     // Build the result token
-    let jwtToken = {
+    let jwtToken: Record<string, any> = {
         jwks    : jwks ? JSON.parse(jwks) : undefined,
         jwks_url: jwks_url || undefined
     };

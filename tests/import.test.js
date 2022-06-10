@@ -2,7 +2,7 @@
 const DownloadTask = require("../import/DownloadTask");
 const assert       = require("assert");
 const { finished } = require("stream");
-const config       = require("../config");
+const config       = require("../config").default;
 const NDJSONStream = require("../import/NDJSONStream");
 const MockReadable = require("./mocks/ReadStream");
 const mockServer   = require("./mocks/mockServer");

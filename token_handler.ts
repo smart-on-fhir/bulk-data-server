@@ -1,10 +1,12 @@
-const jwt       = require("jsonwebtoken");
-const jwkToPem  = require("jwk-to-pem");
-const config    = require("./config");
-const Lib       = require("./lib");
-const { validateScopesForBulkDataExport, ScopeList } = require("./scope");
+import { JsonWebKey }        from "crypto"
+import { Request, Response } from "express"
+import jwt                   from "jsonwebtoken"
+import jwkToPem              from "jwk-to-pem"
+import config                from "./config"
+import * as Lib              from "./lib"
+import { validateScopesForBulkDataExport, ScopeList } from "./scope"
 
-module.exports = async (req, res) => {
+export default async (req: Request, res: Response) => {
 
     // Require "application/x-www-form-urlencoded" POSTs -----------------------
     let ct = req.headers["content-type"] || "";
@@ -41,24 +43,22 @@ module.exports = async (req, res) => {
     }
 
     // client_assertion must be a token ----------------------------------------
-    let authenticationToken;
     try {
-        authenticationToken = Lib.parseToken(req.body.client_assertion);
+        var authenticationToken = Lib.parseToken(req.body.client_assertion);
     } catch (ex) {
         return Lib.replyWithOAuthError(res, "invalid_request", {
             message: "invalid_registration_token",
-            params : [ ex.message ]
+            params : [ (ex as Error).message ]
         });
     }
 
     // The client_id must be a token -------------------------------------------
-    let clientDetailsToken;
     try {
-        clientDetailsToken = Lib.parseToken(authenticationToken.sub);
+        var clientDetailsToken = Lib.parseToken(authenticationToken.sub);
     } catch (ex) {
         return Lib.replyWithOAuthError(res, "invalid_request", {
             message: "invalid_client_details_token",
-            params : [ ex.message ]
+            params : [ (ex as Error).message ]
         });
     }
 
@@ -210,7 +210,7 @@ module.exports = async (req, res) => {
     // the value supplied in the client's JWK header.
     .then(keys => {
 
-        let publicKeys = keys.filter(key => {
+        let publicKeys = keys.filter((key: JsonWebKey) => {
             if (Array.isArray(key.key_ops) && key.key_ops.indexOf("verify") == -1) {
                 return false;
             }
@@ -234,7 +234,7 @@ module.exports = async (req, res) => {
     .then(publicKeys => {
 
         let error = "";
-        let success = publicKeys.some(key => {
+        let success = publicKeys.some((key: any) => {
             /**
              * @type {import("jsonwebtoken").Algorithm}
              */
@@ -248,7 +248,7 @@ module.exports = async (req, res) => {
                 return true;
             } catch(ex) {
                 // console.error(ex);
-                error = ex.message;
+                error = (ex as Error).message;
                 return false;
             }
         });

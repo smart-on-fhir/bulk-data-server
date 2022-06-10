@@ -1,14 +1,21 @@
-const request   = require("request");
+import { Algorithm } from "jsonwebtoken";
+import { Options, Response, ResponseAsJSON } from "request";
+
+import request   from "request";
 const base64url = require("base64-url");
 const crypto    = require("crypto");
 const jwt       = require("jsonwebtoken");
 const jwkToPem  = require("jwk-to-pem");
-const config    = require("../config");
+const config    = require("../config").default;
 
 
-class RequestError extends Error
+export class RequestError extends Error
 {
-    constructor(message, response, outcome = null)
+    response: any;
+
+    outcome: any;
+
+    constructor(message: string, response: any, outcome = null)
     {
         super(message);
         this.response = response;
@@ -19,14 +26,11 @@ class RequestError extends Error
 /**
  * Promisified version of request. Rejects with an Error or resolves with the
  * response (use response.body to access the parsed body).
- * @param {Object} options The request options
- * @param {Number} delay [0] Delay in milliseconds
- * @return {Promise<Object>}
  */
-function requestPromise(options, delay = 0) {
+export function requestPromise(options: Options, delay = 0): Promise<Response> {
     return new Promise((resolve, reject) => {
         setTimeout(() => {
-            request(Object.assign({ strictSSL: false }, options), (error, res) => {
+            request(Object.assign({ strictSSL: false }, options), (error: Error, res: Response) => {
                 if (error) {
                     return reject(new RequestError(error.message, res));
                 }
@@ -48,7 +52,7 @@ function requestPromise(options, delay = 0) {
                         if (res.body.resourceType == "OperationOutcome") {
                             outcome = res.body;
                             message = res.body.issue.map(
-                                i => `${i.code} ${i.severity}: ${i.diagnostics}`
+                                (i: any) => `${i.code} ${i.severity}: ${i.diagnostics}`
                             ).join(";");
                         }
                     } catch(ex) {
@@ -63,12 +67,12 @@ function requestPromise(options, delay = 0) {
     });
 }
 
-function buildUrl(segments) {
+export function buildUrl(segments: (string|number)[]) {
     segments.unshift(config.baseUrl);
     return segments.map(s => String(s).trim().replace(/^\//, "").replace(/\/$/, "").trim()).join("/");
 }
 
-function buildBulkUrl(segments, params) {
+export function buildBulkUrl(segments: string | number | (string | number)[], params?: any) {
     let url = []
     if (params) {
         url.push(base64url.encode(JSON.stringify(params)));
@@ -81,27 +85,27 @@ function buildBulkUrl(segments, params) {
     return buildUrl(url);
 }
 
-function buildDownloadUrl(fileName, params) {
+export function buildDownloadUrl(fileName: string, params: any) {
     return buildBulkUrl(["bulkfiles", fileName], params);
 }
 
-function buildProgressUrl(params) {
+export function buildProgressUrl(params?: any) {
     return buildBulkUrl("bulkstatus", params);
 }
 
-function buildSystemUrl(params) {
+export function buildSystemUrl(params?: any) {
     return buildBulkUrl("$export", params);
 }
 
-function buildPatientUrl(params) {
+export function buildPatientUrl(params: any) {
     return buildBulkUrl("Patient/$export", params);
 }
 
-function buildGroupUrl(groupId, params) {
+export function buildGroupUrl(groupId: string | number, params: any) {
     return buildBulkUrl(["Group", groupId, "$export"], params);
 }
 
-function expectErrorOutcome(res, { message = "", code = 0 } = {}, done = e => { if (e) throw e }) {
+export function expectErrorOutcome(res: ResponseAsJSON, { message = "", code = 0 } = {}, done = (e?: Error) => { if (e) throw e }) {
     if (!res || !res.statusCode) {
         return done(new Error(`Received invalid response`));
     }
@@ -134,7 +138,7 @@ function expectErrorOutcome(res, { message = "", code = 0 } = {}, done = e => { 
  * same "kid" property.
  * @param {Array} keys JWKS.keys 
  */
-function findKeyPair(keys) {
+export function findKeyPair(keys: Record<string, any>[]) {
     let out = null;
 
     keys.forEach(key => {
@@ -163,15 +167,14 @@ function findKeyPair(keys) {
  * Dynamically registers a backend service with the given options. Then it
  * immediately authorizes with that client and returns a promise that gets
  * resolved with the access token response.
- * @param {Object} options
- * @param {import("jsonwebtoken").Algorithm} [options.alg]
- * @param {any} [options.err]
- * @param {any} [options.dur]
- * @param {string} [options.scope = "system/*.*"]
- * @returns {Promise<Object>}
  */
-function authorize(options = {}) {
-    let state = {};
+export function authorize(options: {
+    alg?: Algorithm
+    err?: any
+    dur?: number
+    scope?: string
+} = {}) {
+    let state: Record<string, any> = {};
 
     const tokenUrl = buildUrl(["auth", "token"]);
     const alg      = options.alg || "RS384"
@@ -189,7 +192,7 @@ function authorize(options = {}) {
     .then(() => state.keys = findKeyPair(state.jwks.keys))
 
     .then(() => {
-        let form = { jwks: JSON.stringify(state.jwks) };
+        let form: Record<string, any> = { jwks: JSON.stringify(state.jwks) };
 
         if (options.err) form.err = options.err;
         if (options.dur) form.dur = options.dur;
@@ -246,11 +249,7 @@ function authorize(options = {}) {
     });
 }
 
-/**
- * @param {number} ms 
- * @returns 
- */
-function wait(ms) {
+export function wait(ms: number) {
     return new Promise(resolve => {
         setTimeout(resolve, ms)
     });

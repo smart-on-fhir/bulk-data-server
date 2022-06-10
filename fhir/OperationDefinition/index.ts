@@ -1,13 +1,21 @@
-const moment = require("moment");
-const crypto = require("crypto");
-const config = require("../../config");
-const router = require("express").Router({ mergeParams: true });
+import moment     from "moment"
+import crypto     from "crypto"
+import config     from "../../config"
+import { Router } from "express"
+
+import PatientEverything from "./Patient--everything"
+import GroupEverything   from "./Group-i-everything"
+import ResourceCounts    from "./s-get-resource-counts"
+
 const entries = [
-    require("./Patient--everything"),
-    require("./Group-i-everything"),
-    require("./s-get-resource-counts")
+    PatientEverything,
+    GroupEverything,
+    ResourceCounts
 ];
+
 const SERVER_START_TIME = moment().format("YYYY-MM-DD HH:mm:ss");
+
+const router = Router({ mergeParams: true });
 
 
 router.get("/", (req, res) => res.json({
@@ -31,4 +39,4 @@ router.get("/Patient--everything"   , (req, res) => res.json(entries[0]));
 router.get("/Group-i-everything"    , (req, res) => res.json(entries[1]));
 router.get("/-s-get-resource-counts", (req, res) => res.json(entries[2]));
 
-module.exports = router;
+export default router
