@@ -34,6 +34,13 @@ export default {
 
     jobsPath: process.env.NODE_ENV === "test" ? __dirname + "/jobs/test" : __dirname + "/jobs",
 
+    supportedSigningAlgorithms: [
+        "HS256", "HS384", "HS512",
+        "RS256", "RS384", "RS512",
+        "ES256", "ES384", "ES512",
+        "PS256", "PS384", "PS512",
+    ],
+
     errors: {
         "missing_parameter"               : "Missing %s parameter",
         "invalid_parameter"               : "Invalid %s parameter",

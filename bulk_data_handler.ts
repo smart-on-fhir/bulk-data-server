@@ -9,6 +9,7 @@ import metadata          from "./fhir/metadata"
 import group             from "./fhir/group"
 import getResourceCounts from "./fhir/get-resource-counts"
 import patient           from "./fhir/patient"
+import wellKnown         from "./fhir/wellKnownSmartConfiguration"
 
 
 const router = express.Router({ mergeParams: true });
@@ -88,6 +89,9 @@ router.post("/\\$import", bulkImporter.createImportKickOffHandler());
 // =============================================================================
 // FHIR/Other Endpoints
 // =============================================================================
+
+// host dummy well-known statement
+router.get("/.well-known/smart-configuration", cors({ origin: true }), extractSim, wellKnown);
 
 // host dummy conformance statement
 router.get("/metadata", cors({ origin: true }), extractSim, metadata);

@@ -1,16 +1,16 @@
 import { NextFunction, Request, Response } from "express"
-import FS            from "fs/promises"
-import Path          from "path"
-import jwt           from "jsonwebtoken"
-import moment        from "moment"
-import base64url     from "base64-url"
-import request       from "request"
-import { format }    from "util"
-import config        from "./config"
-import getDB         from "./db"
-import { JSONValue } from "./types"
-import { Dirent }    from "fs"
-import FHIR, { OperationOutcome } from "fhir/r4"
+import FS                                  from "fs/promises"
+import Path                                from "path"
+import jwt, { Algorithm }                  from "jsonwebtoken"
+import moment                              from "moment"
+import base64url                           from "base64-url"
+import request                             from "request"
+import { format }                          from "util"
+import FHIR, { OperationOutcome }          from "fhir/r4"
+import { Dirent }                          from "fs"
+import config                              from "./config"
+import getDB                               from "./db"
+import { JSONValue }                       from "./types"
 
 
 const RE_GT    = />/g;
@@ -216,7 +216,10 @@ export function checkAuth(req: Request, res: Response, next: NextFunction)
         try {
             var token = jwt.verify(
                 req.headers.authorization.split(" ")[1],
-                config.jwtSecret
+                config.jwtSecret,
+                {
+                    algorithms: config.supportedSigningAlgorithms as Algorithm[]
+                }
             );
         } catch (e) {
             return operationOutcome(
@@ -350,7 +353,9 @@ export function parseToken(t: string)
 
 export function getGrantedScopes(req: Request): {system: string, resource: string, action: string}[] {
     try {
-        const accessToken = jwt.verify((req.headers.authorization || "").replace(/^bearer\s+/i, ""), config.jwtSecret)
+        const accessToken = jwt.verify((req.headers.authorization || "").replace(/^bearer\s+/i, ""), config.jwtSecret, {
+            algorithms: config.supportedSigningAlgorithms as Algorithm[]
+        })
         // @ts-ignore jwt.verify returns string | object but for JWK we know it is an object
         return scopeSet(accessToken.scope)
     } catch {

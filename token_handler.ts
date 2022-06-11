@@ -1,6 +1,6 @@
 import { JsonWebKey }        from "crypto"
 import { Request, Response } from "express"
-import jwt                   from "jsonwebtoken"
+import jwt, { Algorithm }    from "jsonwebtoken"
 import jwkToPem              from "jwk-to-pem"
 import config                from "./config"
 import * as Lib              from "./lib"
@@ -243,7 +243,7 @@ export default async (req: Request, res: Response) => {
                 jwt.verify(
                     req.body.client_assertion,
                     jwkToPem(key),
-                    { algorithms: [algorithm] }
+                    { algorithms: config.supportedSigningAlgorithms as Algorithm[] }
                 );
                 return true;
             } catch(ex) {

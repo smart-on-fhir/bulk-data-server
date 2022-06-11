@@ -443,6 +443,7 @@ describe("Static", () => {
         "/fhir/$get-patients",
         `/fhir/$get-patients?group=${BlueCCrossBlueShieldId}`,
         "/fhir/$get-resource-counts",
+        "/fhir/.well-known/smart-configuration",
         "/env.js",
         "/server-config.js",
         "/fhir/OperationDefinition",

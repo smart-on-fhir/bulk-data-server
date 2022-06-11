@@ -1,4 +1,4 @@
-import express, { NextFunction, Request, Response } from "express"
+import express, { NextFunction, Request, RequestHandler, Response } from "express"
 import http           from "http"
 import morgan         from "morgan"
 import cors           from "cors"
@@ -17,6 +17,10 @@ if (process.env.NODE_ENV === "production") {
     app.use(morgan("combined"));
 }
 
+function requireMethod(method: string): RequestHandler {
+    return (req, res) => res.status(400).end(`This endpoint can only be used with ${method} requests`)
+}
+
 // HTTP to HTTPS redirect (this is Heroku-specific!)
 /* istanbul ignore next */
 app.use((req, res, next) => {
@@ -32,9 +36,11 @@ app.use((req, res, next) => {
 app.options("/auth/token", cors({ origin: true }));
 // @ts-ignore 
 app.post("/auth/token", cors({ origin: true }), express.urlencoded({ extended: false }), tokenHandler);
+app.get("/auth/token", cors({ origin: true }), requireMethod("POST"));
 
 // @ts-ignore backend services registration
 app.post("/auth/register", express.urlencoded({ extended: false }), register);
+app.get("/auth/register", cors({ origin: true }), requireMethod("POST"));
 
 // Used as JWKS generator
 app.use("/generator", generator);
