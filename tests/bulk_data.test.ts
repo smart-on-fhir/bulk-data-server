@@ -459,7 +459,7 @@ describe("Static", () => {
             url: config.baseUrl + "/outcome",
             json: true,
             qs: {
-                httpCode: "255",
+                httpCode: 255,
                 issueCode: "my issueCode",
                 severity: "my severity",
                 message: "my message"
