@@ -21,7 +21,7 @@ export abstract class Scope
     /**
      * @type Currently supported values are "1" and "2"
      */
-    abstract verson: string;
+    abstract version: string;
 
     /**
      * Parse a string and return a Scope instance. The returned scope is either
@@ -89,7 +89,7 @@ export class ScopeV1 extends Scope
 
     resource: string;
 
-    verson = "1";
+    version = "1";
 
     constructor(scopeString: string) {
         super();
@@ -135,7 +135,7 @@ export class ScopeV2 extends Scope
 
     resource: string;
 
-    verson = "2";
+    version = "2";
     /**
      * @type { URLSearchParams }
      */
