@@ -365,14 +365,14 @@ function getGrantedScopes(req) {
 /**
  * @param {{system: string, resource: string, action: string}[]} grantedScopes 
  * @param {string} resourceType 
- * @param {"read"|"write"|"*"} [access="read"]
+ * @param {"c"|"r"|"u"|"d"|"s"|"*"} [access="r"]
  * @returns {boolean}
  */
-function hasAccessToResourceType(grantedScopes, resourceType, access = "read") {
+function hasAccessToResourceType(grantedScopes, resourceType, access = "r") {
     return grantedScopes.some(scope => (
         (scope.system === "*" || scope.system === "system") &&
         (scope.resource === "*" || scope.resource === resourceType) &&
-        (scope.action === "*" || scope.action === access)
+        (scope.action === "*" || scope.action.includes(access))
     ))
 }
 
@@ -562,6 +562,15 @@ function tagResource(resource, code, system = "https://smarthealthit.org/tags")
 function scopeSet(scopes) {
     return scopes.trim().split(/\s+/).map(s => {
         const [system, resource, action] = s.split(/\/|\./)
+
+        // Convert v1 scopes into v2 scopes for easier internal comparisons
+        // https://hl7.org/fhir/smart-app-launch/scopes-and-launch-context.html#scopes-for-requesting-clinical-data
+        if (action === 'read') {
+          action = 'rs';
+        } else if (action === 'write') {
+          action = 'cud';
+        }
+
         return {
             system,
             resource,

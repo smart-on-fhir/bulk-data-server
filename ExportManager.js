@@ -882,7 +882,7 @@ class ExportManager
         if (this.secure) {
             const grantedScopes = lib.getGrantedScopes(req)
             const resourceType  = req.params.file.split(".")[1]
-            const hasAccess = lib.hasAccessToResourceType(grantedScopes, resourceType, "read")
+            const hasAccess = lib.hasAccessToResourceType(grantedScopes, resourceType, "r")
             if (!hasAccess) {
                 return lib.operationOutcome(res, "Permission denied", { httpCode: 403 });
             }
