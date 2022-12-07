@@ -33,7 +33,7 @@
     "colors": "^1.4.0",
     "commander": "^2.12.2",
     "cors": "^2.8.5",
-    "express": "^4.16.2",
+    "express": "^4.17.3",
     "fhir-filter": "github:smart-on-fhir/fhir-filter",
     "jsonwebtoken": "^8.1.0",
     "jwk-lite": "^0.1.2",
