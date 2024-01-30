@@ -1,5 +1,5 @@
-const { expect } = require("chai");
-const { ScopeV2, ScopeV1, Scope, ScopeList } = require("../scope");
+import { expect } from "chai"
+import { ScopeV2, ScopeV1, Scope, ScopeList } from "../scope"
 
 describe("Scopes", () => {
 
@@ -86,8 +86,8 @@ describe("Scopes", () => {
 
     describe("Scope", () => {
         it ('parses v2 scopes', () => {
-            const scope = Scope.fromString("system/Observation.rsd?a=b&c=d");
-            expect(scope.verson).to.equal("2")
+            const scope = Scope.fromString("system/Observation.rsd?a=b&c=d") as ScopeV2;
+            expect(scope.version).to.equal("2")
             expect(scope).to.have.property("level", "system")
             expect(scope).to.have.property("resource", "Observation")
             expect(scope.query).to.be.an.instanceOf(URLSearchParams)
@@ -103,7 +103,7 @@ describe("Scopes", () => {
 
         it ('parses v1 scopes', () => {
             const scope = Scope.fromString("system/Observation.read");
-            expect(scope.verson).to.equal("1")
+            expect(scope.version).to.equal("1")
             expect(scope).to.have.property("level", "system")
             expect(scope).to.have.property("resource", "Observation")
             expect(scope.actions.get("create")).to.deep.equal(false)

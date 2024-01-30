@@ -1,6 +1,6 @@
-const config = require("../../config");
+import config from "../../config"
 
-module.exports = {
+export default {
   "resourceType": "OperationDefinition",
   "id": "55bccf047d03198946aeff7b130452fa",
   "text": {

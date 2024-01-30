@@ -1,121 +1,114 @@
-const { URLSearchParams }           = require("url");
-const { getAvailableResourceTypes } = require("./lib");
+import { getAvailableResourceTypes } from "./lib"
 
+type AccessLevel = "patient" | "user" | "system";
+type Action = "create" | "read" | "update" | "delete" | "search";
 
-class Scope
+// patient|user|system|*)/(*|resourceType).(read|write|*)
+const re_scope_v1 = /^\s*(patient|user|system|\*)\/(\*|[A-Z][A-Za-z0-9]+)\.(read|write|\*)\s*$/;
+
+// patient|user|system)/(*|resourceType).[cruds]?query
+const re_scope_v2 = /^\s*(patient|user|system)\/(\*|[A-Z][A-Za-z0-9]+)\.([cruds]+)(\?.*)?$/
+
+export abstract class Scope
 {
 
-    /**
-     * @type { "patient" | "user" | "system" }
-     */
-    level;
+    abstract level: string;
+
+    abstract resource: string;
+
+    abstract actions: Map<Action, boolean>;
 
     /**
-     * @type { string }
+     * @type Currently supported values are "1" and "2"
      */
-    resource;
+    abstract version: string;
 
     /**
-     * @type {Map} { create: boolean, read: boolean, update: boolean, delete: boolean, search: boolean }
+     * Parse a string and return a Scope instance. The returned scope is either
+     * ScopeV1 or ScopeV2 instance depending on the input string
      */
-    actions;
-
-    /**
-     * @type {string} Currently supported values are "1" and "2"
-     */
-    verson;
-
-    /**
-     * Parse a string and return a Scope instance
-     * @param {string} scopeString 
-     * @returns {Scope}
-     */
-    static fromString(scopeString) {
-        if (/^\s*(patient|user|system|\*)\/(\*|[A-Z][A-Za-z0-9]+)\.(read|write|\*)\s*$/.test(String(scopeString || ""))) {
+    static fromString(scopeString: string): Scope {
+        if (re_scope_v1.test(String(scopeString || ""))) {
             return new ScopeV1(scopeString)
         }
-        return new ScopeV2(scopeString)
+        else if (re_scope_v2.test(String(scopeString || ""))) {
+            return new ScopeV2(scopeString)
+        }
+        throw new Error(`Invalid scope "${scopeString}"`);
     }
 
-    /**
-     * @param {string} resourceType 
-     * @param {string} access
-     * @param {"*"|"system"|"patient"|"user"} level
-     * @returns {boolean}
-     */
-    hasAccessTo(resourceType, access, level) {
-        if (this.level !== "*" && this.level !== level) {
-            return false;
-        }
+    // hasAccessTo(resourceType: string, access:string, level: "*"|"system"|"patient"|"user"): boolean {
+    //     if (this.level !== "*" && this.level !== level) {
+    //         return false;
+    //     }
 
-        if (this.resource !== "*" && this.resource !== resourceType) {
-            return false;
-        }
+    //     if (this.resource !== "*" && this.resource !== resourceType) {
+    //         return false;
+    //     }
 
-        const { create, read, update, delete: destroy, search } = this.actions;
+    //     const create  = !!this.actions.get("create");
+    //     const read    = !!this.actions.get("read");
+    //     const update  = !!this.actions.get("update");
+    //     const destroy = !!this.actions.get("delete");
+    //     const search  = !!this.actions.get("search");
 
-        if (access === "*") {
-            return create && destroy && read && search && update;
-        }
+    //     if (access === "*") {
+    //         return create && destroy && read && search && update;
+    //     }
 
-        if (access === "read") {
-            return read && search;
-        }
+    //     if (access === "read") {
+    //         return read && search;
+    //     }
 
-        if (access === "write") {
-            return create && destroy && update;
-        }
+    //     if (access === "write") {
+    //         return create && destroy && update;
+    //     }
 
-        if (!(/^[cruds]$/).test(access)) {
-            console.error(`Invalid access "${access}" requested`)
-            return false
-        }
+    //     if (!(/^[cruds]$/).test(access)) {
+    //         console.error(`Invalid access "${access}" requested`)
+    //         return false
+    //     }
 
-        return access.split("").every(letter => {
-            switch (letter) {
-                case "c": return create;
-                case "r": return read;
-                case "u": return update;
-                case "d": return destroy;
-                case "s": return search;
-            }
-        });
-    }
+    //     return access.split("").every(letter => {
+    //         switch (letter) {
+    //             case "c": return create;
+    //             case "r": return read;
+    //             case "u": return update;
+    //             case "d": return destroy;
+    //             case "s": return search;
+    //         }
+    //     });
+    // }
 }
 
-class ScopeV1 extends Scope
+export class ScopeV1 extends Scope
 {
-    /**
-     * @param { string } scopeString
-     */
-    constructor(scopeString) {
+    level: AccessLevel;
+
+    actions: Map<Action, boolean>;
+
+    resource: string;
+
+    version = "1";
+
+    constructor(scopeString: string) {
         super();
         const SCOPE_RE = /^\s*(patient|user|system)\/(\*|[A-Z][A-Za-z0-9]+)\.(\*|read|write)\s*$/;
         const match = String(scopeString || "").match(SCOPE_RE);
         if (match) {
             const action = match[3];
 
-            /**
-             * @type { "patient" | "user" | "system" }
-             */
-            let level;
-
-            // @ts-ignore
-            level = match[1];
-
-            this.level = level;
+            this.level = match[1] as AccessLevel;
 
             this.resource = match[2];
 
-            this.actions  = new Map([
+            this.actions = new Map([
                 [ "create", action === "*" || action === "write" ],
                 [ "read"  , action === "*" || action === "read"  ],
                 [ "update", action === "*" || action === "write" ],
                 [ "delete", action === "*" || action === "write" ],
                 [ "search", action === "*" || action === "read"  ],
             ]);
-
-            this.verson = "1"
 
         } else {
             throw new Error(`Invalid scope "${scopeString}"`);
@@ -134,17 +127,21 @@ class ScopeV1 extends Scope
     }
 }
 
-class ScopeV2 extends Scope
+export class ScopeV2 extends Scope
 {
+    level: AccessLevel;
+
+    actions: Map<Action, boolean>;
+
+    resource: string;
+
+    version = "2";
     /**
      * @type { URLSearchParams }
      */
     query;
 
-    /**
-     * @param { string } scopeString
-     */
-    constructor(scopeString) {
+    constructor(scopeString: string) {
         super();
         const SCOPE_RE = /^\s*(patient|user|system)\/(\*|[A-Z][A-Za-z0-9]+)\.([cruds]+)(\?.*)?$/;
         const match = String(scopeString || "").match(SCOPE_RE);
@@ -161,19 +158,10 @@ class ScopeV2 extends Scope
 
             actionKeys.filter(x => !map.has(x)).forEach(x => map.set(x, false))
 
-            /**
-             * @type { "patient" | "user" | "system" }
-             */
-            let level;
-
-            // @ts-ignore
-            level = match[1];
-
-            this.level    = level;
+            this.level    = match[1] as AccessLevel;
             this.resource = match[2];
             this.actions  = map;
             this.query    = new URLSearchParams(match[4]);
-            this.verson   = "2"
         } else {
             throw new Error(`Invalid scope "${scopeString}"`);
         }
@@ -197,29 +185,22 @@ class ScopeV2 extends Scope
     }
 }
 
-
-class ScopeList
+export class ScopeList
 {
-    /**
-     * @type {Scope[]}
-     */
-    scopes;
+    scopes: Scope[];
 
-    /**
-     * @param {Scope[]} scopes
-     */
-    constructor(scopes = []) {
+    constructor(scopes: Scope[] = []) {
         this.scopes = scopes;
     }
 
     /**
      * Parse a string or comma separated list of scopes and return an array of
      * Scope instances
-     * @param {string} listString 
      */
-    static fromString(listString) {
+    static fromString(listString: string) {
         return new ScopeList(
-            String(listString || "").trim().split(/\s+|\s*,\s*/).filter(Boolean).map(x => Scope.fromString(x))
+            String(listString || "").trim().split(/\s+|\s*,\s*/)
+            .filter(Boolean).map(x => Scope.fromString(x))
         );
     }
 
@@ -227,13 +208,13 @@ class ScopeList
      * Checks if the given scopes string is valid for use by backend services
      * for making bulk data exports. This will only accept system read and
      * search scopes and will also reject empty scope.
-     * @param {number} [fhirVersion] The FHIR version that this scope should be
+     * @param [fhirVersion = 0] The FHIR version that this scope should be
      * validated against. If provided, the scope should match one of the
      * resource types available in the database for that version (or *).
      * Otherwise no check is performed.
-     * @returns {Promise<string>} The invalid scope or empty string on success
+     * @returns The invalid scope or empty string on success
      */
-    async validateForExport(fhirVersion = 0) {
+    async validateForExport(fhirVersion = 0): Promise<string> {
 
         // Reject empty scope list
         if (!this.scopes.length) {
@@ -267,7 +248,7 @@ class ScopeList
         // we have.
         if (fhirVersion) {
             let availableResources = await getAvailableResourceTypes(fhirVersion);
-            badScope = this.scopes.find(x => !availableResources.includes(x.resource));
+            badScope = this.scopes.find(x => x.resource !== "*" && !availableResources.includes(x.resource));
             if (badScope) {
                 return `Resources of type "${badScope.resource}" do not exist on this server (requested by scope "${badScope}")`
             }
@@ -280,13 +261,13 @@ class ScopeList
      * Checks if the given scopes string is valid for use by backend services
      * for making bulk data exports. This will only accept system read and
      * search scopes and will also reject empty scope.
-     * @param {number} [fhirVersion] The FHIR version that this scope should be
+     * @param [fhirVersion = 0] The FHIR version that this scope should be
      * validated against. If provided, the scope should match one of the
      * resource types available in the database for that version (or *).
      * Otherwise no check is performed.
-     * @returns {Promise<Scope[]>} The invalid scope or empty string on success
+     * @returns The invalid scope or empty string on success
      */
-    async negotiateForExport(fhirVersion = 0) {
+    async negotiateForExport(fhirVersion = 0): Promise<Scope[]> {
 
         let scopes = [...this.scopes].filter(scope => {
 
@@ -318,26 +299,12 @@ class ScopeList
     }
 }
 
-/**
- * 
- * @param {string} scopes 
- * @param {number} [fhirVersion]
- */
-async function validateScopesForBulkDataExport(scopes, fhirVersion = 0) {
+export async function validateScopesForBulkDataExport(scopes: string, fhirVersion = 0) {
     try {
         var scopeList = ScopeList.fromString(scopes);
     } catch (ex) {
-        return ex.message;
+        return (ex as Error).message;
     }
 
-    return await scopeList.validateForExport();
-}
-
-
-module.exports = {
-    Scope,
-    ScopeV1,
-    ScopeV2,
-    ScopeList,
-    validateScopesForBulkDataExport
+    return await scopeList.validateForExport(fhirVersion);
 }

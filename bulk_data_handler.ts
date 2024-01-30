@@ -1,9 +1,15 @@
-const express      = require("express");
-const cors         = require("cors");
-const Lib          = require("./lib");
-const OpDef        = require("./fhir/OperationDefinition/index");
-const bulkImporter = require("./import/bulk_data_import_handler");
-const ExportManager = require("./ExportManager");
+import express, { Request, Response }   from "express"
+import { NextFunction, RequestHandler } from "express-serve-static-core"
+import cors              from "cors"
+import * as Lib          from "./lib"
+import OpDef             from "./fhir/OperationDefinition/index"
+import bulkImporter      from "./import/bulk_data_import_handler"
+import ExportManager     from "./ExportManager"
+import metadata          from "./fhir/metadata"
+import group             from "./fhir/group"
+import getResourceCounts from "./fhir/get-resource-counts"
+import patient           from "./fhir/patient"
+import wellKnown         from "./fhir/wellKnownSmartConfiguration"
 
 
 const router = express.Router({ mergeParams: true });
@@ -15,8 +21,8 @@ const jsonTypes = [
 ];
 
 // Start helper express middlewares --------------------------------------------
-function extractSim(req, res, next) {
-    req.sim = Lib.getRequestedParams(req);
+function extractSim(req: Request, res: Response, next: NextFunction) {
+    (req as any).sim = Lib.getRequestedParams(req);
     next();
 }
 
@@ -29,7 +35,7 @@ function extractSim(req, res, next) {
 // This supports use cases like backing up a server or exporting terminology
 // data by restricting the resources returned using the _type parameter.
 router.route("/\\$export")
-    .post(express.json({ type: jsonTypes }))
+    .post(express.json({ type: jsonTypes }) as RequestHandler)
     .all(
         extractSim,
         Lib.requireFhirJsonAcceptHeader,
@@ -41,7 +47,7 @@ router.route("/\\$export")
 // /Patient/$export - Returns all data on all patients
 // /$export - does the same on this server because we don't
 router.route(["/Patient/\\$export", "/group/:groupId/\\$export"])
-    .post(express.json({ type: jsonTypes }))
+    .post(express.json({ type: jsonTypes }) as RequestHandler)
     .all(
         extractSim,
         Lib.requireFhirJsonAcceptHeader,
@@ -51,10 +57,7 @@ router.route(["/Patient/\\$export", "/group/:groupId/\\$export"])
     );
 
 // This is the endPoint that should provide progress information
-router.get("/bulkstatus/:id", [
-    Lib.checkAuth,
-    ExportManager.createStatusHandler()
-]);
+router.get("/bulkstatus/:id", [Lib.checkAuth, ExportManager.createStatusHandler()]);
 
 // The actual file downloads 
 router.get("/bulkfiles/:file", [
@@ -80,23 +83,26 @@ router.get("/import-status/:taskId", bulkImporter.createImportStatusHandler());
 // Stop an import that has not completed
 router.delete("/import-status/:taskId", bulkImporter.cancelImport);
 
-// Kick-off import
+// @ts-ignore Kick-off import
 router.post("/\\$import", bulkImporter.createImportKickOffHandler());
 
 // =============================================================================
 // FHIR/Other Endpoints
 // =============================================================================
 
+// host dummy well-known statement
+router.get("/.well-known/smart-configuration", cors({ origin: true }), extractSim, wellKnown);
+
 // host dummy conformance statement
-router.get("/metadata", cors({ origin: true }), extractSim, require("./fhir/metadata"));
+router.get("/metadata", cors({ origin: true }), extractSim, metadata);
 
 // list all the groups with their IDs and the number of patients included
-router.get("/Group", cors({ origin: true }), require("./fhir/group"));
+router.get("/Group", cors({ origin: true }), group);
 
-router.get("/\\$get-patients", cors({ origin: true }), require("./fhir/patient"));
+router.get("/\\$get-patients", cors({ origin: true }), patient);
 
 // $get-resource-counts operation
-router.get("/\\$get-resource-counts", cors({ origin: true }), require("./fhir/get-resource-counts"));
+router.get("/\\$get-resource-counts", cors({ origin: true }), getResourceCounts);
 
 // operation definitions
 router.use("/OperationDefinition", cors({ origin: true }), OpDef);
@@ -105,4 +111,4 @@ router.use("/OperationDefinition", cors({ origin: true }), OpDef);
 router.use('/attachments', cors({ origin: true }), extractSim, Lib.checkAuth, express.static(__dirname + "/attachments"));
 
 
-module.exports = router;
+export default router;

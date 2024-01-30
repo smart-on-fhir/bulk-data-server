@@ -1,7 +1,7 @@
-const Transform = require("stream").Transform;
-const { stringifyJSON } = require("../lib");
+import { Transform }     from "stream"
+import { stringifyJSON } from "../lib"
 
-module.exports = function(options = {}) {
+export default function(options: { extended?: boolean } = {}) {
     return new Transform({
         writableObjectMode: true,
         readableObjectMode: true,
@@ -12,5 +12,5 @@ module.exports = function(options = {}) {
                 .catch(next);
         }
     });
-};
+}
 

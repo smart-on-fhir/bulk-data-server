@@ -1,17 +1,20 @@
-const assert        = require("assert");
-const base64url     = require("base64-url");
-const moment        = require("moment");
-const crypto        = require("crypto");
-const jwkToPem      = require("jwk-to-pem");
-const jwt           = require("jsonwebtoken");
-const express       = require("express");
-const { expect }    = require("chai");
-const fs            = require("fs");
-const { server }    = require("../index");
-const config        = require("../config");
-const ExportManager = require("../ExportManager");
-const { wait }      = require("../lib");
-const lib           = require("./lib");
+import fs             from "fs"
+import { Options, Response, ResponseAsJSON } from "request";
+import assert         from "assert/strict"
+import base64url      from "base64-url"
+import moment         from "moment"
+import crypto         from "crypto"
+import jwkToPem       from "jwk-to-pem"
+import jwt            from "jsonwebtoken"
+import express        from "express"
+import { expect }     from "chai"
+const { server }    = require("../index")
+import config         from "../config"
+import ExportManager  from "../ExportManager"
+import { wait }       from "../lib"
+import * as lib       from "./lib"
+import { Parameters } from "fhir/r4";
+import { ExportManifest, JWKS, JWT } from "../types";
 
 const BlueCCrossBlueShieldId = "ff7dc35f-79e9-47a0-af22-475cf301a085";
 
@@ -37,16 +40,62 @@ function cleanUp() {
     });
 }
 
+interface KickOffOptions {
+    stu                    ?: number
+    usePOST                ?: boolean
+    databaseMultiplier     ?: number
+    group                  ?: string
+    _since                 ?: string
+    systemLevel            ?: boolean
+    simulatedError         ?: string
+    simulatedExportDuration?: number
+    resourcesPerFile       ?: number
+    accessTokenLifeTime    ?: number
+    _type                  ?: string
+    _elements              ?: string
+    _outputFormat          ?: string
+    accessToken            ?: string
+    extended               ?: boolean
+    patient                ?: string | any[]
+    accept                 ?: string | null
+    prefer                 ?: string | null // = "respond-async"] The prefer header
+    body                   ?: Record<string, any> // = {}
+    gzip                   ?: boolean // = false]
+    headers                ?: Record<string, any> // = {}
+    secure                 ?: boolean
+    fileError              ?: string
+    del                    ?: number
+    _typeFilter            ?: string
+}
+
+interface Sim {
+    stu       : number
+    m         : number
+    dur       : number
+    err       : string
+    extended  : boolean
+    secure    : boolean
+    fileError?: string
+    del      ?: number
+    page     ?: number
+};
+
+interface StatusResponse extends Response {
+    body: ExportManifest
+}
+
+interface ResponseWithLines extends ResponseAsJSON {
+    lines: string[]
+}
+
 class Client
 {
+    kickOffResponse?: Response;
+
+    statusResponse?: StatusResponse;
 
     /**
      * @param {object}   [options]
-     * @param {number}   [options.stu = 4]
-     * @param {boolean}  [options.usePOST = false] 
-     * @param {number}   [options.databaseMultiplier = 1]
-     * @param {string}   [options.group]
-     * @param {string}   [options._since]
      * @param {boolean}  [options.systemLevel]
      * @param {string}   [options.simulatedError = ""]
      * @param {number}   [options.simulatedExportDuration = 0]
@@ -68,9 +117,9 @@ class Client
      * @param {number}   [options.del]
      * @param {string}   [options._typeFilter]
      */
-    async kickOff(options = {})
+    async kickOff(options: KickOffOptions = {})
     {
-        const sim = {
+        const sim: Sim = {
             stu      : options.stu || 4,
             m        : options.databaseMultiplier || 1,
             dur      : options.simulatedExportDuration || 0,
@@ -102,33 +151,32 @@ class Client
         }
 
         const method = options.usePOST ? "POST" : "GET";
-        let body = null;
+        let body: Parameters | null = null;
         let json = false;
-        const qs = {};
+        const qs: Record<string, any> = {};
 
         if (options.usePOST) {
             json = true;
 
             body = {
                 resourceType: "Parameters",
-                /** @type {any[]} */
                 parameter: []
             };
 
             if ("_type" in options) {
-                body.parameter.push({ name: "_type", valueString: options._type });
+                body.parameter!.push({ name: "_type", valueString: options._type });
             }
 
             if ("_elements" in options) {
-                body.parameter.push({ name: "_elements", valueString: options._elements });
+                body.parameter!.push({ name: "_elements", valueString: options._elements });
             }
 
             if ("_outputFormat" in options) {
-                body.parameter.push({ name: "_outputFormat", valueString: options._outputFormat });
+                body.parameter!.push({ name: "_outputFormat", valueString: options._outputFormat });
             }
 
             if ("_since" in options) {
-                body.parameter.push({ name: "_since", valueInstant: options._since });
+                body.parameter!.push({ name: "_since", valueInstant: options._since });
             }
 
             if ("patient" in options) {
@@ -138,31 +186,31 @@ class Client
                 
                 arr.forEach(x => {
                     if (typeof x == "string") {
-                        body.parameter.push({
+                        body!.parameter!.push({
                             name: "patient",
                             valueReference: {
                                 reference: `Patient/${x}`
                             }
                         });
                     } else {
-                        body.parameter.push(x);
+                        body!.parameter!.push(x);
                     }
                 });
             }
 
             if ("_typeFilter" in options) {
-                body.parameter.push({ name: "_typeFilter", valueString: options._typeFilter });
+                body.parameter!.push({ name: "_typeFilter", valueString: options._typeFilter });
             }
         }
         else {
             ["_since", "_type", "_elements", "patient", "_outputFormat", "_typeFilter"].forEach(key => {
                 if (key in options) {
-                    qs[key] = options[key];
+                    qs[key] = options[key as keyof typeof options];
                 }
             });
         }
 
-        const headers = {
+        const headers: Record<string, string> = {
             "accept-encoding": "identity"
         };
 
@@ -190,59 +238,39 @@ class Client
             body: "body" in options ? options.body : body
         });
 
+        // If the response comes as string and with content-type header
+        // containing "json", parse it as JSON (might happen for custom
+        // types like fhir+json)
         if (typeof this.kickOffResponse.body == "string") {
             const contentType = this.kickOffResponse.headers["content-type"] || "";
             if (contentType.indexOf("json") > -1) {
-                // try {
-                    this.kickOffResponse.body = JSON.parse(this.kickOffResponse.body);
-                // } catch {
-                //     console.log(contentType, this.kickOffResponse.body)
-                // }
+                this.kickOffResponse.body = JSON.parse(this.kickOffResponse.body);
             }
         }
 
         return this.kickOffResponse
     }
 
-    /**
-     * @param {object}   [options]
-     * @param {string}   [options.accessToken]
-     */
-    async checkStatus(options = {}) {
-        if (!this.kickOffResponse) {
-            throw new Error("Trying to check the status of export that has not been started");
-        }
-
+    async checkStatus(options: { accessToken?: string } = {}) {
+        assert(this.kickOffResponse, "Trying to check the status of export that has not been started");
+        
         const location = this.kickOffResponse.headers["content-location"];
 
-        if (!location) {
-            throw new Error("Trying to check the status of export that did not provide status location");
-        }
+        assert(location, "Trying to check the status of export that did not provide status location");
 
-        const headers = {
-            // Accept: "application/fhir+json",
-            // Prefer: "respond-async"
-        };
+        const headers: Record<string, string> = {};
 
         if (options.accessToken) {
             headers.authorization = "Bearer " + options.accessToken;
         }
 
+        this.statusResponse = await lib.requestPromise({
+            url: location,
+            json: true,
+            headers
+        });
 
-        // this.statusResponse = null;
-        // this.statusError = null;
-        // try {
-            this.statusResponse = await lib.requestPromise({
-                url: location,
-                json: true,
-                headers
-            });
-        // } catch (ex) {
-        //     // this.statusResponse = ex.response;
-        //     this.statusError    = ex.error;
-        // }
-
-        return this.statusResponse;
+        return this.statusResponse as StatusResponse;
     }
 
     getState() {
@@ -250,7 +278,7 @@ class Client
             throw new Error("Trying to check the state of export that has not been started");
         }
 
-        const location = this.kickOffResponse.headers["content-location"];
+        const location = String(this.kickOffResponse.headers["content-location"] || "");
 
         let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus\/(.+)/);
         if (!args || !args[2]) {
@@ -264,18 +292,13 @@ class Client
         return require(path);
     }
 
-    /**
-     * @param {object} [options]
-     * @param {string} [options.accessToken]
-     * @param {number} [options.frequency = 100] How often to check (in milliseconds)
-     */
-    async waitForExport(options = {}) {
+    async waitForExport(options: Record<string, number> = {}) {
         while (true) {
             await this.checkStatus(options);
-            if (this.statusResponse.statusCode === 202) {
-                await wait(options.frequency || 100)
+            if (this.statusResponse!.statusCode === 202) {
+                await wait(100)
             } else {
-                return this.statusResponse;
+                return this.statusResponse!;
             }
         }
     }
@@ -284,17 +307,11 @@ class Client
      * Starts an export and waits for it. Then downloads the file at the given
      * index. NOTE: this method assumes that the index exists and will throw
      * otherwise.
-     * @param {number} index The index of the file in the status list
-     * @param {string|null} [accessToken=null]
-     * @param {string|null} [fileError=null]
      */
-    async downloadFileAt(index, accessToken = null, fileError = null) {
-        if (!this.statusResponse || !this.statusResponse.body) {
-            throw new Error("Trying to download from export that has not been completed");
-        }
-        let fileUrl;
+    async downloadFileAt(index: number, accessToken: string | null = null, fileError: string | null = null) {
+        assert(this.statusResponse?.body, "Trying to download from export that has not been completed");
         try {
-            fileUrl = this.statusResponse.body.output[index].url;
+            var fileUrl = this.statusResponse.body.output[index].url;
         } catch (e) {
             throw new Error(`No file was found at "output[${index}]" in the status response.`);
         }
@@ -305,22 +322,18 @@ class Client
      * Starts an export and waits for it. Then downloads the file at the given
      * index. NOTE: this method assumes that the index exists and will throw
      * otherwise.
-     * @param {string} fileUrl The index of the file in the status list
-     * @param {string|null} [accessToken=null]
-     * @param {string|null} [fileError=null]
      */
-    async downloadFile(fileUrl, accessToken = null, fileError = null) {
+    async downloadFile(fileUrl: string, accessToken: string | null = null, fileError: string | null = null): Promise<ResponseWithLines> {
         if (fileError) {
-            // @ts-ignore
-            let sim = fileUrl.match(/^http\:\/\/.*?\/(.*?)\/fhir/)[1];
-            sim = base64url.decode(sim);
-            sim = JSON.parse(sim);
-            // @ts-ignore
+            let match = fileUrl.match(/^http\:\/\/.*?\/(.*?)\/fhir/);
+            assert(match && match[1], "No sim segment found in url")
+            let decoded = base64url.decode(match[1])
+            let sim: Sim = JSON.parse(decoded);
             sim.fileError = fileError;
-            sim = JSON.stringify(sim);
-            sim = base64url.encode(sim);
-            fileUrl = fileUrl.replace(/^(http:\/\/.*?)\/(.*?)\/fhir/, "$1/" + sim + "/fhir/");
+            let str = base64url.encode(JSON.stringify(sim));
+            fileUrl = fileUrl.replace(/^(http:\/\/.*?)\/(.*?)\/fhir/, "$1/" + str + "/fhir/");
         }
+
         const res = await lib.requestPromise({
             uri: fileUrl,
             // json: true,
@@ -330,8 +343,11 @@ class Client
                 authorization: accessToken ? `Bearer ${accessToken}` : undefined
             }
         });
-        res.lines = res.body.split(/\n/).map(l => l.trim()).filter(Boolean);
-        return res;
+        
+        return {
+            ...res,
+            lines: String(res.body).split(/\n/).map(l => l.trim()).filter(Boolean)
+        };
     }
 
     async cancel()
@@ -427,8 +443,13 @@ describe("Static", () => {
         "/fhir/$get-patients",
         `/fhir/$get-patients?group=${BlueCCrossBlueShieldId}`,
         "/fhir/$get-resource-counts",
+        "/fhir/.well-known/smart-configuration",
         "/env.js",
-        "/server-config.js"
+        "/server-config.js",
+        "/fhir/OperationDefinition",
+        "/fhir/OperationDefinition/Patient--everything",
+        "/fhir/OperationDefinition/Group-i-everything",
+        "/fhir/OperationDefinition/-s-get-resource-counts",
     ].forEach(path => {
         it (path, () => lib.requestPromise({ url: config.baseUrl + path }));
     });
@@ -438,7 +459,7 @@ describe("Static", () => {
             url: config.baseUrl + "/outcome",
             json: true,
             qs: {
-                httpCode: "255",
+                httpCode: 255,
                 issueCode: "my issueCode",
                 severity: "my severity",
                 message: "my message"
@@ -488,7 +509,7 @@ describe("Authentication", () => {
         const generatorUrl = lib.buildUrl(["generator", "jwks"]);
         const registerUrl  = lib.buildUrl(["auth"     , "register"]);
 
-        function authenticate(signedToken) {
+        function authenticate(signedToken: string) {
             return lib.requestPromise({
                 method: "POST",
                 url   : tokenUrl,
@@ -502,19 +523,19 @@ describe("Authentication", () => {
             }).catch(ex => Promise.reject(ex.outcome || ex.error || ex));;
         }
 
-        function register(jwks) {
+        function register(jwksOrUrl?: string | JWKS) {
             return lib.requestPromise({
                 method: "POST",
                 url   : registerUrl,
                 json  : true,
                 form  : {
-                    jwks    : jwks && typeof jwks == "object" ? JSON.stringify(jwks) : undefined,
-                    jwks_url: jwks && typeof jwks == "string" ? jwks                 : undefined
+                    jwks    : jwksOrUrl && typeof jwksOrUrl == "object" ? JSON.stringify(jwksOrUrl) : undefined,
+                    jwks_url: jwksOrUrl && typeof jwksOrUrl == "string" ? jwksOrUrl                 : undefined
                 }
             }).catch(ex => Promise.reject(ex.outcome || ex.error || ex));
         }
 
-        function generateKeyPair(alg) {
+        function generateKeyPair(alg: string) {
             return lib.requestPromise({
                 url : generatorUrl,
                 qs  : { alg },
@@ -522,7 +543,7 @@ describe("Authentication", () => {
             }).then(resp => resp.body);
         }
 
-        function generateAuthToken(clientId) {
+        function generateAuthToken(clientId: string): JWT {
             return {
                 iss: clientId,
                 sub: clientId,
@@ -532,90 +553,59 @@ describe("Authentication", () => {
             };
         }
 
-        function findKey(jwks, access, kty, kid) {
+        function findKey(jwks: JWKS, access: string, kty: string, kid?: string) {
             return jwks.keys.find(k => {
                 if (k.kty !== kty) return false;
                 if (kid && k.kid !== kid) return false;
                 if (!Array.isArray(k.key_ops)) return false;
-                if (access == "public" && k.key_ops.indexOf("verify") == -1) return false;
-                if (access == "private" && k.key_ops.indexOf("sign") == -1) return false;
+                if (access == "public"  && k.key_ops.indexOf("verify") == -1) return false;
+                if (access == "private" && k.key_ops.indexOf("sign"  ) == -1) return false;
                 return true;
             });
         }
 
-        function sign(jwks, kty, token, jku) {
-            let privateKey = findKey(jwks, "private", kty);
-            return jwt.sign(
-                token,
-                jwkToPem(privateKey, { private: true }),
-                {
-                    algorithm: privateKey.alg,
-                    keyid: privateKey.kid,
-                    header: { jku, kty }
-                }
-            );
+        function sign(jwks: JWKS, kty: string, token: JWT, jku?: string) {
+            let privateKey = findKey(jwks, "private", kty) as any;
+            assert(privateKey, "No private key found in jwks")
+            // @ts-ignore
+            return jwt.sign(token, jwkToPem(privateKey as any, { private: true }), {
+                algorithm: privateKey.alg,
+                keyid: privateKey.kid,
+                header: { jku, kty }
+            });
         }
 
-        function hostJWKS(jwks) {
+        function hostJWKS(jwks: JWKS) {
             return new Promise(resolve => {
                 const app = express();
-                app.get("/jwks", (req, res) => {
+                app.get("/jwks", (req: any, res: any) => {
                     res.json({ keys: jwks.keys.filter(k => k.key_ops.indexOf("sign") == -1) });
                 });
                 const server = app.listen(0, () => resolve(server));
             });
         }
 
-        it ("Local JWKS", () => {
+        it ("Local JWKS", async () => {
             
-            const state = {};
-
-            return Promise.resolve()
+            const jwks = { keys: [
+                ...(await generateKeyPair("ES384")).keys,
+                ...(await generateKeyPair("RS384")).keys
+            ] }
             
-            // Generate ES384 JWKS key pair
-            .then(() => generateKeyPair("ES384"))
+            const clientId = (await register(jwks)).body
+            const jwtToken = generateAuthToken(clientId)
 
-            // add the ES384 keys to our local JWKS
-            .then(jwks => state.jwks = jwks)
-
-            // Generate RS384 JWKS key pair
-            .then(() => generateKeyPair("RS384"))
-
-            // add the RS384 keys to our local JWKS
-            .then(jwks => state.jwks.keys = state.jwks.keys.concat(jwks.keys))
+            const RS384AccessToken = await authenticate(sign(jwks, "RSA", jwtToken))
+            const ES384AccessToken = await authenticate(sign(jwks, "EC" , jwtToken))
             
-            // Now register a client with that augmented JWKS
-            .then(() => register(state.jwks))
-
-            // Save the newly generated client id to the state
-            .then(res => state.clientId = res.body)
-
-            // Generate the authentication token
-            .then(() => state.jwtToken = generateAuthToken(state.clientId))
-
-            // Find the RS384 private key, sign with it and authenticate
-            .then(() => authenticate(sign(state.jwks, "RSA", state.jwtToken)))
-
-            // Save the RS384 access token to the state
-            .then(resp => state.RS384AccessToken = resp.body)
-
-            // Now find the ES384 private key, sign with it and authenticate
-            .then(() => authenticate(sign(state.jwks, "EC", state.jwtToken)))
-
-            // Save the ES384 access token to the state
-            .then(resp => state.ES384AccessToken = resp.body)
-            
-            // Make some checks
-            .then(resp => {
-                expect(!!state.RS384AccessToken).to.equal(true, "RS384AccessToken should exist");
-                expect(!!state.ES384AccessToken).to.equal(true, "ES384AccessToken should exist");
-            });
+            expect(!!RS384AccessToken.body).to.equal(true, "RS384AccessToken should exist")
+            expect(!!ES384AccessToken.body).to.equal(true, "ES384AccessToken should exist")
 
         });
 
         it ("Hosted JWKS", () => {
 
-            const state = {};
+            const state: Record<string, any> = {};
 
             return Promise.resolve()
             
@@ -702,26 +692,30 @@ describe("Bulk Data Kick-off Request", function() {
         },
         {
             description: "/:sim/fhir/Patient/$export",
-            buildUrl   : params => lib.buildPatientUrl(Object.assign({}, params || {})),
+            buildUrl   : (params?: any) => lib.buildPatientUrl(Object.assign({}, params || {})),
             options: {}
         },
         {
             description: "/fhir/Group/:groupId/$export",
-            buildUrl   : params => lib.buildGroupUrl(1, params),
+            buildUrl   : (params?: any) => lib.buildGroupUrl(1, params),
             options: {
                 group: BlueCCrossBlueShieldId
             }
         },
         {
             description: "/:sim/fhir/Group/:groupId/$export",
-            buildUrl   : params => lib.buildGroupUrl(1, Object.assign({}, params || {})),
+            buildUrl   : (params?: any) => lib.buildGroupUrl(1, Object.assign({}, params || {})),
             options: {
                 group: BlueCCrossBlueShieldId
             }
         }
     ].forEach(meta => {
 
-        function test(options, expected) {
+        function test(options: {
+            sim?: Partial<Sim>
+            qs?: Record<string, any>
+            headers?: Record<string, any>
+        }, expected: Record<string, any>) {
             return lib.requestPromise({
                 uri: meta.buildUrl(options.sim || { dur: 0 }),
                 qs : options.qs || {},
@@ -1156,12 +1150,12 @@ describe("Progress Updates", function() {
         const client1 = new Client();
         await client1.kickOff({ simulatedExportDuration: 0 });
         await client1.waitForExport();
-        expect(client1.statusResponse.statusCode).to.equal(200);
+        expect(client1.statusResponse!.statusCode).to.equal(200);
 
         const client2 = new Client();
         await client2.kickOff({ simulatedExportDuration: 10 });
         await client2.checkStatus();
-        expect(client2.statusResponse.statusCode).to.equal(202);
+        expect(client2.statusResponse!.statusCode).to.equal(202);
     });
 
     it ("Replies with links after the wait time", async () => {
@@ -1169,7 +1163,7 @@ describe("Progress Updates", function() {
         await client.kickOff();
         await client.waitForExport();
         expect(
-            client.statusResponse.body.output,
+            client.statusResponse!.body.output,
             `Did not reply with links array in body.output`
         ).to.be.an.instanceOf(Array);
     });
@@ -1178,12 +1172,12 @@ describe("Progress Updates", function() {
         const client1 = new Client();
         await client1.kickOff({ _type: "Patient", resourcesPerFile: 25 });
         await client1.waitForExport();
-        expect(client1.statusResponse.body.output.length).to.equal(4);
+        expect(client1.statusResponse!.body.output.length).to.equal(4);
 
         const client2 = new Client();
         await client2.kickOff({ _type: "Patient", resourcesPerFile: 22, databaseMultiplier: 10 });
         await client2.waitForExport();
-        expect(client2.statusResponse.body.output.length).to.equal(46);
+        expect(client2.statusResponse!.body.output.length).to.equal(46);
     });
 
     it ("Generates correct number of links with _filter", async () => {
@@ -1195,9 +1189,9 @@ describe("Progress Updates", function() {
         });
         await client1.waitForExport();
         // console.log(client1.statusResponse.body)
-        expect(client1.statusResponse.body.output.length).to.equal(2);
-        expect(client1.statusResponse.body.output[0].count).to.equal(30);
-        expect(client1.statusResponse.body.output[1].count).to.equal(3);
+        expect(client1.statusResponse!.body.output.length).to.equal(2);
+        expect(client1.statusResponse!.body.output[0].count).to.equal(30);
+        expect(client1.statusResponse!.body.output[1].count).to.equal(3);
 
         const client2 = new Client();
         await client2.kickOff({
@@ -1208,11 +1202,11 @@ describe("Progress Updates", function() {
         });
         await client2.waitForExport();
         // console.log(client1.statusResponse.body)
-        expect(client2.statusResponse.body.output.length).to.equal(4);
-        expect(client2.statusResponse.body.output[0].count).to.equal(100);
-        expect(client2.statusResponse.body.output[1].count).to.equal(100);
-        expect(client2.statusResponse.body.output[2].count).to.equal(100);
-        expect(client2.statusResponse.body.output[3].count).to.equal(30);
+        expect(client2.statusResponse!.body.output.length).to.equal(4);
+        expect(client2.statusResponse!.body.output[0].count).to.equal(100);
+        expect(client2.statusResponse!.body.output[1].count).to.equal(100);
+        expect(client2.statusResponse!.body.output[2].count).to.equal(100);
+        expect(client2.statusResponse!.body.output[3].count).to.equal(30);
     });
 
     it ("rejects further calls on completed exports", () => assert.rejects(async () => {
@@ -1230,7 +1224,7 @@ describe("Progress Updates", function() {
         await client.kickOff({ _type: "Patient", resourcesPerFile: 22, databaseMultiplier: 10 });
         await client.waitForExport();
         
-        const { output } = client.statusResponse.body;
+        const { output } = client.statusResponse!.body;
         const n = output.length;
         
         if (n != 46) {
@@ -1251,7 +1245,7 @@ describe("Progress Updates", function() {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
         await client.waitForExport();
-        expect(client.statusResponse.body.error).to.deep.equal([]);
+        expect(client.statusResponse!.body.error).to.deep.equal([]);
     });
 
     it ("Rejects status checks on canceled exports", () => assert.rejects(async () => {
@@ -1277,8 +1271,8 @@ describe("Progress Updates", function() {
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 25, simulatedError: "some_file_generation_failed" });
         await client.waitForExport();
-        expect(client.statusResponse.body.output.length).to.equal(2);
-        expect(client.statusResponse.body.error.length).to.equal(2);
+        expect(client.statusResponse!.body.output.length).to.equal(2);
+        expect(client.statusResponse!.body.error.length).to.equal(2);
     });
 });
 
@@ -1294,13 +1288,31 @@ describe("File Downloading", function() {
         await client.downloadFileAt(0, "bad-token");
     }));
 
-    it ("requires an auth token if kicked off with auth", () => assert.rejects(async () => {
-        const { access_token } = await lib.authorize();
+    it ("requires an auth token if kicked off with auth", async () => {
+        await assert.rejects(async () => {
+            const { access_token } = await lib.authorize();
+            const client = new Client();
+            await client.kickOff({ _type: "Patient", accessToken: access_token });
+            await client.waitForExport({ accessToken: access_token });
+            return client.downloadFileAt(0); // intentionally skip the token here
+        }, /Authentication is required/)
+    });
+
+    it ("works with v1 scopes", async () => {
+        const { access_token } = await lib.authorize({ scope: "system/*.read" });
         const client = new Client();
         await client.kickOff({ _type: "Patient", accessToken: access_token });
         await client.waitForExport({ accessToken: access_token });
-        await client.downloadFileAt(0);
-    }));
+        await client.downloadFileAt(0, access_token);
+    });
+
+    it ("works with v2 scopes", async () => {
+        const { access_token } = await lib.authorize({ scope: "system/*.rs" });
+        const client = new Client();
+        await client.kickOff({ _type: "Patient", accessToken: access_token });
+        await client.waitForExport({ accessToken: access_token });
+        await client.downloadFileAt(0, access_token);
+    });
 
     // Make sure that every single line contains valid JSON
     it ("Returns valid ndjson files", async () => {
@@ -1308,7 +1320,7 @@ describe("File Downloading", function() {
         await client.kickOff({ _type: "Patient" });
         await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
-        const errors = [];
+        const errors: string[] = [];
 
         lines.forEach(line => {
             try {
@@ -1450,7 +1462,10 @@ describe("File Downloading", function() {
         await client.kickOff({ _type: "Patient", resourcesPerFile: 1, _since: "2010-01-01", extended: true });
         await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
-        lines.forEach(row => expect(moment(row.modified_date).isSameOrAfter("2010-01-01", "day")).to.equal(true));
+        lines.forEach(row => {
+            const json = JSON.parse(row)
+            expect(moment(json.modified_date).isSameOrAfter("2010-01-01", "day")).to.equal(true)
+        });
     });
     
     it ("Can simulate the 'file_missing_or_expired' error", async () => {
@@ -1460,7 +1475,7 @@ describe("File Downloading", function() {
         try {
             await client.downloadFileAt(0);
         } catch (err) {
-            lib.expectErrorOutcome(err.response, { code: 410 });
+            lib.expectErrorOutcome((err as lib.RequestError).response, { code: 410 });
         }
     });
 
@@ -1809,12 +1824,12 @@ describe("Groups", function() {
         const client = new Client();
         await client.kickOff({ _type: "Patient", group: BlueCCrossBlueShieldId });
         await client.waitForExport();
-        expect(client.statusResponse.body.output, "statusResponse.body.output must be an array").to.be.instanceOf(Array);
-        expect(client.statusResponse.body.output.length, "Wrong number of links returned").to.equal(1);
-        expect(client.statusResponse.body.output[0].url).to.match(/\/1\.Patient\.ndjson$/);
+        expect(client.statusResponse!.body.output, "statusResponse.body.output must be an array").to.be.instanceOf(Array);
+        expect(client.statusResponse!.body.output.length, "Wrong number of links returned").to.equal(1);
+        expect(client.statusResponse!.body.output[0].url).to.match(/\/1\.Patient\.ndjson$/);
         const { lines } = await client.downloadFileAt(0);
         expect(lines.length, "Wrong number of lines").to.equal(27);
-        let ids = {};
+        let ids: Record<string, number> = {};
         for (const line of lines) {
             let r = JSON.parse(line);
             if (ids[r.id]) {
@@ -1862,7 +1877,7 @@ describe("Error responses", () => {
     const tokenUrl    = lib.buildUrl(["auth", "token"]);
     const registerUrl = lib.buildUrl(["auth", "register"]);
 
-    function assertError(requestOptions, expected, code, message="") {
+    function assertError(requestOptions: Options, expected?: any, code?: number, message = "") {
         return lib.requestPromise(requestOptions).then(
             () => { throw new Error("This request should have failed"); },
             result => {
@@ -1875,20 +1890,13 @@ describe("Error responses", () => {
                         assert.deepEqual(result.response.body, expected)
                     } catch (ex) {
                         return Promise.reject(new Error(
-                            // ex.message
                             " The error response should equal:\n" +
                             JSON.stringify(expected, null, 2) +
                             "\n but was:\n" +
                             JSON.stringify(result.response.body, null, 2)
                         ));
                     }
-                    // if (result.response.body !== expected) {
-                    //     message += " The error response should equal\n" +
-                    //         JSON.stringify(expected, null, 2) +
-                    //         "\n but was:\n" +
-                    //         JSON.stringify(result.response.body, null, 2);
-                    //     return Promise.reject(new Error(message));
-                    // }
+
                     return true
                 }
 
@@ -2001,11 +2009,7 @@ describe("Error responses", () => {
         });
 
         it("returns 400 invalid_request if the token does not contain valid client_id (sub) token", () => {
-            /**
-             * @type {jwt.Algorithm}
-             */
-            // @ts-ignore
-            const algorithm = jwks.keys[1].alg;
+            const algorithm = jwks.keys[1].alg as jwt.Algorithm;
             return assertError({
                 method: "POST",
                 json  : true,
@@ -2013,6 +2017,7 @@ describe("Error responses", () => {
                 form  : {
                     grant_type           : "client_credentials",
                     client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                    // @ts-ignore
                     client_assertion     : jwt.sign({ a: 1 }, privateKey, {
                         algorithm,
                         keyid    : jwks.keys[1].kid,
@@ -2047,11 +2052,8 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
-                // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
+                
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid
@@ -2091,11 +2093,8 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
-                // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
+                
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid
@@ -2137,11 +2136,8 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
-                // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
+                
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid
@@ -2182,11 +2178,7 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
-                // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid
@@ -2226,11 +2218,7 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
-                // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid
@@ -2271,11 +2259,7 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
-                // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid
@@ -2315,11 +2299,8 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid,
@@ -2346,13 +2327,13 @@ describe("Error responses", () => {
         });
 
         it("returns 400 invalid_grant if the jwks_url returns no keys", () => {
-            function hostJWKS(jwks) {
+            function hostJWKS(jwks: any) {
                 return new Promise(resolve => {
                     const app = express();
-                    app.get("/jwks", (req, res) => res.json({}));
+                    app.get("/jwks", (req: any, res: any) => res.json({}));
                     const server = app.listen(0, () => resolve(server));
                 })
-                .then(server => {
+                .then((server: any) => {
                     return lib.requestPromise({
                         method: "POST",
                         url   : registerUrl,
@@ -2413,11 +2394,7 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
-                // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid
@@ -2449,11 +2426,7 @@ describe("Error responses", () => {
                 exp: Date.now()/1000 + 300, // 5 min
                 jti: crypto.randomBytes(32).toString("hex")
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
-                // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid
@@ -2496,11 +2469,8 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid,
@@ -2562,11 +2532,8 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid,
@@ -2616,11 +2583,8 @@ describe("Error responses", () => {
                     jti: crypto.randomBytes(32).toString("hex")
                 };
             }).then(token => {
-                /**
-                 * @type {jwt.Algorithm}
-                 */
+                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
                 // @ts-ignore
-                const algorithm = jwks.keys[1].alg;
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid,

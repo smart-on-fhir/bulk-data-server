@@ -3,7 +3,7 @@ const Task           = require("./Task");
 const DownloadTask   = require("./DownloadTask");
 const DatabaseWriter = require("./DatabaseWriter");
 const Queue          = require("./Queue");
-const config         = require("../config");
+const config         = require("../config").default;
 
 
 class DownloadTaskCollection extends Task

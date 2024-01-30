@@ -1,8 +1,11 @@
-const Transform = require("stream").Transform;
-const base64url = require("base64-url");
-const lib       = require("../lib");
-const { baseUrl, requiredElements } = require("../config");
+import { Transform } from "stream"
+import base64url from "base64-url"
+import { tagResource, buildUrlPath, getPath } from "../lib"
+import config from "../config"
+import { Resource } from "fhir/r4";
 
+
+const { baseUrl, requiredElements } = config;
 
 /**
  * When provided, the server SHOULD omit unlisted, non-mandatory elements from
@@ -21,16 +24,16 @@ const { baseUrl, requiredElements } = require("../config");
  * OperationOutcome resource so clients can re-submit a request omitting the
  * _elements parameter.
  * 
- * @param {object} json The resource json 
- * @param {string[]} elements Array of FHIR Elements
+ * @param json The resource json 
+ * @param elements Array of FHIR Elements
  */
-function filterElements(json, elements = [])
+function filterElements(json: Resource, elements: string[] = [])
 {
     if (!elements || !elements.length) {
         return json;
     }
 
-    const out = {};
+    const out: Partial<Resource> = {};
 
     const list = [ ...requiredElements, ...elements ];
 
@@ -47,16 +50,17 @@ function filterElements(json, elements = [])
         }
 
         if (json.hasOwnProperty(name)) {
+            // @ts-ignore
             out[name] = json[name];
         }
     }
 
-    lib.tagResource(out, "SUBSETTED", "http://terminology.hl7.org/CodeSystem/v3-ObservationValue");
+    tagResource(out, "SUBSETTED", "http://terminology.hl7.org/CodeSystem/v3-ObservationValue");
 
     return out;
 }
 
-function generateDeleteTransaction(json)
+function generateDeleteTransaction(json: Resource)
 {
     return {
         resourceType: "Bundle",
@@ -72,7 +76,12 @@ function generateDeleteTransaction(json)
     };
 }
 
-module.exports = function(sim = {}) {
+export default function(sim: {
+    deleted?: boolean
+    _elements?: string[]
+    secure?: boolean
+    err?: string
+} = {}) {
     return new Transform({
         writableObjectMode: true,
         readableObjectMode: true,
@@ -93,12 +102,12 @@ module.exports = function(sim = {}) {
                     // that begin with `/files/` will be converted to absolute HTTP
                     // URLs to allow the client to directly download bigger files
                     if (row.resource_json.resourceType == "DocumentReference") {
-                        const url = lib.getPath(row.resource_json, "content.0.attachment.url");
+                        const url = getPath(row.resource_json, "content.0.attachment.url");
                         if (url && url.search(/\/attachments\/.*/) === 0) {
-                            row.resource_json.content[0].attachment.url = lib.buildUrlPath(
+                            row.resource_json.content[0].attachment.url = buildUrlPath(
                                 baseUrl,
                                 base64url.encode(JSON.stringify({
-                                    err: sim.err || "",
+                                    err   : sim.err || "",
                                     secure: !!sim.secure
                                 })),
                                 "fhir",
@@ -110,9 +119,8 @@ module.exports = function(sim = {}) {
 
                 next(null, row);
             } catch (error) {
-                next(error);
+                next(error as Error);
             }
         }
     });
-};
-
+}

@@ -1,21 +1,24 @@
-const express        = require("express");
-const http           = require("http");
-const bodyParser     = require("body-parser");
-const morgan         = require("morgan");
-const cors           = require("cors");
-const config         = require("./config");
-const generator      = require("./generator");
-const tokenHandler   = require("./token_handler");
-const register       = require("./registration_handler");
-const bulkData       = require("./bulk_data_handler");
-const env            = require("./env");
-const encodedOutcome = require("./outcome_handler");
+import express, { NextFunction, Request, RequestHandler, Response } from "express"
+import http           from "http"
+import morgan         from "morgan"
+import cors           from "cors"
+import config         from "./config"
+import generator      from "./generator"
+import tokenHandler   from "./token_handler"
+import register       from "./registration_handler"
+import bulkData       from "./bulk_data_handler"
+import env            from "./env"
+import encodedOutcome from "./outcome_handler"
 
 const app = express();
 
 /* istanbul ignore if */
 if (process.env.NODE_ENV === "production") {
     app.use(morgan("combined"));
+}
+
+function requireMethod(method: string): RequestHandler {
+    return (req, res) => res.status(400).end(`This endpoint can only be used with ${method} requests`)
 }
 
 // HTTP to HTTPS redirect (this is Heroku-specific!)
@@ -29,12 +32,15 @@ app.use((req, res, next) => {
     next();
 });
 
-// backend services authorization
+// @ts-ignore backend services authorization
 app.options("/auth/token", cors({ origin: true }));
-app.post("/auth/token", cors({ origin: true }), bodyParser.urlencoded({ extended: false }), tokenHandler);
+// @ts-ignore 
+app.post("/auth/token", cors({ origin: true }), express.urlencoded({ extended: false }), tokenHandler);
+app.get("/auth/token", cors({ origin: true }), requireMethod("POST"));
 
-// backend services registration
-app.post("/auth/register", bodyParser.urlencoded({ extended: false }), register);
+// @ts-ignore backend services registration
+app.post("/auth/register", express.urlencoded({ extended: false }), register);
+app.get("/auth/register", cors({ origin: true }), requireMethod("POST"));
 
 // Used as JWKS generator
 app.use("/generator", generator);
@@ -62,7 +68,7 @@ app.use(express.static("static"));
 
 // global error handler
 /* istanbul ignore next */
-app.use(function (err, req, res, next) {
+app.use(function (err: Error, req: Request, res: Response, next: NextFunction) {
     console.error(err.stack);
     res.status(500).send('Something broke!');
 });

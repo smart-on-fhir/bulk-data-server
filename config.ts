@@ -1,7 +1,7 @@
 const ENV  = process.env.NODE_ENV || "production";
-const PORT = process.env.PORT || (ENV == "test" ? 9444 : 9443);
+const PORT = +(process.env.PORT || (ENV == "test" ? 9444 : 9443));
 
-module.exports = {
+export default {
 
     baseUrl: process.env.BASE_URL || `http://localhost:${PORT}`,
 
@@ -33,6 +33,13 @@ module.exports = {
     jwtSecret: process.env.SECRET || "this-is-our-big-secret",
 
     jobsPath: process.env.NODE_ENV === "test" ? __dirname + "/jobs/test" : __dirname + "/jobs",
+
+    supportedSigningAlgorithms: [
+        "HS256", "HS384", "HS512",
+        "RS256", "RS384", "RS512",
+        "ES256", "ES384", "ES512",
+        "PS256", "PS384", "PS512",
+    ],
 
     errors: {
         "missing_parameter"               : "Missing %s parameter",
