@@ -716,14 +716,14 @@ class ExportManager
                 return null;
             }
 
-            this.statusMessage = `currenly processing ${fhir_type} resources`;
+            this.statusMessage = `currently processing ${fhir_type} resources`;
             await this.save()
 
             let resourceCount = rowCount * this.databaseMultiplier;
             let filteredCount = resourceCount;
 
-            // If a filter is used we need to actualy loop tru, filter and count how many
-            // resorces would remain after the dilter
+            // If a filter is used we need to actually loop tru, filter and count how many
+            // resources would remain after the filter
             if (this.typeFilter.get("_filter")) {
                 try {
                     filteredCount = await lib.abortablePromise<number>(this.getCountsForResourceType(fhir_type, resourceCount), signal);
