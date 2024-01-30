@@ -1298,6 +1298,22 @@ describe("File Downloading", function() {
         }, /Authentication is required/)
     });
 
+    it ("works with v1 scopes", async () => {
+        const { access_token } = await lib.authorize({ scope: "system/*.read" });
+        const client = new Client();
+        await client.kickOff({ _type: "Patient", accessToken: access_token });
+        await client.waitForExport({ accessToken: access_token });
+        await client.downloadFileAt(0, access_token);
+    });
+
+    it ("works with v2 scopes", async () => {
+        const { access_token } = await lib.authorize({ scope: "system/*.rs" });
+        const client = new Client();
+        await client.kickOff({ _type: "Patient", accessToken: access_token });
+        await client.waitForExport({ accessToken: access_token });
+        await client.downloadFileAt(0, access_token);
+    });
+
     // Make sure that every single line contains valid JSON
     it ("Returns valid ndjson files", async () => {
         const client = new Client();

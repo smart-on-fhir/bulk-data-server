@@ -11,6 +11,7 @@ import { Dirent }                          from "fs"
 import config                              from "./config"
 import getDB                               from "./db"
 import { JSONValue }                       from "./types"
+import { ScopeList }                       from "./scope"
 
 
 const RE_GT    = />/g;
@@ -351,15 +352,15 @@ export function parseToken(t: string)
     return body;
 }
 
-export function getGrantedScopes(req: Request): {system: string, resource: string, action: string}[] {
+export function getGrantedScopes(req: Request): ScopeList {
     try {
         const accessToken = jwt.verify((req.headers.authorization || "").replace(/^bearer\s+/i, ""), config.jwtSecret, {
             algorithms: config.supportedSigningAlgorithms as Algorithm[]
         })
         // @ts-ignore jwt.verify returns string | object but for JWK we know it is an object
-        return scopeSet(accessToken.scope)
+        return ScopeList.fromString(accessToken.scope)
     } catch {
-        return []
+        return new ScopeList() // no scopes granted
     }
 }
 
@@ -515,24 +516,6 @@ export function tagResource(resource: Partial<FHIR.Resource>, code: string, syst
     } else {
         resource.meta.tag.push({ system, code });
     }
-}
-
-/**
- * Parses a scopes string and returns an array of {system, resource, action}
- * objects
- */
-export function scopeSet(scopes: string): {system: string, resource: string, action: string}[] {
-    return scopes.trim().split(/\s+/).map(s => {
-        const [system, resource, action] = s.split(/\/|\./)
-        return {
-            system,
-            resource,
-            action,
-            toString() {
-                return `${this.system}/${this.resource}.${this.action}`;
-            }
-        }
-    }) 
 }
 
 /**
