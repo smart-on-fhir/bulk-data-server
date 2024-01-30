@@ -202,7 +202,7 @@ export default function(req: Request, res: Response) {
     const { query } = req
 
     if (query._format) {
-        let format = query._format.toLowerCase();
+        let format = String(query._format).toLowerCase();
         if (!SUPPORTED_FORMATS.some(mime => format.indexOf(mime) === 0)) {
             return replyWithError(res, "only_json_supported", 400);
         }

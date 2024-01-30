@@ -1,7 +1,6 @@
 module.exports = {
     require: "ts-node/register",
     watch: false,
-    watchFiles: ["./**/*.test.ts"],
     spec: ["tests/*.test.ts", "tests/*.test.js"],
     // ignore: ["tests/import.test.js"],
     // parallel: true,

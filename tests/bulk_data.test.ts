@@ -1,10 +1,10 @@
 import fs             from "fs"
 import { Options, Response, ResponseAsJSON } from "request";
-import assert         from "assert"
+import assert         from "assert/strict"
 import base64url      from "base64-url"
 import moment         from "moment"
 import crypto         from "crypto"
-import jwkToPem, { JWK }       from "jwk-to-pem"
+import jwkToPem       from "jwk-to-pem"
 import jwt            from "jsonwebtoken"
 import express        from "express"
 import { expect }     from "chai"
@@ -567,7 +567,7 @@ describe("Authentication", () => {
         function sign(jwks: JWKS, kty: string, token: JWT, jku?: string) {
             let privateKey = findKey(jwks, "private", kty) as any;
             assert(privateKey, "No private key found in jwks")
-            
+            // @ts-ignore
             return jwt.sign(token, jwkToPem(privateKey as any, { private: true }), {
                 algorithm: privateKey.alg,
                 keyid: privateKey.kid,
@@ -1288,13 +1288,15 @@ describe("File Downloading", function() {
         await client.downloadFileAt(0, "bad-token");
     }));
 
-    it ("requires an auth token if kicked off with auth", () => assert.rejects(async () => {
-        const { access_token } = await lib.authorize();
-        const client = new Client();
-        await client.kickOff({ _type: "Patient", accessToken: access_token });
-        await client.waitForExport({ accessToken: access_token });
-        await client.downloadFileAt(0);
-    }));
+    it ("requires an auth token if kicked off with auth", async () => {
+        await assert.rejects(async () => {
+            const { access_token } = await lib.authorize();
+            const client = new Client();
+            await client.kickOff({ _type: "Patient", accessToken: access_token });
+            await client.waitForExport({ accessToken: access_token });
+            return client.downloadFileAt(0); // intentionally skip the token here
+        }, /Authentication is required/)
+    });
 
     // Make sure that every single line contains valid JSON
     it ("Returns valid ndjson files", async () => {
@@ -1999,6 +2001,7 @@ describe("Error responses", () => {
                 form  : {
                     grant_type           : "client_credentials",
                     client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                    // @ts-ignore
                     client_assertion     : jwt.sign({ a: 1 }, privateKey, {
                         algorithm,
                         keyid    : jwks.keys[1].kid,
@@ -2281,6 +2284,7 @@ describe("Error responses", () => {
                 };
             }).then(token => {
                 const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+                // @ts-ignore
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid,
@@ -2450,6 +2454,7 @@ describe("Error responses", () => {
                 };
             }).then(token => {
                 const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+                // @ts-ignore
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid,
@@ -2512,6 +2517,7 @@ describe("Error responses", () => {
                 };
             }).then(token => {
                 const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+                // @ts-ignore
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid,
@@ -2562,6 +2568,7 @@ describe("Error responses", () => {
                 };
             }).then(token => {
                 const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+                // @ts-ignore
                 let signed = jwt.sign(token, privateKey, {
                     algorithm,
                     keyid    : jwks.keys[1].kid,

@@ -3,9 +3,12 @@
   "version": "2.1.1",
   "description": "",
   "main": "index.ts",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "NODE_ENV=test nyc --cache false --reporter text --reporter html mocha",
-    "test:watch": "NODE_ENV=test nyc --cache false --reporter text --reporter html mocha -w",
+    "test": "NODE_ENV=test nyc --cache false --reporter text --reporter html mocha --exit",
+    "test:watch": "nodemon -e ts,js -w . -x 'npm test'",
     "coverage": "nyc npm run test",
     "start": "ts-node --transpile-only .",
     "start:dev": "ts-node ."
@@ -61,6 +64,7 @@
     "@types/uuid": "^7.0.3",
     "@types/walk": "^2.3.0",
     "chai": "^4.2.0",
+    "nodemon": "^3.0.3",
     "nyc": "^15.0.1"
   }
 }
