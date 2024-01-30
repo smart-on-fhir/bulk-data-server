@@ -49,9 +49,13 @@ export function requestPromise(options: Options, delay = 0): Promise<Response> {
                     // console.log(res.body, res.statusMessage)
                     let outcome;
                     try {
-                        if (res.body.resourceType == "OperationOutcome") {
-                            outcome = res.body;
-                            message = res.body.issue.map(
+                        let body = res.body
+                        if (typeof body === "string" && res.headers["content-type"]?.match(/\bjson\b/)) {
+                            body = JSON.parse(body)
+                        }
+                        if (body.resourceType == "OperationOutcome") {
+                            outcome = body;
+                            message = body.issue.map(
                                 (i: any) => `${i.code} ${i.severity}: ${i.diagnostics}`
                             ).join(";");
                         }
