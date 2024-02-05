@@ -1121,6 +1121,20 @@ describe("Canceling", () => {
             expect(response.statusCode).to.equal(404);
         });
     });
+
+    it ("Kick-off -> cancel -> status should result in 404 (issue #64)", async () => {
+        const client = new Client();
+        await client.kickOff({ _type: "Patient" });
+
+        const statusUrl = client.kickOffResponse!.headers["content-location"] + "";
+
+        const cancelResponse = await fetch(statusUrl, { method: "DELETE" });
+        expect(cancelResponse.status).to.equal(202)
+        
+        const statusResponse = await fetch(statusUrl);
+        expect(statusResponse.status).to.equal(404)
+        expect(await statusResponse.text()).to.include("The export was not found")
+    })
 });
 
 describe("Progress Updates", function() {

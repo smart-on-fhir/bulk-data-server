@@ -297,7 +297,13 @@ class ExportManager
         return function handleStatus(req: Request, res: Response) {
             return ExportManager.load(req.params.id).then(
                 job => job.handleStatus(req, res),
-                err => lib.operationOutcome(res, err.message, { httpCode: 400 })
+                (err: any) => {
+                    if (err.code === "ENOENT") {
+                        lib.operationOutcome(res, "The export was not found", { httpCode: 404 })
+                    } else {
+                        lib.operationOutcome(res, err.message, { httpCode: 400 })
+                    }
+                }
             );
         }
     };
