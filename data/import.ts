@@ -10,6 +10,8 @@ import * as Lib  from "../lib"
 
 let DB: CustomizedDB;
 
+const IS_PROD = process.env.NODE_ENV === "production";
+
 // @see assignTimes
 const TIME_MAP: Record<string, (string | number)[]> = {
     Observation       : ["issued", "effectiveDateTime"               ],
@@ -239,12 +241,15 @@ async function insertBundle(json: fhir4.Bundle, path: string, num: number)
     const total = json.entry!.length;
     let i = 0, skipped = 0;
     for (const entry of json.entry!) {
-        const pct = Math.round(++i / total * 100);
-        // @ts-ignore
-        let msg = "\033[2KFile " + num + ": " + path.bold + ": " + entry.resource!.id + " ";
-        msg += "▉".repeat(Math.ceil(pct/10)) + "░".repeat(Math.floor(10 - pct/10)) + " ";
-        msg += pct + "%, "  + String(i).magenta.bold + " resources\r"; 
-        process.stdout.write(msg);
+
+        if (!IS_PROD) {
+            const pct = Math.round(++i / total * 100);
+            // @ts-ignore
+            let msg = "\033[2KFile " + num + ": " + path.bold + ": " + entry.resource!.id + " ";
+            msg += "▉".repeat(Math.ceil(pct/10)) + "░".repeat(Math.floor(10 - pct/10)) + " ";
+            msg += pct + "%, "  + String(i).magenta.bold + " resources\r"; 
+            process.stdout.write(msg);
+        }
         fixReferences(entry);
         try {
             await insertResource(entry, patient ? patient.resource!.id! + "" : null, null);
@@ -268,11 +273,19 @@ async function insertBundle(json: fhir4.Bundle, path: string, num: number)
             break;
         }
     }
-    process.stdout.write(
-        // @ts-ignore
-        "\r\033[2KFile " + num + ": " + String(path).bold + ": imported " +
-        String(total).magenta.bold + " resources" + (skipped ? ", " + ("skipped " + skipped).yellow.bold : "") + "\n"
-    );
+
+    if (!IS_PROD) {
+        process.stdout.write(
+            // @ts-ignore
+            "\r\033[2KFile " + num + ": " + String(path).bold + ": imported " +
+            String(total).magenta.bold + " resources" + (skipped ? ", " + ("skipped " + skipped).yellow.bold : "") + "\n"
+        );
+    } else {
+        console.log(
+            "File " + num + ": " + path + ": imported " +
+            total + " resources" + (skipped ? ", " + ("skipped " + skipped) : "")
+        );
+    }
 }
 
 /**
@@ -381,7 +394,9 @@ async function insertGroups()
 
     let i = 0;
     for (const patient of patients) {
-        process.stdout.write(`\rUpdating resources for patient #${patient.resource_id}`);
+        if (!IS_PROD) {
+            process.stdout.write(`\rUpdating resources for patient #${patient.resource_id}`);
+        }
 
         // pick a group for this patient
         let group = groups.sort((a, b) => a.cur - b.cur)[0];
@@ -407,7 +422,11 @@ async function insertGroups()
 
         i++;
     }
-    process.stdout.write("\r\033[2KUpdated " + i + " resources to belong to a Group\n");
+    if (!IS_PROD) {
+        process.stdout.write("\r\033[2KUpdated " + i + " resources to belong to a Group\n");
+    } else {
+        process.stdout.write("Updated " + i + " resources to belong to a Group\n");
+    }
 
     // insert groups
     for (const group of groups) {
