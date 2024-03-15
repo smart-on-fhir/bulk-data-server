@@ -9,7 +9,7 @@
         tlt       : { type: "number", defaultValue: CFG.defaultTokenLifeTime || 15 },
         dur       : { type: "number", defaultValue: CFG.defaultWaitTime || 10 },
         m         : { type: "number", defaultValue: 1 },
-        stu       : { type: "number", defaultValue: 3 },
+        stu       : { type: "number", defaultValue: 4 },
         del       : { type: "number", defaultValue: 0 },
         secure    : { type: "number", defaultValue: 1 },
     };
