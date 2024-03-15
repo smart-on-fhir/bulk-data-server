@@ -11,7 +11,8 @@
     "test:watch": "nodemon -e ts,js -w . -x 'npm test'",
     "coverage": "nyc npm run test",
     "start": "ts-node --transpile-only .",
-    "start:dev": "ts-node ."
+    "start:dev": "ts-node .",
+    "import": "ts-node ./data/import.ts"
   },
   "repository": {
     "type": "git",
