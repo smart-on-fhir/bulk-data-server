@@ -6,7 +6,7 @@ import OpDef             from "./fhir/OperationDefinition/index"
 import bulkImporter      from "./import/bulk_data_import_handler"
 import ExportManager     from "./ExportManager"
 import metadata          from "./fhir/metadata"
-import group             from "./fhir/group"
+import * as group        from "./fhir/group"
 import getResourceCounts from "./fhir/get-resource-counts"
 import patient           from "./fhir/patient"
 import wellKnown         from "./fhir/wellKnownSmartConfiguration"
@@ -97,7 +97,10 @@ router.get("/.well-known/smart-configuration", cors({ origin: true }), extractSi
 router.get("/metadata", cors({ origin: true }), extractSim, metadata);
 
 // list all the groups with their IDs and the number of patients included
-router.get("/Group", cors({ origin: true }), group);
+router.get("/Group", cors({ origin: true }), group.getAll);
+
+// list groups with by ID
+router.get("/Group/:id", cors({ origin: true }), group.getOne);
 
 router.get("/\\$get-patients", cors({ origin: true }), patient);
 
