@@ -347,6 +347,17 @@
                 $el.highlight();
             }
         });
+
+        // Display the table with available groups
+        MODEL.on("change:stu change:m", function updateFhirUrl(e) {
+            const url = BASE_URL + "/" + MODEL.get("openLaunchData") + "/fhir/Group"
+            fetch(url).then(r => r.json()).then(bundle => {
+                $("#groups-table tbody").html(bundle.entry.map((entry) => `<tr><td class="hidden-xs"><i class="glyphicon glyphicon-folder-open" aria-hidden="true">&nbsp;</i>${
+                    entry.resource.name}</td><td><code>${entry.resource.id}</code></td><td>${
+                        entry.resource.quantity.toLocaleString()}</td></tr>`
+                ));
+            }, console.error)
+        });
     }
 
     $(function init() {

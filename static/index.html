@@ -276,7 +276,25 @@
                         <div class="form-group col-sm-12">
                             <label>Client ID</label>
                             <textarea class="form-control input-sm" rows="4" id="client-id" data-prop="client_id" readonly></textarea>
-                        </div>    
+                        </div>
+
+                        <div class="form-group col-sm-12">
+                            <div class="table-responsive">
+                                <table class="table table-condensed" id="groups-table">
+                                    <caption>&nbsp;Available Groups</caption>
+                                    <thead>
+                                        <tr>
+                                            <th class="hidden-xs">Group</th>
+                                            <th>Group ID</th>
+                                            <th>Patients</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td colspan="3" class="text-center text-muted">Loading Groups...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                         
                     </div>
                     <div class="panel-footer alert-warning list-group-item-warning text-success">
