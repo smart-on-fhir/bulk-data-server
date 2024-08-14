@@ -39,7 +39,7 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "fhir-filter": "github:smart-on-fhir/fhir-filter",
-    "jsonwebtoken": "^8.1.0",
+    "jsonwebtoken": "^9.0.0",
     "jwk-lite": "^0.1.2",
     "jwk-to-pem": "^2.0.0",
     "mocha": "^10.2.0",
