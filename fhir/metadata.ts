@@ -71,7 +71,7 @@ class CapabilityStatement
                                 "valueCode": "SHOULD"
                             }
                         ],
-                        "name": "patient-export",
+                        "name": "export",
                         "definition": this.stu === 4 ?
                             "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/patient-export" :
                             { reference: "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/patient-export" }
@@ -88,7 +88,7 @@ class CapabilityStatement
                                 "valueCode": "SHOULD"
                             }
                         ],
-                        "name": "group-export",
+                        "name": "export",
                         "definition": this.stu === 4 ?
                             "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/group-export" :
                             { reference: "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/group-export" }

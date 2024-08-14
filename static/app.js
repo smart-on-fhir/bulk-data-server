@@ -9,8 +9,9 @@
         tlt       : { type: "number", defaultValue: CFG.defaultTokenLifeTime || 15 },
         dur       : { type: "number", defaultValue: CFG.defaultWaitTime || 10 },
         m         : { type: "number", defaultValue: 1 },
-        stu       : { type: "number", defaultValue: 3 },
-        del       : { type: "number", defaultValue: 0 }
+        stu       : { type: "number", defaultValue: 4 },
+        del       : { type: "number", defaultValue: 0 },
+        secure    : { type: "number", defaultValue: 1 },
     };
 
     var MODEL    = new Lib.Model();
@@ -130,13 +131,24 @@
      */
     function updateLaunchData(e) {
         MODEL.set("launchData", Lib.base64UrlEncode(JSON.stringify({
-            err :  MODEL.get("err"),
-            page: +MODEL.get("page"),
-            dur : +MODEL.get("dur"),
-            tlt : +MODEL.get("tlt"),
-            m   : +MODEL.get("m"),
-            stu : +MODEL.get("stu"),
-            del : +MODEL.get("del")
+            err   :  MODEL.get("err"),
+            page  : +MODEL.get("page"),
+            dur   : +MODEL.get("dur"),
+            tlt   : +MODEL.get("tlt"),
+            m     : +MODEL.get("m"),
+            stu   : +MODEL.get("stu"),
+            del   : +MODEL.get("del"),
+            secure: +MODEL.get("secure"),
+        })));
+        MODEL.set("openLaunchData", Lib.base64UrlEncode(JSON.stringify({
+            err   :  MODEL.get("err"),
+            page  : +MODEL.get("page"),
+            dur   : +MODEL.get("dur"),
+            tlt   : +MODEL.get("tlt"),
+            m     : +MODEL.get("m"),
+            stu   : +MODEL.get("stu"),
+            del   : +MODEL.get("del"),
+            secure: 0,
         })));
     }
 
@@ -215,6 +227,11 @@
             MODEL.set("auth_type", $(":radio[name='auth_type']:checked").val());
         });
 
+        // Set the auth type
+        $(":radio[name='secure']").on("change", function() {
+            MODEL.set("secure", $(":radio[name='secure']:checked").val());
+        });
+
         // Activate the "Generate Keys" button
         $("#generate-keys a[data-alg]").click(function(e) {
             e.preventDefault();
@@ -259,13 +276,16 @@
             $("#jwks_url").toggle(e.data.newValue == "jwks_url", true);
         });
 
+        MODEL.on("change:secure", function(e) {
+            $(":radio[name='secure']").each(function(i, o) {
+                $(o).prop("checked", o.value === e.data.newValue)
+                    .parent().toggleClass("active", o.value === e.data.newValue + "");
+            });
+        });
+
         // When fhir_server_url changes update the "Try Sample App" link
-        MODEL.on("change:fhir_server_url", function(e) {
-            $("#try-app-link").attr(
-                "href",
-                "/sample-app/index.html?server=" +
-                encodeURIComponent(e.data.newValue)
-            );
+        MODEL.on("change:sampleAppUrl", function(e) {
+            $("#try-app-link").attr("href", MODEL.get("sampleAppUrl"));
         });
 
 
@@ -273,13 +293,21 @@
         MODEL.on("change:jwks change:jwks_url change:err change:tlt", generateClientId);
 
         // Whenever the advanced options change (re)generate the launchData
-        MODEL.on("change:page change:dur change:del change:err change:tlt change:m change:stu", updateLaunchData);
+        MODEL.on("change:page change:dur change:del change:err change:tlt change:m change:stu change:secure", updateLaunchData);
         
         // Whenever launchData changes, update the fhir server fhir_server_url
         MODEL.on("change:launchData", function updateFhirUrl(e) {
             MODEL.set(
                 "fhir_server_url",
                 BASE_URL + "/" + MODEL.get("launchData") + "/fhir"
+            );
+        });
+
+        // Whenever openLaunchData changes, update the sampleAppUrl
+        MODEL.on("change:openLaunchData", function updateFhirUrl(e) {
+            MODEL.set(
+                "sampleAppUrl",
+                "/sample-app/index.html?server=" + encodeURIComponent(BASE_URL + "/" + MODEL.get("openLaunchData") + "/fhir")
             );
         });
 
@@ -318,6 +346,17 @@
                 }
                 $el.highlight();
             }
+        });
+
+        // Display the table with available groups
+        MODEL.on("change:stu change:m", function updateFhirUrl(e) {
+            const url = BASE_URL + "/" + MODEL.get("openLaunchData") + "/fhir/Group"
+            fetch(url).then(r => r.json()).then(bundle => {
+                $("#groups-table tbody").html(bundle.entry.map((entry) => `<tr><td class="hidden-xs"><i class="glyphicon glyphicon-folder-open" aria-hidden="true">&nbsp;</i>${
+                    entry.resource.name}</td><td><code>${entry.resource.id}</code></td><td>${
+                        entry.resource.quantity.toLocaleString()}</td></tr>`
+                ));
+            }, console.error)
         });
     }
 

@@ -2,7 +2,7 @@ import sqlite3 from "sqlite3"
 
 type DbMethodName = "run" | "get" | "all" | "each" | "exec" | "prepare"
 
-interface CustomizedDB extends sqlite3.Database {
+export interface CustomizedDB extends sqlite3.Database {
     promise: (method: DbMethodName, ...args: any[]) => Promise<any>
 }
 

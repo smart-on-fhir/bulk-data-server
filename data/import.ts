@@ -1,16 +1,19 @@
-const moment = require("moment");
-const uuid   = require("uuid");
-const App    = require("commander");
-const fs     = require("fs");
-const Path   = require("path");
-const db     = require("../db");
-const Lib    = require("../lib");
-require("colors");
+import "colors"
+import moment    from "moment"
+import * as uuid from "uuid"
+import App       from "commander"
+import fs        from "fs"
+import Path      from "path"
+import db, { CustomizedDB } from "../db"
+import * as Lib  from "../lib"
 
-let DB;
+
+let DB: CustomizedDB;
+
+const IS_PROD = process.env.NODE_ENV === "production";
 
 // @see assignTimes
-const TIME_MAP = {
+const TIME_MAP: Record<string, (string | number)[]> = {
     Observation       : ["issued", "effectiveDateTime"               ],
     Claim             : ["billablePeriod.start"                      ],
     Encounter         : ["period.start"                              ],
@@ -30,46 +33,46 @@ const GROUPS = [
     {
         weight: 9,
         id: 1,
-        resource: createGroup({ name: "Blue Cross Blue Shield" })
+        resource: createGroup({ name: "Blue Cross Blue Shield", id: "BlueCrossBlueShield" })
     },
     {
         weight: 3,
         id: 2,
-        resource: createGroup({ name: "BMC HealthNet" })
+        resource: createGroup({ name: "BMC HealthNet", id: "BMCHealthNet" })
     },
     {
         weight: 1,
         id: 3,
-        resource: createGroup({ name: "Fallon Health" })
+        resource: createGroup({ name: "Fallon Health", id: "FallonHealth" })
     },
     {
         weight: 1,
         id: 4,
-        resource: createGroup({ name: "Harvard Pilgrim Health Care" })
+        resource: createGroup({ name: "Harvard Pilgrim Health Care", id: "HarvardPilgrimHealthCare" })
     },
     {
         weight: 8,
         id: 5,
-        resource: createGroup({ name: "Health New England" })
+        resource: createGroup({ name: "Health New England", id: "HealthNewEngland" })
     },
     {
         weight: 1,
         id: 6,
-        resource: createGroup({ name: "Minuteman Health" })
+        resource: createGroup({ name: "Minuteman Health", id: "MinutemanHealth" })
     },
     {
         weight: 2,
         id: 7,
-        resource: createGroup({ name: "Neighborhood Health Plan" })
+        resource: createGroup({ name: "Neighborhood Health Plan", id: "NeighborhoodHealthPlan" })
     },
     {
         weight: 7,
         id: 8,
-        resource: createGroup({ name: "Tufts Health Plan" })
+        resource: createGroup({ name: "Tufts Health Plan", id: "TuftsHealthPlan" })
     }
 ];
 
-const URN_MAP = {};
+const URN_MAP: Record<string, string> = {};
 
 function getInputDir()
 {
@@ -89,7 +92,7 @@ function getInputDir()
     }
 }
 
-function randomMoment(after, before)
+function randomMoment(after: moment.MomentInput, before?: moment.MomentInput)
 {
     const out = moment(after);
     let add = Math.random() * 60 * 60 * 24 * 365;
@@ -102,7 +105,7 @@ function randomMoment(after, before)
     return out;
 }
 
-function createGroup({ name, id = "", members = [], type = "person" })
+function createGroup({ name, id = "", members = [], type = "person" } : { name: string, id?: string, members?: any[], type?: string })
 {
     return {
         resourceType: "Group",
@@ -123,9 +126,8 @@ function createGroup({ name, id = "", members = [], type = "person" })
 /**
  * Walks the app input directory, filters json files only, parses them and calls
  * the callback with that JSON as argument
- * @param {(path: string, dirent: fs.Dirent) => any} callback 
  */
-function loopFiles(callback)
+function loopFiles(callback: (path: string, dirent: fs.Dirent) => any)
 {
     return Lib.forEachFile({
         dir   : getInputDir(),
@@ -136,13 +138,13 @@ function loopFiles(callback)
 /**
  * Reads the entries of a bundle and adds their urn uuids to the URN_MAP. Later,
  * this map will be used to translate URN refs to relative URLs.
- * @param {object} resource FHIR Bundle
+ * @param resource FHIR Bundle
  */
-function updateUrnMap(resource)
+function updateUrnMap(resource: fhir4.Bundle)
 {
-    resource.entry.forEach(entry => {
+    resource.entry?.forEach(entry => {
         if (entry.fullUrl && entry.fullUrl.indexOf("urn:uuid:") === 0) {
-            URN_MAP[entry.fullUrl] = `${entry.resource.resourceType}/${entry.resource.id}`;
+            URN_MAP[entry.fullUrl] = `${entry.resource!.resourceType}/${entry.resource!.id}`;
         }
     });
 }
@@ -150,14 +152,13 @@ function updateUrnMap(resource)
 /**
  * Walks the app input directory, filters json files only, parses them and
  * builds the URN_MAP
- * @returns {Promise<*>}
  */
 function buildUrnMap()
 {
     return loopFiles(path => {
-        return Lib.readJSON(path).then(json => {
+        return Lib.readJSON<fhir4.Resource>(path).then(json => {
             if (json.resourceType == "Bundle") {
-                updateUrnMap(json);
+                updateUrnMap(json as fhir4.Bundle);
             } else {
                 URN_MAP[`urn:uuid:${json.id}`] = `${json.resourceType}/${json.id}`;
             }
@@ -167,14 +168,15 @@ function buildUrnMap()
 
 /**
  * Inserts one row into the data table
- * @param {string|number} resource_id
- * @param {String} resource_json 
- * @param {String} resourceType 
- * @param {String} time 
- * @param {String} patientId 
- * @param {Number} groupId
  */
-function insertRow(resource_id, resource_json, resourceType, time, patientId, groupId)
+function insertRow(
+    resource_id  : string | number,
+    resource_json: string,
+    resourceType : string,
+    time         : string,
+    patientId    : string | null,
+    groupId      : number | null
+)
 {
     return DB.promise(
         "run",
@@ -202,17 +204,15 @@ function insertRow(resource_id, resource_json, resourceType, time, patientId, gr
  * finds references that begin with "urn:uuid:" and replaces them with the
  * corresponding value from URN_MAP. This is recursive.
  * @throws {Error} If a reference is not found in URN_MAP
- * @returns void
- * @param {*} obj The variable to try to translate
+ * @param obj The variable to try to translate
  */
-function fixReferences(obj)
+function fixReferences(obj: any): void
 {    
     // if array just dive into it (it cannot have references anyway)
     if (Array.isArray(obj)) {
-        return obj.every(fixReferences);
+        obj.every(fixReferences);
     }
-
-    if (obj && typeof obj == "object") {
+    else if (obj && typeof obj == "object") {
         for (let key in obj) {
             if (key == "reference") {
                 let ref = obj[key];
@@ -233,27 +233,29 @@ function fixReferences(obj)
 
 /**
  * Given a JSON bundle, insert everything onto the database
- * @param {Object} json
- * @returns {Promise<*>}
  */
-async function insertBundle(json, path, num)
+async function insertBundle(json: fhir4.Bundle, path: string, num: number)
 {
     assignTimes(json);
-    const patient = json.entry.find(e => e.resource.resourceType == "Patient");
-    const total = json.entry.length;
+    const patient = json.entry!.find(e => e.resource!.resourceType == "Patient");
+    const total = json.entry!.length;
     let i = 0, skipped = 0;
-    for (const entry of json.entry) {
-        const pct = Math.round(++i / total * 100);
-        let msg = "\033[2KFile " + num + ": " + path.bold + ": " + entry.resource.id + " ";
-        msg += "▉".repeat(Math.ceil(pct/10)) + "░".repeat(Math.floor(10 - pct/10)) + " ";
-        msg += pct + "%, "  + String(i).magenta.bold + " resources\r"; 
-        process.stdout.write(msg);
+    for (const entry of json.entry!) {
+
+        if (!IS_PROD) {
+            const pct = Math.round(++i / total * 100);
+            // @ts-ignore
+            let msg = "\033[2KFile " + num + ": " + path.bold + ": " + entry.resource!.id + " ";
+            msg += "▉".repeat(Math.ceil(pct/10)) + "░".repeat(Math.floor(10 - pct/10)) + " ";
+            msg += pct + "%, "  + String(i).magenta.bold + " resources\r"; 
+            process.stdout.write(msg);
+        }
         fixReferences(entry);
         try {
-            await insertResource(entry, patient ? patient.resource.id : null, null);
+            await insertResource(entry, patient ? patient.resource!.id! + "" : null, null);
         } catch (error) {
-            if (error.code == "SQLITE_CONSTRAINT") {
-                const row = await DB.promise("get", "SELECT * FROM data WHERE resource_id = ?", entry.resource.id);
+            if ((error as any).code == "SQLITE_CONSTRAINT") {
+                const row = await DB.promise("get", "SELECT * FROM data WHERE resource_id = ?", entry.resource!.id);
                 if (row.resource_json === JSON.stringify(entry.resource)) {
                     // process.stdout.write(
                     //     "\033[2K" + ("File " + num).red + ": " + path.bold + ": " + 
@@ -262,28 +264,38 @@ async function insertBundle(json, path, num)
                     skipped++;
                     continue;
                 }
+                // @ts-ignore
                 console.log("\033[2K%s\n", row.resource_json);
             }
             console.error(error);
+            // @ts-ignore
             console.log("\033[2K" + ("File " + num).red + ": " + path.bold + ": Failed entry:\n%j", entry);
             break;
         }
     }
-    process.stdout.write(
-        "\r\033[2KFile " + num + ": " + String(path).bold + ": imported " +
-        String(total).magenta.bold + " resources" + (skipped ? ", " + ("skipped " + skipped).yellow.bold : "") + "\n"
-    );
+
+    if (!IS_PROD) {
+        process.stdout.write(
+            // @ts-ignore
+            "\r\033[2KFile " + num + ": " + String(path).bold + ": imported " +
+            String(total).magenta.bold + " resources" + (skipped ? ", " + ("skipped " + skipped).yellow.bold : "") + "\n"
+        );
+    } else {
+        console.log(
+            "File " + num + ": " + path + ": imported " +
+            total + " resources" + (skipped ? ", " + ("skipped " + skipped) : "")
+        );
+    }
 }
 
 /**
  * Walks the app input directory, and inserts all the bundles into the database
- * @returns {Promise<*>}
  */
 function insertBundles()
 {
     let i = 0;
     return loopFiles((path, dirent) => {
-        return Lib.readJSON(path).then(json => {
+        return Lib.readJSON<any>(path).then(json => {
             i++;
             if (json.resourceType == "Bundle") {
                 return insertBundle(json, dirent.name, i);
@@ -295,22 +307,24 @@ function insertBundles()
     });
 }
 
-async function insertResource(entry, patientId, group) {
+async function insertResource(entry: fhir4.BundleEntry, patientId: string | null, group: number | null) {
 
-    let type = entry.resource.resourceType;
+    let type = entry.resource!.resourceType;
     
     let json = process.env.NODE_ENV == "test" ?
         {
+            // @ts-ignore
             modified_date: entry.__time,
             type: type,
-            id: entry.resource.id
+            id: entry.resource!.id
         } :
         entry.resource;
      
-    return Lib.stringifyJSON(json).then(json => insertRow(
-        entry.resource.id,
+    return Lib.stringifyJSON(json as any).then(json => insertRow(
+        entry.resource!.id!,
         json,
         type,
+        // @ts-ignore
         entry.__time,
         patientId,
         group
@@ -322,10 +336,10 @@ async function insertResource(entry, patientId, group) {
  * @param {Object} json 
  * @returns {Object} The modified json
  */
-function assignTimes(json) {
+function assignTimes(json: fhir4.Bundle): fhir4.Bundle {
     let absMinDate = moment([2000, 0, 1]);
-    json.entry.forEach(entry => {
-        let type = entry.resource.resourceType;
+    json.entry?.forEach((entry: any) => {
+        let type = entry.resource!.resourceType;
         let paths = TIME_MAP[ type ] || [];
 
         for (const path of paths) {
@@ -380,7 +394,9 @@ async function insertGroups()
 
     let i = 0;
     for (const patient of patients) {
-        process.stdout.write(`\rUpdating resources for patient #${patient.resource_id}`);
+        if (!IS_PROD) {
+            process.stdout.write(`\rUpdating resources for patient #${patient.resource_id}`);
+        }
 
         // pick a group for this patient
         let group = groups.sort((a, b) => a.cur - b.cur)[0];
@@ -406,7 +422,11 @@ async function insertGroups()
 
         i++;
     }
-    process.stdout.write("\r\033[2KUpdated " + i + " resources to belong to a Group\n");
+    if (!IS_PROD) {
+        process.stdout.write("\r\033[2KUpdated " + i + " resources to belong to a Group\n");
+    } else {
+        process.stdout.write("Updated " + i + " resources to belong to a Group\n");
+    }
 
     // insert groups
     for (const group of groups) {
@@ -455,7 +475,7 @@ async function insertDocumentReferences()
     const photoData = fs.readFileSync(photoPath).toString("base64");
     const photoSize = Buffer.from(photoData).byteLength;
 
-    const docRef1 = {
+    const docRef1: any = {
         resourceType: "DocumentReference",
         id: uuid.v4(),
         meta: {
@@ -518,7 +538,7 @@ async function insertDocumentReferences()
     // Insert one DocumentReference resource to link to an image file
     // -------------------------------------------------------------------------
     console.log("Add one DocumentReference to DICOM image");
-    const docRef2 = {
+    const docRef2: any = {
         resourceType: "DocumentReference",
         id : uuid.v4(),
         meta: {
@@ -580,7 +600,7 @@ async function insertDocumentReferences()
     // Insert one DocumentReference resource to link to a PDF file
     // -------------------------------------------------------------------------
     console.log("Add one DocumentReference to PDF file");
-    const docRef3 = {
+    const docRef3: any = {
         resourceType: "DocumentReference",
         id: uuid.v4(),
         meta: {
@@ -673,12 +693,7 @@ App
     .parse(process.argv);
 
 if (App.fhirVersion) {
-    try {
-        main();
-    } catch (e) {
-        Lib.die(e);
-    }
-}
-else {
+    main();
+} else {
     App.outputHelp();
 }

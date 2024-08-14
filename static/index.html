@@ -160,13 +160,30 @@
                             <label class="text-warning">Advanced</label>
                             <hr class="solid fg-warning"/>
                             <div class="row">
-                                <div class="col-sm-6">                                  
-                                    <label>Access Token Lifetime</label>
-                                    <select class="form-control" id="token-lifetime" data-prop="tlt">
-                                        <option value="1">1 minute</option>
-                                        <option value="15" selected>15 minutes</option>
-                                        <option value="60">1 hour</option>
-                                    </select>
+                                <div class="col-sm-6">
+                                    <div class="row">
+                                        <div class="col-xs-7 col-md-8">
+                                            <label style="width:100%;text-overflow:ellipsis;overflow:hidden;white-space: nowrap;margin: 0">Access Token Lifetime</label>
+                                            <select class="form-control" id="token-lifetime" data-prop="tlt">
+                                                <option value="1">1 minute</option>
+                                                <option value="15" selected>15 minutes</option>
+                                                <option value="60">1 hour</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-xs-5 col-md-4" style="min-width:10em"">
+                                            <label style="width:100%;text-overflow:ellipsis;overflow:hidden;white-space: nowrap;margin: 0">Require Auth<span class="hidden-sm hidden-md">entication</span></label>
+                                            <div class="btn-group" role="group" aria-label="Auth Type" data-toggle="buttons" style="width:100%">
+                                                <label class="btn btn-default" style="width:50%;text-overflow:ellipsis;overflow:hidden;">
+                                                    <input type="radio" name="secure" value="1" autocomplete="off" />
+                                                    <span class="text-success">Yes</span>
+                                                </label>
+                                                <label class="btn btn-default" style="width:50%;text-overflow:ellipsis;overflow:hidden;">
+                                                    <input type="radio" name="secure" value="0" autocomplete="off" />
+                                                    <span class="text-danger">No</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <br />
                                     <label>Database Size</label>
                                     <select class="form-control" id="m" data-prop="m">
@@ -259,7 +276,25 @@
                         <div class="form-group col-sm-12">
                             <label>Client ID</label>
                             <textarea class="form-control input-sm" rows="4" id="client-id" data-prop="client_id" readonly></textarea>
-                        </div>    
+                        </div>
+
+                        <div class="form-group col-sm-12">
+                            <div class="table-responsive">
+                                <table class="table table-condensed" id="groups-table">
+                                    <caption>&nbsp;Available Groups</caption>
+                                    <thead>
+                                        <tr>
+                                            <th class="hidden-xs">Group</th>
+                                            <th>Group ID</th>
+                                            <th>Patients</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td colspan="3" class="text-center text-muted">Loading Groups...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                         
                     </div>
                     <div class="panel-footer alert-warning list-group-item-warning text-success">

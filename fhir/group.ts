@@ -19,11 +19,11 @@ interface Row {
 
 const SERVER_START_TIME = moment().format("YYYY-MM-DD HH:mm:ss");
 
-function resourceCreator(multiplier: number) {
+function resourceCreator(multiplier: number, sim?: string) {
     return function resource(group: Row) {
         const json = JSON.parse(group.resource_json) as Group;
         return {
-            fullUrl: `${config.baseUrl}/fhir/Group/${json.id}`,
+            fullUrl: sim ? `${config.baseUrl}/${sim}/fhir/Group/${json.id}` : `${config.baseUrl}/fhir/Group/${json.id}`,
             resource: {
                 resourceType: "Group",
                 id: json.id,
@@ -46,7 +46,7 @@ function resourceCreator(multiplier: number) {
     }
 }
 
-function bundle(items: Row[], multiplier: number) {
+function bundle(items: Row[], multiplier: number, sim?: string) {
     const len = items.length;
     const bundle: Bundle = {
         "resourceType": "Bundle",
@@ -59,19 +59,38 @@ function bundle(items: Row[], multiplier: number) {
         "link": [
             {
                 "relation": "self",
-                "url": `${config.baseUrl}/fhir/Group`
+                "url": sim ? `${config.baseUrl}/${sim}/fhir/Group` : `${config.baseUrl}/fhir/Group`
             }
         ]
     };
 
     if (len) {
-        bundle.entry = items.map(resourceCreator(multiplier)) as BundleEntry[];
+        bundle.entry = items.map(resourceCreator(multiplier, sim)) as BundleEntry[];
     }
 
     return bundle;
 }
 
-export default function(req: Request, res: Response) {
+export function getOne(req: Request, res: Response) {
+    const {id} = req.params 
+    const sim = getRequestedParams(req);
+    let multiplier = sim.m || 1;
+    let stu = sim.stu || 3;
+
+    DB(stu).get(`SELECT "resource_json" FROM "data" WHERE "resource_id" = ?`, [id], (error: Error, row: Row) => {
+        
+        if (error) {
+            console.error(error);
+            return operationOutcome(res, "DB query error");
+        }
+
+        const json = JSON.parse(row.resource_json)
+
+        res.json({ ...json, quantity: json.quantity * multiplier });
+    })
+}
+
+export function getAll(req: Request, res: Response) {
     const sim = getRequestedParams(req);
     let multiplier = sim.m || 1;
     let stu = sim.stu || 3;
@@ -88,7 +107,7 @@ export default function(req: Request, res: Response) {
                 console.error(error);
                 return operationOutcome(res, "DB query error");
             }
-            res.json(bundle(rows, multiplier));
+            res.json(bundle(rows, multiplier, req.params.sim));
         }
     );
 }
