@@ -1,5 +1,5 @@
 const Transform = require("stream").Transform;
-const config    = require("../config");
+const config    = require("../config").default;
 
 /**
  * This is a transform stream that takes parts of NDJSON file as Buffer chunks

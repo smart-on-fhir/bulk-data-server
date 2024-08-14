@@ -2,7 +2,7 @@
 const DownloadTask = require("../import/DownloadTask");
 const assert       = require("assert");
 const { finished } = require("stream");
-const config       = require("../config");
+const config       = require("../config").default;
 const NDJSONStream = require("../import/NDJSONStream");
 const MockReadable = require("./mocks/ReadStream");
 const mockServer   = require("./mocks/mockServer");
@@ -185,7 +185,7 @@ describe("BulkData Import", () => {
             finished(ndjsonStream, error => {
                 assert.notEqual(error, null);
                 assert.equal(error instanceof SyntaxError, true);
-                assert.equal(error.message, "Error parsing NDJSON on line 1: Unexpected end of JSON input");
+                assert.equal(error.message, "Error parsing NDJSON on line 1: Unterminated string in JSON at position 6");
                 next();
             });
 
@@ -199,7 +199,7 @@ describe("BulkData Import", () => {
             finished(ndjsonStream, error => {
                 assert.notEqual(error, null);
                 assert.equal(error instanceof SyntaxError, true);
-                assert.equal(error.message, "Error parsing NDJSON on line 2: Unexpected end of JSON input");
+                assert.equal(error.message, "Error parsing NDJSON on line 2: Expected ',' or '}' after property value in JSON at position 6");
                 next();
             });
 

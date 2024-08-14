@@ -1,6 +1,6 @@
 const { Writable } = require("stream");
 const DB           = require("./db");
-const config       = require("../config");
+const config       = require("../config").default;
 require("./DBMaintainer");
 
 
