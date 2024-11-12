@@ -716,87 +716,91 @@ class ExportManager
             });
         };
 
-        for (const { fhir_type, rowCount } of resourceTypes) {
-            
-            if (signal.aborted) {
-                return null;
-            }
+        if (resourceTypes.length > 0) {
+            for (const { fhir_type, rowCount } of resourceTypes) {
+                
+                if (signal.aborted) {
+                    return null;
+                }
 
-            this.statusMessage = `currently processing ${fhir_type} resources`;
-            await this.save()
+                this.statusMessage = `currently processing ${fhir_type} resources`;
+                await this.save()
 
-            let resourceCount = rowCount * this.databaseMultiplier;
-            let filteredCount = resourceCount;
+                let resourceCount = rowCount * this.databaseMultiplier;
+                let filteredCount = resourceCount;
 
-            // If a filter is used we need to actually loop tru, filter and count how many
-            // resources would remain after the filter
-            if (this.typeFilter.get("_filter")) {
-                try {
-                    filteredCount = await lib.abortablePromise<number>(this.getCountsForResourceType(fhir_type, resourceCount), signal);
-                } catch (e) {
-                    if (!(e instanceof lib.AbortError)) {
-                        console.error(e)
-                        return null
+                // If a filter is used we need to actually loop tru, filter and count how many
+                // resources would remain after the filter
+                if (this.typeFilter.get("_filter")) {
+                    try {
+                        filteredCount = await lib.abortablePromise<number>(this.getCountsForResourceType(fhir_type, resourceCount), signal);
+                    } catch (e) {
+                        if (!(e instanceof lib.AbortError)) {
+                            console.error(e)
+                            return null
+                        }
                     }
                 }
-            }
 
-            if (filteredCount > 0) {
-                const numFiles = Math.ceil(filteredCount / this.resourcesPerFile);
-                for (let i = 0; i < numFiles; i++) {
+                if (filteredCount > 0) {
+                    const numFiles = Math.ceil(filteredCount / this.resourcesPerFile);
+                    for (let i = 0; i < numFiles; i++) {
 
-                    // ~ half of the links might fail if such error is requested
-                    if (this.simulatedError == "some_file_generation_failed" && i % 2) {
-                        addError(i, fhir_type, `Failed to export ${i + 1}.${fhir_type}.${this.outputFormat}`);
-                    }
-
-                    // Add normal download link
-                    else {
-                        let offset = this.resourcesPerFile * i;
-                        let count = Math.min(this.resourcesPerFile, filteredCount - offset);
-                        
-
-                        // Here we know we have a list of {count} resources that
-                        // we can put into a file by generating the proper link
-                        // to it. However, if {this.simulateDeletedPct} is set,
-                        // certain percentage of them should go into the
-                        // "deleted" array instead!
-                        if (this.simulateDeletedPct && this.since) {
-                            let cnt = Math.round(count/100 * this.simulateDeletedPct);
-                            if (cnt) {
-                                addDeleted(
-                                    i,
-                                    fhir_type,
-                                    cnt,
-                                    offset,
-                                    Math.min(this.resourcesPerFile, Math.abs(filteredCount - offset))
-                                );
-                                count  -= cnt;
-                                offset += cnt;
-                            }
+                        // ~ half of the links might fail if such error is requested
+                        if (this.simulatedError == "some_file_generation_failed" && i % 2) {
+                            addError(i, fhir_type, `Failed to export ${i + 1}.${fhir_type}.${this.outputFormat}`);
                         }
 
-                        addFile(
-                            i,
-                            fhir_type,
-                            count,
-                            offset,
-                            Math.max(Math.min(this.resourcesPerFile, filteredCount - offset), 0)
-                        );
-                    }
+                        // Add normal download link
+                        else {
+                            let offset = this.resourcesPerFile * i;
+                            let count = Math.min(this.resourcesPerFile, filteredCount - offset);
+                            
 
-                    // Limit the manifest size based on total number of file links
-                    if (manifest.output.length + manifest.error.length + manifest.deleted!.length > config.maxFiles) {
-                        this.tooManyFiles = true;
-                        await this.save();
-                        return null;
+                            // Here we know we have a list of {count} resources that
+                            // we can put into a file by generating the proper link
+                            // to it. However, if {this.simulateDeletedPct} is set,
+                            // certain percentage of them should go into the
+                            // "deleted" array instead!
+                            if (this.simulateDeletedPct && this.since) {
+                                let cnt = Math.round(count/100 * this.simulateDeletedPct);
+                                if (cnt) {
+                                    addDeleted(
+                                        i,
+                                        fhir_type,
+                                        cnt,
+                                        offset,
+                                        Math.min(this.resourcesPerFile, Math.abs(filteredCount - offset))
+                                    );
+                                    count  -= cnt;
+                                    offset += cnt;
+                                }
+                            }
+
+                            addFile(
+                                i,
+                                fhir_type,
+                                count,
+                                offset,
+                                Math.max(Math.min(this.resourcesPerFile, filteredCount - offset), 0)
+                            );
+                        }
+
+                        // Limit the manifest size based on total number of file links
+                        if (manifest.output.length + manifest.error.length + manifest.deleted!.length > config.maxFiles) {
+                            this.tooManyFiles = true;
+                            await this.save();
+                            return null;
+                        }
                     }
                 }
-            }
 
-            this.progress += (rowCount * this.databaseMultiplier / totalResourceCount * 100)
-            // console.log(`Progress =======> ${this.progress}%`);
-            await this.save()
+                this.progress += (rowCount * this.databaseMultiplier / totalResourceCount * 100)
+                // console.log(`Progress =======> ${this.progress}%`);
+                await this.save()
+            }
+        } else {
+            this.progress = 100
         }
 
         this.manifest = manifest
