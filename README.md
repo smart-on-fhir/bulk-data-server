@@ -4,7 +4,7 @@
 
 
 ## Install
-First you have to install NodeJS if you don't already have it from https://nodejs.org/. This app has been developed on Node version 7.9 and also tested on Node 8 and 9. There is a known conflict that currently prevents use of Node version 10 or later. If your system's version is outside that range you will want to install a supported version. This is easy to do using the Node Version Manager from https://github.com/creationix/nvm. (_Note the instruction on updating your shell's configuration file or you may find the Node version reverts on starting a new session_)
+First you have to install NodeJS if you don't already have it from https://nodejs.org/. This app requires Node version 20+. We recommend using the [Node Version Manager (nvm)](https://github.com/creationix/nvm).
 
 Then clone the repo, install the dependencies and start it:
 
