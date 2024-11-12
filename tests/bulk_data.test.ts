@@ -16,7 +16,7 @@ import * as lib       from "./lib"
 import { Parameters } from "fhir/r4";
 import { ExportManifest, JWKS, JWT } from "../types";
 
-const BlueCCrossBlueShieldId = "ff7dc35f-79e9-47a0-af22-475cf301a085";
+const BlueCrossBlueShieldId = "BlueCrossBlueShield"
 
 
 before(next => {
@@ -441,7 +441,7 @@ describe("Static", () => {
     [
         "/fhir/Group",
         "/fhir/$get-patients",
-        `/fhir/$get-patients?group=${BlueCCrossBlueShieldId}`,
+        `/fhir/$get-patients?group=${BlueCrossBlueShieldId}`,
         "/fhir/$get-resource-counts",
         "/fhir/.well-known/smart-configuration",
         "/env.js",
@@ -699,14 +699,14 @@ describe("Bulk Data Kick-off Request", function() {
             description: "/fhir/Group/:groupId/$export",
             buildUrl   : (params?: any) => lib.buildGroupUrl(1, params),
             options: {
-                group: BlueCCrossBlueShieldId
+                group: BlueCrossBlueShieldId
             }
         },
         {
             description: "/:sim/fhir/Group/:groupId/$export",
             buildUrl   : (params?: any) => lib.buildGroupUrl(1, Object.assign({}, params || {})),
             options: {
-                group: BlueCCrossBlueShieldId
+                group: BlueCrossBlueShieldId
             }
         }
     ].forEach(meta => {
@@ -1836,7 +1836,7 @@ describe("Groups", function() {
         this.timeout(10000);
 
         const client = new Client();
-        await client.kickOff({ _type: "Patient", group: BlueCCrossBlueShieldId });
+        await client.kickOff({ _type: "Patient", group: BlueCrossBlueShieldId });
         await client.waitForExport();
         expect(client.statusResponse!.body.output, "statusResponse.body.output must be an array").to.be.instanceOf(Array);
         expect(client.statusResponse!.body.output.length, "Wrong number of links returned").to.equal(1);
