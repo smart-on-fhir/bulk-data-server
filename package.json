@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "NODE_ENV=test nyc --cache false --reporter text --reporter html mocha --exit",
+    "test": "NODE_ENV=test nyc --cache false mocha --exit",
     "test:watch": "nodemon -e ts,js -w . -x 'npm test'",
     "coverage": "nyc npm run test",
     "start": "ts-node --transpile-only .",
@@ -68,5 +68,18 @@
     "chai": "^4.2.0",
     "nodemon": "^3.0.3",
     "nyc": "^15.0.1"
+  },
+  "nyc": {
+    "extension": [
+      ".js",
+      ".ts",
+      ".tsx"
+    ],
+    "all": false,
+    "reporter": [
+      "html",
+      "lcov",
+      "text-summary"
+    ]
   }
 }

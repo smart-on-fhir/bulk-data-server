@@ -1554,11 +1554,10 @@ describe("File Downloading", function() {
         await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         // console.log(lines)
-        // expect(lines.length).to.equal(2);
-        expect(lines.map(l => JSON.parse(l).id)).to.deep.equal([
-            "6c5d9ca9-54d7-42f5-bfae-a7c19cd217f2",
-            "58c297c4-d684-4677-8024-01131d93835e"
-        ]);
+        const IDs = lines.map(l => JSON.parse(l).id)
+        expect(IDs.length).to.equal(2);
+        expect(IDs).to.include("6c5d9ca9-54d7-42f5-bfae-a7c19cd217f2");
+        expect(IDs).to.include("58c297c4-d684-4677-8024-01131d93835e");
     });
 
     // it ("Handles the 'm' parameter for multiplication", done => {
