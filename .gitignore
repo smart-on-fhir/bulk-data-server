@@ -63,3 +63,6 @@ import/database.*.imports.db
 jobs/*
 !.gitkeep
 .DS_Store
+database.r2.old.db
+database.r3.old.db
+database.r4.old.db
