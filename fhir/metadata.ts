@@ -97,9 +97,9 @@ class CapabilityStatement
             },
             {
                 "type": "OperationDefinition",
-                "profile": {
-                    "reference": "http://hl7.org/fhir/Profile/OperationDefinition"
-                },
+                "profile": this.stu === 4 ?
+                    "http://hl7.org/fhir/Profile/OperationDefinition" :
+                    { "reference": "http://hl7.org/fhir/Profile/OperationDefinition" },
                 "interaction": [
                     {
                         "code": "read"
@@ -155,7 +155,7 @@ class CapabilityStatement
                 "description": "SMART Sample Bulk Data Server"
             },
             fhirVersion: getFhirVersion(this.stu),
-            acceptUnknown: "extensions",
+            ...(this.stu < 4 && {acceptUnknown: "extensions"}),
             format: [ "json" ],
             rest: [
                 {
