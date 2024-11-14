@@ -677,6 +677,15 @@ describe("System-level Export", function() {
         client.cancel();
         expect(body.output.map(x => x.type)).to.deep.equal(["Group", "Patient"]);
     });
+
+    it ("works with specified scopes", async () => {
+        const { access_token } = await lib.authorize({ scope: "system/Patient.read"});
+        const client = new Client();
+        await client.kickOff({ _type: "Group,Patient", systemLevel: true, accessToken: access_token });
+        const { body } = await client.waitForExport({ accessToken: access_token });
+        client.cancel();
+        expect(body.output.map(x => x.type)).to.deep.equal(["Patient"]);
+    });
 });
 
 describe("Bulk Data Kick-off Request", function() {

@@ -364,6 +364,14 @@ export function getGrantedScopes(req: Request): ScopeList {
     }
 }
 
+export function canExportResourceType(resourceType: string, grantedScopes: ScopeList) {
+    return grantedScopes.scopes.some(scope => {
+        return (scope.level === "*" || scope.level === "system") &&
+            (scope.resource === "*" || scope.resource === resourceType) &&
+            scope.actions.has("read");
+    })
+}
+
 export function hasAccessToResourceType(
     grantedScopes: {system: string, resource: string, action: string}[],
     resourceType: string,

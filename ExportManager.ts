@@ -1,19 +1,20 @@
-import crypto        from "crypto"
-import moment        from "moment"
-import fs            from "fs"
-import base64url     from "base64-url"
-import zlib          from "zlib"
-import config        from "./config"
-import * as lib      from "./lib";
-import QueryBuilder  from "./QueryBuilder"
-import getDB         from "./db"
-import toNdjson      from "./transforms/dbRowToNdjson"
-import toCSV         from "./transforms/dbRowToCSV"
-import fhirStream    from "./FhirStream"
-import translator    from "./transforms/dbRowTranslator"
-import { ExportManifest, RequestWithSim }        from "./types"
-import { OperationOutcome, ParametersParameter } from "fhir/r4"
+import crypto                                    from "crypto"
+import moment                                    from "moment"
+import fs                                        from "fs"
+import base64url                                 from "base64-url"
+import zlib                                      from "zlib"
 import { NextFunction, Request, Response }       from "express"
+import { OperationOutcome, ParametersParameter } from "fhir/r4"
+import config                                    from "./config"
+import * as lib                                  from "./lib";
+import QueryBuilder                              from "./QueryBuilder"
+import getDB                                     from "./db"
+import toNdjson                                  from "./transforms/dbRowToNdjson"
+import toCSV                                     from "./transforms/dbRowToCSV"
+import fhirStream                                from "./FhirStream"
+import translator                                from "./transforms/dbRowTranslator"
+import { ExportManifest, RequestWithSim }        from "./types"
+import { ScopeList }                             from "./scope"
 
 const supportedFormats = {
     "application/fhir+ndjson" : "ndjson",
@@ -458,6 +459,10 @@ class ExportManager
 
         const isLenient = !!String(req.headers.prefer || "").match(/\bhandling\s*=\s*lenient\b/i);
 
+        this.secure = !!req.headers.authorization;
+
+        const grantedScopes = lib.getGrantedScopes(req)
+
         // Verify that the POST body contains a Parameters resource ------------
         if (req.method == "POST" && req.body.resourceType !== "Parameters") {
             return lib.operationOutcome(res, "The POST body should be a Parameters resource", { httpCode: 400 });
@@ -528,7 +533,7 @@ class ExportManager
         }
 
         try {
-            await this.setResourceTypes(_type);
+            await this.setResourceTypes(_type, grantedScopes);
         } catch (ex) {
             return lib.operationOutcome(res, (ex as Error).message, { httpCode: 400 });
         }
@@ -557,7 +562,6 @@ class ExportManager
         this.outputFormat = supportedFormats[_outputFormat as keyof typeof supportedFormats] as keyof typeof exportTypes;
 
         this.requestStart = Date.now();
-        this.secure = !!req.headers.authorization;
 
         const proto = req.headers["x-forwarded-proto"] || req.protocol;
         this.request = proto + "://" + req.headers.host + req.originalUrl;
@@ -912,20 +916,6 @@ class ExportManager
             return lib.operationOutcome(res, "Not authorized", { httpCode: 401 });
         }
 
-        if (this.secure) {
-            const grantedScopes = lib.getGrantedScopes(req)
-            const resourceType  = req.params.file.split(".")[1]
-            const hasAccess = grantedScopes.scopes.some(scope => {
-                return (scope.level === "*" || scope.level === "system") &&
-                    (scope.resource === "*" || scope.resource === resourceType) &&
-                    scope.actions.has("read");
-            })
-
-            if (!hasAccess) {
-                return lib.operationOutcome(res, "Permission denied", { httpCode: 403 });
-            }
-        }
-
         if (this.jobStatus !== "EXPORTED") {        
             return lib.outcomes.exportNotCompleted(res);
         }
@@ -1117,19 +1107,32 @@ class ExportManager
      * Sets the array of resource types to be exported
      * @param types Comma-separated list or array of strings
      */
-    async setResourceTypes(types: string | string[])
+    async setResourceTypes(types: string | string[], grantedScopes: ScopeList)
     {
-        const requestedTypes = lib.makeArray(types || "").map(t => String(t || "").trim()).filter(Boolean);
         const availableTypes = await lib.getAvailableResourceTypes(this.stu);
+        const requestedTypes = types ?
+            lib.makeArray(types || "").map(t => String(t || "").trim()).filter(Boolean) :
+            [...availableTypes];
+
         if (availableTypes.indexOf("OperationDefinition") === -1) {
             availableTypes.push("OperationDefinition");
         }
+
         const badParam = requestedTypes.find(type => availableTypes.indexOf(type) == -1);
         if (badParam) {
             this.resourceTypes = [];
             throw new Error(`The requested resource type "${badParam}" is not available on this server`);
         }
-        this.resourceTypes = requestedTypes;
+
+        if (this.secure) {
+            const result = requestedTypes.filter(t => t === "OperationDefinition" || lib.canExportResourceType(t, grantedScopes));
+            if (!result.length) {
+                throw new Error("Could not authorize access to any resources");
+            }
+            this.resourceTypes = result;
+        } else {
+            this.resourceTypes = requestedTypes;
+        }
     }
 
     setPatients(patients: {reference:string}[])
