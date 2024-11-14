@@ -87,6 +87,15 @@ function deleteFileIfExists(path: string)
 
 const ABORT_CONTROLLERS = new Map();
 
+/**
+ * Map of organizeOutputBy parameters and their corresponding DB columns to
+ * stratify by
+ */
+const SUPPORTED_ORGANIZE_BY_TYPES = {
+    ""       : "fhir_type",
+    "Patient": "patient_id"
+}
+
 interface JobState {
     createdAt               : number
     simulatedError         ?: string
@@ -117,6 +126,7 @@ interface JobState {
     statusMessage          ?: string
     manifest               ?: ExportManifest
     tooManyFiles           ?: boolean
+    organizeOutputBy       ?: keyof typeof SUPPORTED_ORGANIZE_BY_TYPES
 };
 
 class ExportManager
@@ -251,6 +261,8 @@ class ExportManager
 
     ignoreTransientError?: boolean;
 
+    organizeOutputBy?: keyof typeof SUPPORTED_ORGANIZE_BY_TYPES = "";
+
     getAbortController() {
         let ctl = ABORT_CONTROLLERS.get(this.id)
         if (!ctl) {
@@ -367,7 +379,8 @@ class ExportManager
             // .setPatients(options.patients)
             .setSimulateDeletedPct(options.simulateDeletedPct)
             .setSince(options.since)
-            .setTypeFilter(options.typeFilter);
+            .setTypeFilter(options.typeFilter)
+            .setOrganizeOutputBy(options.organizeOutputBy);
         
         ["resourceTypes", "fhirElements", "id", "requestStart", "secure",
         "patients", "outputFormat", "request", "fileError","jobStatus",
@@ -434,7 +447,8 @@ class ExportManager
             progress               : this.progress,
             statusMessage          : this.statusMessage,
             manifest               : this.manifest,
-            tooManyFiles           : this.tooManyFiles
+            tooManyFiles           : this.tooManyFiles,
+            organizeOutputBy       : this.organizeOutputBy
         };
     }
 
@@ -474,13 +488,14 @@ class ExportManager
 
         this.extended = !!sim.extended;
 
-        const _type         = getExportParam(req, "_type")         || "";
-        const _patient      = getExportParam(req, "patient")       || "";
-        const _since        = getExportParam(req, "_since")        || "";
-        const _outputFormat = getExportParam(req, "_outputFormat") || "application/fhir+ndjson";
-        const _elements     = getExportParam(req, "_elements")     || "";
-        const _typeFilter   = getExportParam(req, "_typeFilter")   || "";
+        const _type                  = getExportParam(req, "_type")         || "";
+        const _patient               = getExportParam(req, "patient")       || "";
+        const _since                 = getExportParam(req, "_since")        || "";
+        const _outputFormat          = getExportParam(req, "_outputFormat") || "application/fhir+ndjson";
+        const _elements              = getExportParam(req, "_elements")     || "";
+        const _typeFilter            = getExportParam(req, "_typeFilter")   || "";
         const _includeAssociatedData = getExportParam(req, "_includeAssociatedData") || "";
+        const _organizeOutputBy      = getExportParam(req, "organizeOutputBy") || "";
 
         if (_includeAssociatedData) {
             const outcome = lib.createOperationOutcome(`The "_includeAssociatedData" parameter is not supported by this server`);
@@ -504,6 +519,12 @@ class ExportManager
                 return res.status(400).json(outcome);
             }
             this.kickoffErrors.push(outcome);
+        }
+
+        try {
+            this.setOrganizeOutputBy(_organizeOutputBy)
+        } catch (ex) {
+            return lib.operationOutcome(res, (ex as Error).message, { httpCode: 400 });
         }
 
         try {
@@ -1041,6 +1062,15 @@ class ExportManager
             throw new Error(`Invalid FHIR version "${version}". Must be 2, 3 or 4`);
         }
         this.stu = ver;
+        return this;
+    }
+
+    setOrganizeOutputBy(organizeOutputBy = "")
+    {
+        if (!(organizeOutputBy in SUPPORTED_ORGANIZE_BY_TYPES)) {
+            throw new Error("Unsupported organizeOutputBy parameter value");
+        }
+        this.organizeOutputBy = organizeOutputBy as keyof typeof SUPPORTED_ORGANIZE_BY_TYPES;
         return this;
     }
 

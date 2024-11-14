@@ -66,6 +66,7 @@ interface KickOffOptions {
     fileError              ?: string
     del                    ?: number
     _typeFilter            ?: string
+    organizeOutputBy       ?: string
 }
 
 interface Sim {
@@ -167,6 +168,10 @@ class Client
                 body.parameter!.push({ name: "_type", valueString: options._type });
             }
 
+            if ("organizeOutputBy" in options) {
+                body.parameter!.push({ name: "organizeOutputBy", valueString: options.organizeOutputBy });
+            }
+
             if ("_elements" in options) {
                 body.parameter!.push({ name: "_elements", valueString: options._elements });
             }
@@ -203,7 +208,7 @@ class Client
             }
         }
         else {
-            ["_since", "_type", "_elements", "patient", "_outputFormat", "_typeFilter"].forEach(key => {
+            ["_since", "_type", "_elements", "patient", "_outputFormat", "_typeFilter", "organizeOutputBy"].forEach(key => {
                 if (key in options) {
                     qs[key] = options[key as keyof typeof options];
                 }
@@ -777,6 +782,14 @@ describe("Bulk Data Kick-off Request", function() {
                     const options = { ...meta.options, usePOST: method === "POST" };
                     it (method + " rejects invalid", () => assert.rejects(new Client().kickOff({ ...options, _type: "x,y" })));
                     it (method + " accepts valid", async () => new Client().kickOff({ ...options, _type: "Patient,Observation" }));
+                });
+            });
+
+            describe("organizeOutputBy parameter", () => {
+                ["GET", "POST"].forEach(method => {
+                    const options = { ...meta.options, usePOST: method === "POST" };
+                    it (method + " rejects invalid", () => assert.rejects(new Client().kickOff({ ...options, organizeOutputBy: "x" })));
+                    it (method + " accepts valid", async () => new Client().kickOff({ ...options, organizeOutputBy: "Patient" }));
                 });
             });
 
