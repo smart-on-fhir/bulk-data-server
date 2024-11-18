@@ -506,6 +506,9 @@
             q.append("organizeOutputBy", organizeOutputBy);
         }
 
+        // allowPartialManifests ----------------------------------------------
+        q.append("allowPartialManifests", "true")
+
         return q.toString();
     }
 
@@ -589,6 +592,12 @@
                 valueString: organizeOutputBy
             });
         }
+
+        // allowPartialManifests -----------------------------------------------
+        payload.parameter.push({
+            name: "allowPartialManifests",
+            valueBoolean: true
+        });
 
         return payload;
     }

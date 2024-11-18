@@ -1,7 +1,6 @@
 import crypto                                    from "crypto"
 import moment                                    from "moment"
 import fs                                        from "fs"
-import base64url                                 from "base64-url"
 import zlib                                      from "zlib"
 import { NextFunction, Request, Response }       from "express"
 import { OperationOutcome, ParametersParameter } from "fhir/r4"
@@ -15,6 +14,7 @@ import fhirStream                                from "./FhirStream"
 import translator                                from "./transforms/dbRowTranslator"
 import { ExportManifest, RequestWithSim }        from "./types"
 import { ScopeList }                             from "./scope"
+import { Manifest }                              from "./Manifest"
 
 const supportedFormats = {
     "application/fhir+ndjson" : "ndjson",
@@ -128,6 +128,7 @@ interface JobState {
     manifest               ?: ExportManifest
     tooManyFiles           ?: boolean
     organizeOutputBy       ?: keyof typeof SUPPORTED_ORGANIZE_BY_TYPES
+    allowPartialManifests  ?: boolean
 };
 
 class ExportManager
@@ -264,6 +265,8 @@ class ExportManager
 
     organizeOutputBy: keyof typeof SUPPORTED_ORGANIZE_BY_TYPES = "";
 
+    allowPartialManifests = true
+
     getAbortController() {
         let ctl = ABORT_CONTROLLERS.get(this.id)
         if (!ctl) {
@@ -386,7 +389,8 @@ class ExportManager
         ["resourceTypes", "fhirElements", "id", "requestStart", "secure",
         "patients", "outputFormat", "request", "fileError","jobStatus",
         "extended", "createdAt", "ignoreTransientError", "progress",
-        "statusMessage", "manifest", "tooManyFiles"].forEach(key => {
+        "statusMessage", "manifest", "tooManyFiles", "allowPartialManifests"]
+        .forEach(key => {
             if (key in options) {
                 // @ts-ignore
                 this[key] = options[key];
@@ -449,7 +453,8 @@ class ExportManager
             statusMessage          : this.statusMessage,
             manifest               : this.manifest,
             tooManyFiles           : this.tooManyFiles,
-            organizeOutputBy       : this.organizeOutputBy
+            organizeOutputBy       : this.organizeOutputBy,
+            allowPartialManifests  : this.allowPartialManifests
         };
     }
 
@@ -560,6 +565,8 @@ class ExportManager
             return lib.operationOutcome(res, `The "${_outputFormat}" _outputFormat is not supported`, { httpCode: 400 });
         }
         this.outputFormat = supportedFormats[_outputFormat as keyof typeof supportedFormats] as keyof typeof exportTypes;
+
+        this.allowPartialManifests = lib.bool(getExportParam(req, "allowPartialManifests"));
 
         this.requestStart = Date.now();
 

@@ -67,6 +67,7 @@ interface KickOffOptions {
     del                    ?: number
     _typeFilter            ?: string
     organizeOutputBy       ?: string
+    allowPartialManifests  ?: boolean
 }
 
 interface Sim {
@@ -206,9 +207,13 @@ class Client
             if ("_typeFilter" in options) {
                 body.parameter!.push({ name: "_typeFilter", valueString: options._typeFilter });
             }
+
+            if (options.allowPartialManifests) {
+                body.parameter!.push({ name: "allowPartialManifests", valueBoolean: true });
+            }
         }
         else {
-            ["_since", "_type", "_elements", "patient", "_outputFormat", "_typeFilter", "organizeOutputBy"].forEach(key => {
+            ["_since", "_type", "_elements", "patient", "_outputFormat", "_typeFilter", "organizeOutputBy", "allowPartialManifests"].forEach(key => {
                 if (key in options) {
                     qs[key] = options[key as keyof typeof options];
                 }
