@@ -116,6 +116,12 @@ export interface ExportManifest {
      * object.
      */
     extension?: Record<string, any>
+
+    /**
+     * The organizeOutputBy value from the Bulk Data kick-off request when
+     * populated and supported.
+     */
+    outputOrganizedBy?: string
 }
 
 export interface ExportManifestFile<Type = string> {

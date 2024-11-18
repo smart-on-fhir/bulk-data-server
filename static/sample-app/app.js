@@ -29,7 +29,8 @@
         statusUrl       : null,
         files           : null,
         deletedFiles    : null,
-        codeType        : null
+        codeType        : null,
+        organizeOutputBy: ""
     });
 
     // Rendering functions (Views) ---------------------------------------------
@@ -499,6 +500,12 @@
             q.append("_typeFilter", _typeFilter);
         }
 
+        // organizeOutputBy ---------------------------------------------------
+        const organizeOutputBy = MODEL.get("organizeOutputBy");
+        if (organizeOutputBy) {
+            q.append("organizeOutputBy", organizeOutputBy);
+        }
+
         return q.toString();
     }
 
@@ -573,6 +580,15 @@
                 });
             });
         // }
+
+        // organizeOutputBy ----------------------------------------------------
+        const organizeOutputBy = MODEL.get("organizeOutputBy");
+        if (organizeOutputBy) {
+            payload.parameter.push({
+                name: "organizeOutputBy",
+                valueString: organizeOutputBy
+            });
+        }
 
         return payload;
     }
@@ -894,6 +910,7 @@
         $("#show-request").on("change", e => MODEL.set("showRequest", e.target.checked));
         $("#_elements").on("input change", e => MODEL.set("_elements", e.target.value.split(",").map(x => x.trim()).filter(Boolean).join(",")));
         $("#_typeFilter").on("input change", e => MODEL.set("_typeFilter", e.target.value));
+        $("#organizeOutputBy").on("change", e => MODEL.set("organizeOutputBy", e.target.value));
         $("form").on("submit", onFormSubmit);
         $("#delete-export, #cancel-btn").on("click", cancelExport);
         $(".copy-btn").on("click", copyToClipboard);

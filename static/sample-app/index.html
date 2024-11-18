@@ -428,7 +428,7 @@
                     </div>
                 </div>
                 <div class="row">
-                    <div class="col-sm-12">
+                    <div class="col-sm-6">
                         <label class="text-success" for="_typeFilter">
                             <i class="fa fa-filter" aria-hidden="true"></i> _typeFilter
                         </label>
@@ -438,6 +438,15 @@
                             (<a href="https://www.hl7.org/fhir/search_filter.html" rel="noopener noreferrer" target="_blank">docs</a>).
                         </p>
                         <br/>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="text-success" for="organizeOutputBy">
+                            <i class="fa fa-sitemap" aria-hidden="true"></i> organizeOutputBy
+                        </label>
+                        <select class="form-control" id="organizeOutputBy">
+                            <option value="">Resource Type</option>
+                            <option value="Patient">Patient</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-control" readonly style="height: auto;padding:6px">
