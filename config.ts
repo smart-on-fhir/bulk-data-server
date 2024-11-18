@@ -9,6 +9,9 @@ export default {
 
     // Delay in milliseconds between NDJSON row generation
     throttle: 0,
+
+    // Delay in milliseconds between files processed in the status endpoint
+    statusThrottle: ENV == "test" ? 10 : 200,
     
     // Max. number of fhir resources (lines) in one ndjson file
     defaultPageSize: 10000,

@@ -697,6 +697,8 @@ class ExportManager
                     const numFiles = Math.ceil(filteredCount / this.resourcesPerFile);
                     for (let i = 0; i < numFiles; i++) {
 
+                        await lib.wait(config.statusThrottle)
+
                         // ~ half of the links might fail if such error is requested
                         if (this.simulatedError == "some_file_generation_failed" && i % 2) {
                             manifestInstance.addError(stratifier, `Failed to export ${i + 1}.${stratifier}.${this.outputFormat}`)
