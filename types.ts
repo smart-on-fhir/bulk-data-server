@@ -122,6 +122,8 @@ export interface ExportManifest {
      * populated and supported.
      */
     outputOrganizedBy?: string
+
+    link?: { relation: "next"; url: string }[]
 }
 
 export interface ExportManifestFile<Type = string> {

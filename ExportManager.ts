@@ -640,41 +640,14 @@ class ExportManager
 
     async buildManifest(signal: AbortSignal) {
 
-        let requestStart = moment(this.requestStart);
-
-        const manifest: ExportManifest = {
-    
-            // a FHIR instant type that indicates the server's time when the
-            // query is run. No resources that have a modified data after this
-            // instant should be in the response.
-            "transactionTime": requestStart + "",
-
-            // the full url of the original bulk data kick-off request
-            "request" : this.request,
-
-            // boolean value indicating whether downloading the generated files
-            // will require an authentication token. Note: This may be false in
-            // the case of signed S3 urls or an internal file server within an
-            // organization's firewall.
-            "requiresAccessToken": this.secure,
-
-            // array of bulk data file items with one entry for each generated
-            // file. Note: If no data is returned from the kick-off request,
-            // the server should return an empty array.
-            "output" : [],
-
-            // When a _since timestamp is supplied in the export request,
-            // this array SHALL be populated with output files containing
-            // FHIR Transaction Bundles that indicate which FHIR resources
-            // would have been returned, but have been deleted subsequent to
-            // that date. If no resources have been deleted or the _since
-            // parameter was not supplied, the server MAY omit this key
-            // or MAY return an empty array.
-            "deleted": [],
-
-            // If no errors occurred, the server should return an empty array
-            "error": []
-        };
+        const manifestInstance = new Manifest({
+            jobId            : this.id,
+            transactionTime  : moment(this.requestStart).format(),
+            secure           : this.secure,
+            request          : this.request,
+            outputOrganizedBy: this.organizeOutputBy,
+            outputFormat     : this.outputFormat
+        })
 
         try {
             var resourceTypes = await lib.abortablePromise(this.stratify(), signal);
@@ -686,59 +659,6 @@ class ExportManager
         }
 
         const totalResourceCount = resourceTypes.reduce((prev, cur) => prev + cur.rowCount, 0) * this.databaseMultiplier;
-
-        const addDeleted = (index: number, resourceType: string, count: number, offset: number, filteredCount: number) => {
-            manifest.deleted!.push({
-                type: "Bundle",
-                count: filteredCount,
-                url: lib.buildUrlPath(
-                    config.baseUrl,
-                    base64url.encode(JSON.stringify({
-                        id    : this.id,
-                        limit : count,
-                        del   : 1,
-                        secure: this.secure,
-                        offset
-                    })),
-                    "/fhir/bulkfiles/",
-                    `${index + 1}.${resourceType}.${this.outputFormat}`
-                )
-            }); 
-        }
-
-        const addError = (index: number, resourceType: string, error: string) => {
-            manifest.error.push({
-                type : "OperationOutcome",
-                url: lib.buildUrlPath(
-                    config.baseUrl,
-                    base64url.encode(JSON.stringify({
-                        id: this.id,
-                        secure: this.secure,
-                        fileError: error
-                    })),
-                    "/fhir/bulkfiles/",
-                    `${index + 1}.${resourceType}.${this.outputFormat}`
-                )
-            });
-        };
-
-        const addFile = (index: number, resourceType: string, count: number, offset: number, filteredCount: number) => {
-            manifest.output.push({
-                type: resourceType,
-                count: filteredCount,
-                url: lib.buildUrlPath(
-                    config.baseUrl,
-                    base64url.encode(JSON.stringify({
-                        id    : this.id,
-                        offset,
-                        limit : count,
-                        secure: this.secure,
-                    })),
-                    "/fhir/bulkfiles/",
-                    `${index + 1}.${resourceType}.${this.outputFormat}`
-                )
-            });
-        };
 
         if (resourceTypes.length > 0) {
             for (const { stratifier, rowCount } of resourceTypes) {
@@ -772,7 +692,7 @@ class ExportManager
 
                         // ~ half of the links might fail if such error is requested
                         if (this.simulatedError == "some_file_generation_failed" && i % 2) {
-                            addError(i, fhir_type, `Failed to export ${i + 1}.${fhir_type}.${this.outputFormat}`);
+                            manifestInstance.addError(stratifier, `Failed to export ${i + 1}.${stratifier}.${this.outputFormat}`)
                         }
 
                         // Add normal download link
@@ -789,29 +709,22 @@ class ExportManager
                             if (this.simulateDeletedPct && this.since) {
                                 let cnt = Math.round(count/100 * this.simulateDeletedPct);
                                 if (cnt) {
-                                    addDeleted(
-                                        i,
-                                        fhir_type,
+                                    manifestInstance.addDeleted(
+                                        stratifier,
                                         cnt,
                                         offset,
                                         Math.min(this.resourcesPerFile, Math.abs(filteredCount - offset))
-                                    );
+                                    )
                                     count  -= cnt;
                                     offset += cnt;
                                 }
                             }
 
-                            addFile(
-                                i,
-                                fhir_type,
-                                count,
-                                offset,
-                                Math.max(Math.min(this.resourcesPerFile, filteredCount - offset), 0)
-                            );
+                            manifestInstance.addFile(stratifier, count, offset, Math.max(Math.min(this.resourcesPerFile, filteredCount - offset), 0))
                         }
 
                         // Limit the manifest size based on total number of file links
-                        if (manifest.output.length + manifest.error.length + manifest.deleted!.length > config.maxFiles) {
+                        if (manifestInstance.size() > config.maxFiles) {
                             this.tooManyFiles = true;
                             await this.save();
                             return null;
@@ -827,9 +740,9 @@ class ExportManager
             this.progress = 100
         }
 
-        this.manifest = manifest
+        this.manifest = manifestInstance.toJSON()
         await this.save()
-        return manifest
+        return this.manifest
     }
 
     async handleStatus(req: Request, res: Response) {
