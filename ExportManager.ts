@@ -262,7 +262,7 @@ class ExportManager
 
     ignoreTransientError?: boolean;
 
-    organizeOutputBy?: keyof typeof SUPPORTED_ORGANIZE_BY_TYPES = "";
+    organizeOutputBy: keyof typeof SUPPORTED_ORGANIZE_BY_TYPES = "";
 
     getAbortController() {
         let ctl = ABORT_CONTROLLERS.get(this.id)
@@ -592,16 +592,14 @@ class ExportManager
         lib.outcomes.exportAccepted(res, url);
     }
 
-    /**
-     * Finds all the resource types included in this export and their count
-     */
-    async getResourceTypes(): Promise<{ fhir_type: string, rowCount: number }[]> {
+    async stratify(): Promise<{ stratifier: string, rowCount: number }[]> {
         const builder = new QueryBuilder({
             type       : this.resourceTypes,
             patients   : this.patients,
             group      : this.group,
             systemLevel: this.systemLevel,
-            start      : this.since
+            start      : this.since,
+            stratifier : SUPPORTED_ORGANIZE_BY_TYPES[this.organizeOutputBy] as any
         });
         const { sql, params } = builder.compileCount();
         const DB = getDB(this.stu);
@@ -623,6 +621,7 @@ class ExportManager
             patients   : this.patients,
             offset     : 0,
             filter     : this.typeFilter.get("_filter"),
+            stratifier : "fhir_type",
             limit
         });
     }
@@ -678,7 +677,7 @@ class ExportManager
         };
 
         try {
-            var resourceTypes = await lib.abortablePromise(this.getResourceTypes(), signal);
+            var resourceTypes = await lib.abortablePromise(this.stratify(), signal);
         } catch (e) {
             if (!(e instanceof lib.AbortError)) {
                 console.error(e)
@@ -742,13 +741,13 @@ class ExportManager
         };
 
         if (resourceTypes.length > 0) {
-            for (const { fhir_type, rowCount } of resourceTypes) {
+            for (const { stratifier, rowCount } of resourceTypes) {
                 
                 if (signal.aborted) {
                     return null;
                 }
 
-                this.statusMessage = `currently processing ${fhir_type} resources`;
+                this.statusMessage = `currently processing ${stratifier} resources`;
                 await this.save()
 
                 let resourceCount = rowCount * this.databaseMultiplier;
@@ -758,7 +757,7 @@ class ExportManager
                 // resources would remain after the filter
                 if (this.typeFilter.get("_filter")) {
                     try {
-                        filteredCount = await lib.abortablePromise<number>(this.getCountsForResourceType(fhir_type, resourceCount), signal);
+                        filteredCount = await lib.abortablePromise<number>(this.getCountsForResourceType(stratifier, resourceCount), signal);
                     } catch (e) {
                         if (!(e instanceof lib.AbortError)) {
                             console.error(e)

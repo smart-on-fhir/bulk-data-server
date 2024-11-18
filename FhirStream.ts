@@ -23,6 +23,7 @@ interface FhirStreamOptions {
     patients          ?: string[]|null
     filter            ?: string|null
     databaseMultiplier?: number
+    stratifier        ?: "fhir_type" | "patient_id"
 }
 
 export default class FhirStream extends Readable
@@ -47,6 +48,7 @@ export default class FhirStream extends Readable
     timer: NodeJS.Timeout | null;
     builder: QueryBuilder;
     db: any;
+    stratifier: "fhir_type" | "patient_id";
 
     constructor(options: FhirStreamOptions)
     {
@@ -70,6 +72,7 @@ export default class FhirStream extends Readable
         this.rowIndex   = 0;
         this.overflow   = 0;
         this.filter     = options.filter ? fhirFilter.create(options.filter) : null;
+        this.stratifier = options.stratifier || "fhir_type";
 
         this.timer = null
 
@@ -85,7 +88,8 @@ export default class FhirStream extends Readable
             patients   : this.patients,
             columns    : this.extended ?
                 ["resource_json", "modified_date"] :
-                ["resource_json"]
+                ["resource_json"],
+            stratifier : this.stratifier
         });
 
         this.getNextRow  = this.getNextRow .bind(this);

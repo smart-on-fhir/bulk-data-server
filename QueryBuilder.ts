@@ -10,6 +10,7 @@ interface QueryBuilderOptions {
     group      ?: string
     systemLevel?: boolean
     patients   ?: string | string[] | null
+    stratifier  : "fhir_type" | "patient_id"
 }
 
 /**
@@ -62,8 +63,13 @@ export default class QueryBuilder {
      * List of patient IDs
      */
     private _patients: string[] = [];
+
+    /**
+     * The column to stratify by
+     */
+    private _stratifier = "fhir_type";
     
-    constructor(options: QueryBuilderOptions = {}) {
+    constructor(options: QueryBuilderOptions) {
         this.setOptions(options);
     }
 
@@ -92,6 +98,7 @@ export default class QueryBuilder {
         if (Array.isArray(options.patients)) {
             this._patients = options.patients;
         }
+        this._stratifier = options.stratifier || "fhir_type"
     }
 
     compile() {
@@ -124,8 +131,8 @@ export default class QueryBuilder {
         return { sql, params };
     }
 
-    compileCount(countColumnAlias = "rowCount") {
-        let sql = `SELECT "fhir_type", COUNT(*) as "${countColumnAlias}" FROM "data"`;
+    compileCount() {
+        let sql = `SELECT "${this._stratifier}" as "stratifier", COUNT(*) as "rowCount" FROM "data"`;
         let where = this.compileWhere();
         let params: Record<string, any> = {};
 
@@ -134,7 +141,9 @@ export default class QueryBuilder {
             params = Object.assign({}, params, where.params);
         }
 
-        sql += ` GROUP BY "fhir_type"`;
+        sql += ` GROUP BY "${this._stratifier}"`;
+
+        // console.log({ sql, params })
 
         return { sql, params };
     }
@@ -144,10 +153,10 @@ export default class QueryBuilder {
         let where = [];
         let params: Record<string, any> = {};
         let len = 0;
-        
-        if (this._fhirTypes.length) {
-            len = where.push(`"fhir_type" IN("${this._fhirTypes.join('", "')}")`);
-        }
+
+        len = where.push(`"${this._stratifier}" IS NOT NULL`);
+
+        len = where.push(`"fhir_type" IN("${this._fhirTypes.join('", "')}")`);
 
         if (this._startTime) {
             len = where.push(`dateTime(modified_date) >= dateTime($_startTime)`);
