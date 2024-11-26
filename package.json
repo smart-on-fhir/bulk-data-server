@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "NODE_ENV=test nyc --cache false mocha --exit",
+    "test": "NODE_ENV=test nyc --cache false mocha --exit -n trace-warnings",
     "test:watch": "nodemon -e ts,js -w . -x 'npm test'",
     "coverage": "nyc npm run test",
     "start": "ts-node --transpile-only .",
@@ -45,7 +45,7 @@
     "mocha": "^10.2.0",
     "moment": "^2.19.4",
     "morgan": "^1.10.0",
-    "request": "^2.88.2",
+    "proper-lockfile": "^4.1.2",
     "sqlite3": "^5.0.5",
     "ts-node": "^10.7.0",
     "typescript": "^4.6.3"
@@ -61,7 +61,7 @@
     "@types/mocha": "^7.0.2",
     "@types/morgan": "^1.9.0",
     "@types/node": "^17.0.41",
-    "@types/request": "^2.48.8",
+    "@types/proper-lockfile": "^4.1.4",
     "@types/sqlite3": "^3.1.6",
     "@types/uuid": "^7.0.3",
     "@types/walk": "^2.3.0",

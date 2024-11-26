@@ -1,7 +1,5 @@
-import { Algorithm } from "jsonwebtoken";
-import { Options, Response, ResponseAsJSON } from "request";
-
-import request   from "request";
+import { OperationOutcome } from "fhir/r4";
+import { Algorithm }        from "jsonwebtoken";
 const base64url = require("base64-url");
 const crypto    = require("crypto");
 const jwt       = require("jsonwebtoken");
@@ -11,69 +9,65 @@ const config    = require("../config").default;
 
 export class RequestError extends Error
 {
-    response: any;
+    [key: string]: any;
 
-    outcome: any;
-
-    constructor(message: string, response: any, outcome = null)
+    constructor(message: string, props: Record<string, any>)
     {
         super(message);
-        this.response = response;
-        this.outcome = outcome;
+        Object.assign(this, props)
     }
 }
 
-/**
- * Promisified version of request. Rejects with an Error or resolves with the
- * response (use response.body to access the parsed body).
- */
-export function requestPromise(options: Options, delay = 0): Promise<Response> {
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            request(Object.assign({ strictSSL: false }, options), (error: Error, res: Response) => {
-                if (error) {
-                    return reject(new RequestError(error.message, res));
-                }
-
-                let message = res.statusMessage || "Request failed";
-
-                if (!res || !res.statusCode) {
-                    return reject(new RequestError(message, res));
-                }
-
-                if (res.statusCode == 404) {
-                    return reject(new RequestError("Not Found", res));
-                }
-
-                if (res.statusCode >= 400) {
-                    // console.log(res.body, res.statusMessage)
-                    let outcome;
-                    try {
-                        let body = res.body
-                        if (typeof body === "string" && res.headers["content-type"]?.match(/\bjson\b/)) {
-                            body = JSON.parse(body)
-                        }
-                        if (body.resourceType == "OperationOutcome") {
-                            outcome = body;
-                            message = body.issue.map(
-                                (i: any) => `${i.code} ${i.severity}: ${i.diagnostics}`
-                            ).join(";");
-                        }
-                    } catch(ex) {
-                        message = String(res.body || res.statusMessage || "Unknown error!")
-                    }
-                    
-                    return reject(new RequestError(message, res, outcome));
-                }
-                resolve(res);
-            });
-        }, delay);
-    });
+export interface FetchResponse<T=string | object> {
+    response: globalThis.Response
+    parsedBody: T
 }
 
-export function buildUrl(segments: (string|number)[]) {
+export async function request<T=string | object>(url: string | URL, options?: RequestInit): Promise<FetchResponse<T>> {
+    const response = await fetch(url, options)
+    
+    let message = response.statusText || "Request failed";
+
+    let type = response.headers.get("Content-Type") + "";
+
+    let out = {
+        response,
+        parsedBody: await response.text()
+    }
+
+    if (out.parsedBody.length && type.match(/\bjson\b/i)) {
+        out.parsedBody = JSON.parse(out.parsedBody);
+    }
+
+    if (response.status >= 400) {
+        try {
+            const outcome = out.parsedBody as unknown as OperationOutcome
+            if (outcome.resourceType == "OperationOutcome") {
+                message = outcome.issue.map(
+                    (i: any) => `${i.code} ${i.severity}: ${i.diagnostics}`
+                ).join(";");
+            }
+        } catch(ex) {
+            message = String(out.parsedBody || response.statusText || "Unknown error!")
+        }
+        
+        throw new RequestError(message, out);
+    }
+
+    if (!response.ok) {
+        throw new RequestError(message, out);
+    }
+    
+    return out as FetchResponse<T>;
+}
+
+export function buildUrl(segments: (string|number)[], query?: Record<string, any>) {
     segments.unshift(config.baseUrl);
-    return segments.map(s => String(s).trim().replace(/^\//, "").replace(/\/$/, "").trim()).join("/");
+    let url = segments.map(s => String(s).trim().replace(/^\//, "").replace(/\/$/, "").trim()).join("/");
+    if (query) {
+        url += "?" + Object.keys(query).map(k => k + "=" + encodeURIComponent(query[k])).join("&")
+    }
+    return url
 }
 
 export function buildBulkUrl(segments: string | number | (string | number)[], params?: any) {
@@ -109,32 +103,6 @@ export function buildGroupUrl(groupId: string | number, params: any) {
     return buildBulkUrl(["Group", groupId, "$export"], params);
 }
 
-export function expectErrorOutcome(res: ResponseAsJSON, { message = "", code = 0 } = {}, done = (e?: Error) => { if (e) throw e }) {
-    if (!res || !res.statusCode) {
-        return done(new Error(`Received invalid response`));
-    }
-    if (code && res.statusCode !== code) {
-        return done(new Error(`Expected ${code} statusCode but received ${res.statusCode}`));
-    }
-    let json = res.body;
-    if (typeof json == "string") {
-        try {
-            json = JSON.parse(json);
-        } catch(ex) {
-            return done(new Error(`Error parsing body as json: ${ex}`));
-        }
-    }
-
-    if (json.resourceType != "OperationOutcome") {
-        return done(new Error(`Expected an OperationOutcome response but got ${json.resourceType}`));
-    }
-
-    if (message && (!json.issue || !json.issue[0] || json.issue[0].diagnostics != message)) {
-        return done(new Error(`Did not return proper error message`));
-    }
-
-    done();
-}
 
 /**
  * JWKS is just an array of keys. We need to find the last private key that
@@ -183,34 +151,30 @@ export function authorize(options: {
     const tokenUrl = buildUrl(["auth", "token"]);
     const alg      = options.alg || "RS384"
 
-    return requestPromise({
-        url : buildUrl(["generator", "jwks"]),
-        qs  : { alg },
-        json: true
-    })
+    return request(buildUrl(["generator", "jwks"], { alg }))
 
     // Save the JWKS to the state object
-    .then(res => state.jwks = res.body)
+    .then(res => state.jwks = res.parsedBody)
 
     // Save the keys to the state object
     .then(() => state.keys = findKeyPair(state.jwks.keys))
 
     .then(() => {
-        let form: Record<string, any> = { jwks: JSON.stringify(state.jwks) };
+        const body = new URLSearchParams()
+        body.append("jwks", JSON.stringify(state.jwks));
 
-        if (options.err) form.err = options.err;
-        if (options.dur) form.dur = options.dur;
+        if (options.err) body.append("err", options.err);
+        if (options.dur) body.append("dur", options.dur + "");
 
-        // console.log(form)
-        return requestPromise({
+        // console.log(body)
+        return request(buildUrl(["auth", "register"]), {
             method: "POST",
-            url   : buildUrl(["auth", "register"]),
-            json  : true,
-            form
-        });
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body
+        })
     })
 
-    .then(res => state.clientId = res.body)
+    .then(res => state.clientId = res.parsedBody)
 
     .then(() => {
 
@@ -234,21 +198,20 @@ export function authorize(options: {
             }
         });
 
-        return requestPromise({
-            method: "POST",
-            uri   : tokenUrl,
-            json  : true,
-            form  : {
-                scope: "scope" in options ? options.scope : "system/*.read",
-                grant_type: "client_credentials",
-                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                client_assertion: signed
-            }
+        const body = new URLSearchParams()
+        body.set("scope", options.scope ?? "system/*.read")
+        body.set("grant_type", "client_credentials")
+        body.set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
+        body.set("client_assertion", signed)
+
+        return request(tokenUrl, {
+            method : "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body
         });
     })
-    .then(res => {return res.body})
+    .then(res => res.parsedBody as any)
     .catch(result => {
-        // console.log(result.response.body)
         return Promise.reject(result.outcome || result.error || result)
     });
 }
@@ -261,14 +224,14 @@ export function wait(ms: number) {
 
 module.exports = {
     buildUrl,
-    requestPromise,
+    request,
     buildBulkUrl,
     buildDownloadUrl,
     buildProgressUrl,
     buildPatientUrl,
     buildSystemUrl,
     buildGroupUrl,
-    expectErrorOutcome,
     authorize,
+    RequestError,
     wait
 }

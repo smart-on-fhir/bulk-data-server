@@ -4,10 +4,10 @@ import Path                                from "path"
 import jwt, { Algorithm }                  from "jsonwebtoken"
 import moment                              from "moment"
 import base64url                           from "base64-url"
-import request                             from "request"
 import { format }                          from "util"
 import FHIR, { OperationOutcome }          from "fhir/r4"
 import { Dirent }                          from "fs"
+import lockfile                            from "proper-lockfile"
 import config                              from "./config"
 import getDB                               from "./db"
 import { JSONValue }                       from "./types"
@@ -23,6 +23,19 @@ const RE_FALSE = /^(0|no|false|off|null|undefined|NaN|)$/i;
 
 export function bool(x: any): boolean {
     return !RE_FALSE.test(String(x).trim());
+}
+
+export async function lock(path: string): Promise<() => Promise<void>> {
+    await lockfile.lock(path, {
+        realpath: false,
+        retries: {
+            unref: true,
+            minTimeout: 20,
+            retries: 100,
+            factor: 1
+        }
+    });
+    return () => lockfile.unlock(path, { realpath: false });
 }
 
 export function htmlEncode(html: string): string {
@@ -168,7 +181,14 @@ export async function stringifyJSON(json: JSONValue, indentation?: string | numb
  */
 export async function readJSON<T=JSONValue>(path: string): Promise<T>
 {
-    return FS.readFile(path, "utf8").then(json => parseJSON<T>(json));
+    const release = await lock(path)
+    try {
+        const data = await FS.readFile(path, "utf8")
+        const json = parseJSON<T>(data)
+        return json
+    } finally {
+        await release()
+    }
 }
 
 export async function forEachFile(options: {
@@ -441,28 +461,12 @@ export function fhirDateTime(dateTime: string | number, noFuture?: boolean) {
     return t.format("YYYY-MM-DD HH:mm:ss");
 }
 
-export function fetchJwks(url: string): Promise<any> {
-    return new Promise((resolve, reject) => {
-        request({ url, json: true }, (error, resp, body) => {
-            if (error) {
-                return reject(error);
-            }
-
-            if (resp.statusCode >= 400) {
-                return reject(new Error(
-                    `Requesting "${url}" returned ${resp.statusCode} status code`
-                ));
-            }
-
-            // if (resp.headers["content-type"].indexOf("json") == -1) {
-            //     return reject(new Error(
-            //         `Requesting "${url}" did not return a JSON content-type`
-            //     ));
-            // }
-
-            resolve(body);
-        });
-    });
+export async function fetchJwks(url: string): Promise<any> {
+    const res = await fetch(url)
+    if (!res.ok) {
+        throw new Error(`Requesting "${url}" returned ${res.status} status code`);
+    }
+    return res.json();
 }
 
 /**

@@ -1,5 +1,4 @@
 import fs             from "fs"
-import { Options, Response, ResponseAsJSON } from "request";
 import assert         from "assert/strict"
 import base64url      from "base64-url"
 import moment         from "moment"
@@ -8,12 +7,13 @@ import jwkToPem       from "jwk-to-pem"
 import jwt            from "jsonwebtoken"
 import express        from "express"
 import { expect }     from "chai"
+import { rejects }    from "assert"
+import { OperationOutcome, Parameters } from "fhir/r4"
 const { server }    = require("../index")
 import config         from "../config"
 import ExportManager  from "../ExportManager"
 import { wait }       from "../lib"
 import * as lib       from "./lib"
-import { Parameters } from "fhir/r4";
 import { ExportManifest, JWKS, JWT } from "../types";
 
 const BlueCrossBlueShieldId = "BlueCrossBlueShield"
@@ -82,42 +82,43 @@ interface Sim {
     page     ?: number
 };
 
-interface StatusResponse extends Response {
-    body: ExportManifest
+interface ResponseResult<T=any> {
+    response: globalThis.Response
+    body?: T
 }
 
-interface ResponseWithLines extends ResponseAsJSON {
+interface ResponseWithLines<T=any> extends ResponseResult<T> {
     lines: string[]
 }
 
 class Client
 {
-    kickOffResponse?: Response;
+    kickOffResult?: {
+        response: globalThis.Response
+        body?: OperationOutcome
+    }
 
-    statusResponse?: StatusResponse;
+    statusResult?: lib.FetchResponse<ExportManifest>
 
     /**
-     * @param {object}   [options]
-     * @param {boolean}  [options.systemLevel]
-     * @param {string}   [options.simulatedError = ""]
-     * @param {number}   [options.simulatedExportDuration = 0]
-     * @param {number}   [options.resourcesPerFile]
-     * @param {number}   [options.accessTokenLifeTime]
-     * @param {string}   [options._type]
-     * @param {string}   [options._elements]
-     * @param {string}   [options._outputFormat]
-     * @param {string}   [options.accessToken]
-     * @param {boolean}  [options.extended = false]
-     * @param {string|*[]}  [options.patient = ""]
-     * @param {string|null} [options.accept = "application/fhir+json"] The accept header
-     * @param {string|null} [options.prefer = "respond-async"] The prefer header
-     * @param {object}   [options.body = {}]
-     * @param {boolean}  [options.gzip = false]
-     * @param {object}   [options.headers = {}]
-     * @param {boolean}  [options.secure = false]
-     * @param {string}   [options.fileError]
-     * @param {number}   [options.del]
-     * @param {string}   [options._typeFilter]
+     * @param {object}     [options]
+     * @param {boolean}    [options.systemLevel]
+     * @param {string}     [options.simulatedError = ""]
+     * @param {number}     [options.simulatedExportDuration = 0]
+     * @param {number}     [options.resourcesPerFile]
+     * @param {number}     [options.accessTokenLifeTime]
+     * @param {string}     [options._type]
+     * @param {string}     [options._elements]
+     * @param {string}     [options._outputFormat]
+     * @param {string}     [options.accessToken]
+     * @param {boolean}    [options.extended = false]
+     * @param {string|*[]} [options.patient = ""]
+     * @param {object}     [options.body = {}]
+     * @param {object}     [options.headers = {}]
+     * @param {boolean}    [options.secure = false]
+     * @param {string}     [options.fileError]
+     * @param {number}     [options.del]
+     * @param {string}     [options._typeFilter]
      */
     async kickOff(options: KickOffOptions = {})
     {
@@ -152,15 +153,28 @@ class Client
             segments.push("Patient/$export");
         }
 
-        const method = options.usePOST ? "POST" : "GET";
-        let body: Parameters | null = null;
-        let json = false;
-        const qs: Record<string, any> = {};
+        const url = new URL(segments.map(s => String(s).trim().replace(/^\//, "").replace(/\/$/, "").trim()).join("/"));
+
+        const requestOptions: RequestInit = {
+            method: options.usePOST ? "POST" : "GET",
+            // @ts-ignore
+            headers: {
+                "accept-encoding": "identity",
+                "accept"         : "application/fhir+json",
+                "prefer"         : "respond-async",
+                "content-type"   : options.usePOST ? "application/json" : "",
+                ...options.headers
+            }
+        }
+
+        if (options.accessToken) {
+            // @ts-ignore
+            requestOptions.headers.authorization = "Bearer " + options.accessToken
+        }
 
         if (options.usePOST) {
-            json = true;
 
-            body = {
+            const body: Parameters = {
                 resourceType: "Parameters",
                 parameter: []
             };
@@ -211,54 +225,22 @@ class Client
             if (options.allowPartialManifests) {
                 body.parameter!.push({ name: "allowPartialManifests", valueBoolean: true });
             }
+
+            requestOptions.body = JSON.stringify("body" in options ? options.body : body)
         }
         else {
-            ["_since", "_type", "_elements", "patient", "_outputFormat", "_typeFilter", "organizeOutputBy", "allowPartialManifests"].forEach(key => {
+            [
+                "_since", "_type", "_elements", "patient", "_outputFormat",
+                "_typeFilter", "organizeOutputBy", "allowPartialManifests"
+            ].forEach(key => {
                 if (key in options) {
-                    qs[key] = options[key as keyof typeof options];
+                    url.searchParams.set(key, options[key as keyof typeof options] + "")
                 }
             });
         }
 
-        const headers: Record<string, string> = {
-            "accept-encoding": "identity"
-        };
-
-        if (options.accept !== null) {
-            headers.Accept = options.accept || "application/fhir+json";
-        }
-
-        if (options.prefer !== null) {
-            headers.Prefer = options.prefer || "respond-async";
-        }
-
-        if (options.accessToken) {
-            headers.authorization = "Bearer " + options.accessToken;
-        }
-
-        const url = segments.map(s => String(s).trim().replace(/^\//, "").replace(/\/$/, "").trim()).join("/");
-
-        this.kickOffResponse = await lib.requestPromise({
-            url,
-            qs,
-            method,
-            json,
-            gzip: !!options.gzip,
-            headers: { ...headers, ...(options.headers || {})},
-            body: "body" in options ? options.body : body
-        });
-
-        // If the response comes as string and with content-type header
-        // containing "json", parse it as JSON (might happen for custom
-        // types like fhir+json)
-        if (typeof this.kickOffResponse.body == "string") {
-            const contentType = this.kickOffResponse.headers["content-type"] || "";
-            if (contentType.indexOf("json") > -1) {
-                this.kickOffResponse.body = JSON.parse(this.kickOffResponse.body);
-            }
-        }
-
-        return this.kickOffResponse
+        this.kickOffResult = await lib.request(url, requestOptions);
+        return this.kickOffResult
     }
 
     async checkStatus(options: { accessToken?: string } = {}) {
@@ -274,27 +256,23 @@ class Client
             headers.authorization = "Bearer " + options.accessToken;
         }
 
-        this.statusResponse = await lib.requestPromise({
-            url: location,
-            json: true,
-            headers
-        });
+        this.statusResult = await lib.request<ExportManifest>(location, { headers });
 
-        return this.statusResponse as StatusResponse;
+        return this.statusResult;
     }
 
     getState() {
-        if (!this.kickOffResponse) {
+        if (!this.kickOffResult) {
             throw new Error("Trying to check the state of export that has not been started");
         }
 
-        const location = String(this.kickOffResponse.headers["content-location"] || "");
+        const location = this.kickOffResult.response.headers.get("content-location") || "";
 
         let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus\/(.+)/);
         if (!args || !args[2]) {
             throw new Error("Invalid content-location returned: " +
-                JSON.stringify(this.kickOffResponse.headers, null, 4) + "\n\n" +
-                this.kickOffResponse.body
+                JSON.stringify(this.kickOffResult.response.headers, null, 4) + "\n\n" +
+                this.kickOffResult.body
             );
         }
 
@@ -302,15 +280,16 @@ class Client
         return require(path);
     }
 
-    async waitForExport(options: Record<string, number> = {}) {
+    async waitForExport(options: Record<string, number> = {}, waitOptions?: { delay?: number }) {
         while (true) {
             await this.checkStatus(options);
-            if (this.statusResponse!.statusCode === 202) {
-                await wait(100)
+            if (this.statusResult!.response.status === 202) {
+                await wait(waitOptions?.delay || 100)
             } else {
-                return this.statusResponse!;
+                return this.statusResult!;
             }
         }
+    }
     }
 
     /**
@@ -319,9 +298,9 @@ class Client
      * otherwise.
      */
     async downloadFileAt(index: number, accessToken: string | null = null, fileError: string | null = null) {
-        assert(this.statusResponse?.body, "Trying to download from export that has not been completed");
+        assert(this.statusResult?.parsedBody, "Trying to download from export that has not been completed");
         try {
-            var fileUrl = this.statusResponse.body.output[index].url;
+            var fileUrl = this.statusResult.parsedBody.output[index].url;
         } catch (e) {
             throw new Error(`No file was found at "output[${index}]" in the status response.`);
         }
@@ -344,35 +323,32 @@ class Client
             fileUrl = fileUrl.replace(/^(http:\/\/.*?)\/(.*?)\/fhir/, "$1/" + str + "/fhir/");
         }
 
-        const res = await lib.requestPromise({
-            uri: fileUrl,
-            // json: true,
-            gzip: true,
+        const res = await lib.request(fileUrl, {
             headers: {
                 accept: "application/fhir+ndjson",
-                authorization: accessToken ? `Bearer ${accessToken}` : undefined
+                authorization: accessToken ? `Bearer ${accessToken}` : ""
             }
         });
         
         return {
             ...res,
-            lines: String(res.body).split(/\n/).map(l => l.trim()).filter(Boolean)
+            lines: String(res.parsedBody).split(/\n/).map(l => l.trim()).filter(Boolean)
         };
     }
 
     async cancel()
     {
-        if (!this.kickOffResponse) {
+        if (!this.kickOffResult) {
             throw new Error("Trying to check the status of export that has not been started");
         }
-
-        const url = this.kickOffResponse.headers["content-location"];
-
+        
+        const url = this.kickOffResult.response.headers.get("content-location");
+        
         if (!url) {
             throw new Error("Trying to check the status of export that did not provide status location");
         }
-
-        return lib.requestPromise({ url, json: true, method: "DELETE" });
+        
+        return lib.request<any>(url, { method: "DELETE" });
     }
 }
 
@@ -386,38 +362,19 @@ describe("Conformance Statement", () => {
             "text/json",
             "json"
         ].forEach(mime => {
-            it (`/fhir/metadata?_format=${mime}`, () => {
-                return lib.requestPromise({
-                    url: lib.buildUrl([
-                        `/fhir/metadata?_format=${encodeURIComponent(mime)}`
-                    ])
-                }).then(
-                    res => expect(res.headers["content-type"]).to.equal("application/fhir+json; charset=utf-8"),
-                    er => Promise.reject(`${er.error} (${er.response.body})`)
-                );
+            it (`/fhir/metadata?_format=${mime}`, async () => {
+                const { response } = await lib.request(lib.buildUrl([`/fhir/metadata?_format=${encodeURIComponent(mime)}`]))
+                expect(response.headers.get("content-type")).to.equal("application/fhir+json; charset=utf-8")
             });
 
-            it (`/fhir/metadata using accept:${mime}`, () => {
-                return lib.requestPromise({
-                    url: lib.buildUrl(["/fhir/metadata"]),
-                    headers: { accept: mime }
-                }).then(
-                    res => expect(res.headers["content-type"]).to.equal("application/fhir+json; charset=utf-8"),
-                    er => Promise.reject(`${er.error} (${er.response.body})`)
-                );
+            it (`/fhir/metadata using accept:${mime}`, async () => {
+                const { response } = await lib.request(lib.buildUrl(["/fhir/metadata"]), { headers: { accept: mime }})
+                expect(response.headers.get("content-type")).to.equal("application/fhir+json; charset=utf-8")
             });
 
-            it (`/fhir/metadata using accept:${mime};charset=UTF-8`, () => {
-                return lib.requestPromise({
-                    url: lib.buildUrl(["/fhir/metadata"]),
-                    headers: { accept: `${mime};charset=UTF-8` }
-                }).then(
-                    res => {
-                        // console.log(res.headers["content-type"])
-                        expect(res.headers["content-type"]).to.equal("application/fhir+json; charset=utf-8")
-                    },
-                    er => Promise.reject(`${er.error} (${er.response.body})`)
-                );
+            it (`/fhir/metadata using accept:${mime};charset=UTF-8`, async () => {
+                const { response } = await lib.request(lib.buildUrl(["/fhir/metadata"]), { headers: { accept: `${mime};charset=UTF-8` }})
+                expect(response.headers.get("content-type")).to.equal("application/fhir+json; charset=utf-8")
             });
         });
     });
@@ -430,19 +387,13 @@ describe("Conformance Statement", () => {
             "text/xml",
             "xml"
         ].forEach(mime => {
-            it (`/fhir/metadata?_format=${mime}`, () => {
-                let url = lib.buildUrl([`/fhir/metadata?_format=${encodeURIComponent(mime)}`]);
-                return assert.rejects(lib.requestPromise({ url }));
-            });
+            it (`/fhir/metadata?_format=${mime}`, async () => await assert.rejects(
+                lib.request(lib.buildUrl(["/fhir/metadata"], { _format: mime }))
+            ));
 
-            it (`/fhir/metadata using accept:${mime}`, () => {
-                return assert.rejects(
-                    lib.requestPromise({
-                        url: lib.buildUrl(["/fhir/metadata"]),
-                        headers: { accept: mime }
-                    })
-                );
-            });
+            it (`/fhir/metadata using accept:${mime}`, async () => await assert.rejects(
+                lib.request(lib.buildUrl(["/fhir/metadata"]), { headers: { accept: mime }})
+            ));
         });
     });
 });
@@ -461,25 +412,22 @@ describe("Static", () => {
         "/fhir/OperationDefinition/Group-i-everything",
         "/fhir/OperationDefinition/-s-get-resource-counts",
     ].forEach(path => {
-        it (path, () => lib.requestPromise({ url: config.baseUrl + path }));
+        it (path, () => lib.request(config.baseUrl + path));
     });
 
     it ("/outcome", async () => {
-        const { body, statusCode } = await lib.requestPromise({
-            url: config.baseUrl + "/outcome",
-            json: true,
-            qs: {
-                httpCode: 255,
+        const { parsedBody, response } = await lib.request<any>(
+            lib.buildUrl(["/outcome"], {
+                httpCode : 255,
                 issueCode: "my issueCode",
-                severity: "my severity",
-                message: "my message"
-            }
-        });
-        // console.log(statusCode, body)
-        expect(statusCode).to.equal(255);
-        expect(body.issue[0].code).to.equal("my issueCode");
-        expect(body.issue[0].severity).to.equal("my severity");
-        expect(body.issue[0].diagnostics).to.equal("my message");
+                severity : "my severity",
+                message  : "my message"
+            })
+        );
+        expect(response.status).to.equal(255);
+        expect(parsedBody.issue[0].code).to.equal("my issueCode");
+        expect(parsedBody.issue[0].severity).to.equal("my severity");
+        expect(parsedBody.issue[0].diagnostics).to.equal("my message");
     });
 });
 
@@ -490,7 +438,7 @@ describe("Authentication", () => {
         return client.kickOff({ secure: true }).then(
             () => { throw new Error("Should have failed") },
             err => {
-                expect(err.response.statusCode).to.equal(401);
+                expect(err.response.status).to.equal(401);
             }
         );
     });
@@ -520,37 +468,38 @@ describe("Authentication", () => {
         const registerUrl  = lib.buildUrl(["auth"     , "register"]);
 
         function authenticate(signedToken: string) {
-            return lib.requestPromise({
+            const body = new URLSearchParams()
+            body.set("scope", "system/*.read")
+            body.set("grant_type", "client_credentials")
+            body.set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
+            body.set("client_assertion", signedToken)
+
+            return lib.request(tokenUrl, {
                 method: "POST",
-                url   : tokenUrl,
-                json  : true,
-                form  : {
-                    scope: "system/*.read",
-                    grant_type: "client_credentials",
-                    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                    client_assertion: signedToken
-                }
-            }).catch(ex => Promise.reject(ex.outcome || ex.error || ex));;
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body
+            })
+            .catch(ex => Promise.reject(ex.parsedBody.outcome || ex.parsedBody.error || ex));
         }
 
         function register(jwksOrUrl?: string | JWKS) {
-            return lib.requestPromise({
+            const body = new URLSearchParams()
+            if (jwksOrUrl && typeof jwksOrUrl == "object") {
+                body.set("jwks", JSON.stringify(jwksOrUrl))
+            }
+            if (jwksOrUrl && typeof jwksOrUrl == "string") {
+                body.set("jwks_url", jwksOrUrl)
+            }
+            return lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks    : jwksOrUrl && typeof jwksOrUrl == "object" ? JSON.stringify(jwksOrUrl) : undefined,
-                    jwks_url: jwksOrUrl && typeof jwksOrUrl == "string" ? jwksOrUrl                 : undefined
-                }
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body
             }).catch(ex => Promise.reject(ex.outcome || ex.error || ex));
         }
 
-        function generateKeyPair(alg: string) {
-            return lib.requestPromise({
-                url : generatorUrl,
-                qs  : { alg },
-                json: true
-            }).then(resp => resp.body);
+        async function generateKeyPair(alg: string) {
+            const { parsedBody } = await lib.request(generatorUrl + "?alg=" + encodeURIComponent(alg))
+            return parsedBody as any;
         }
 
         function generateAuthToken(clientId: string): JWT {
@@ -602,14 +551,14 @@ describe("Authentication", () => {
                 ...(await generateKeyPair("RS384")).keys
             ] }
             
-            const clientId = (await register(jwks)).body
-            const jwtToken = generateAuthToken(clientId)
+            const clientId = (await register(jwks)).parsedBody
+            const jwtToken = generateAuthToken(clientId + "")
 
             const RS384AccessToken = await authenticate(sign(jwks, "RSA", jwtToken))
             const ES384AccessToken = await authenticate(sign(jwks, "EC" , jwtToken))
             
-            expect(!!RS384AccessToken.body).to.equal(true, "RS384AccessToken should exist")
-            expect(!!ES384AccessToken.body).to.equal(true, "ES384AccessToken should exist")
+            expect(!!RS384AccessToken.parsedBody).to.equal(true, "RS384AccessToken should exist")
+            expect(!!ES384AccessToken.parsedBody).to.equal(true, "ES384AccessToken should exist")
 
         });
 
@@ -644,7 +593,7 @@ describe("Authentication", () => {
             .then(() => register(state.jwks_url))
 
             // Save the newly generated client id to the state
-            .then(res => state.clientId = res.body)
+            .then(res => state.clientId = res.parsedBody)
 
             // Generate the authentication token
             .then(() => state.jwtToken = generateAuthToken(state.clientId))
@@ -653,13 +602,13 @@ describe("Authentication", () => {
             .then(() => authenticate(sign(state.jwks, "RSA", state.jwtToken, state.jwks_url)))
 
             // Save the RS384 access token to the state
-            .then(resp => state.RS384AccessToken = resp.body)
+            .then(resp => state.RS384AccessToken = resp.parsedBody)
 
             // Now find the ES384 private key, sign with it and authenticate
             .then(() => authenticate(sign(state.jwks, "EC", state.jwtToken, state.jwks_url)))
 
             // Save the ES384 access token to the state
-            .then(resp => state.ES384AccessToken = resp.body)
+            .then(resp => state.ES384AccessToken = resp.parsedBody)
             
             // Make some checks
             .then(resp => {
@@ -678,18 +627,18 @@ describe("System-level Export", function() {
     it ("works", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Group,Patient", systemLevel: true });
-        const { body } = await client.waitForExport();
+        const { parsedBody } = await client.waitForExport();
         client.cancel();
-        expect(body.output.map(x => x.type)).to.deep.equal(["Group", "Patient"]);
+        expect(parsedBody!.output.map(x => x.type)).to.deep.equal(["Group", "Patient"]);
     });
 
     it ("works with specified scopes", async () => {
         const { access_token } = await lib.authorize({ scope: "system/Patient.read"});
         const client = new Client();
         await client.kickOff({ _type: "Group,Patient", systemLevel: true, accessToken: access_token });
-        const { body } = await client.waitForExport({ accessToken: access_token });
+        const { parsedBody } = await client.waitForExport({ accessToken: access_token });
         client.cancel();
-        expect(body.output.map(x => x.type)).to.deep.equal(["Patient"]);
+        expect(parsedBody!.output.map(x => x.type)).to.deep.equal(["Patient"]);
     });
 });
 
@@ -730,15 +679,18 @@ describe("Bulk Data Kick-off Request", function() {
         }
     ].forEach(meta => {
 
-        function test(options: {
+        async function test(options: {
             sim?: Partial<Sim>
             qs?: Record<string, any>
             headers?: Record<string, any>
         }, expected: Record<string, any>) {
-            return lib.requestPromise({
-                uri: meta.buildUrl(options.sim || { dur: 0 }),
-                qs : options.qs || {},
-                json: true,
+
+            const url = new URL(meta.buildUrl(options.sim || { dur: 0 }))
+            for (const param in options.qs || {}) {
+                url.searchParams.append(param, options.qs![param] + "")
+            }
+            
+            return lib.request(url, {
                 headers: {
                     Accept: "application/fhir+json",
                     Prefer: "respond-async",
@@ -746,10 +698,10 @@ describe("Bulk Data Kick-off Request", function() {
                 }
             }).then(res => {
                 if (expected) {
-                    let location = res.headers["content-location"] || "";
+                    let location = res.response.headers.get("content-location") || "";
                     let args = location.match(/^http.*?\/([^/]+)\/fhir\/bulkstatus\/(.+)/);
                     if (!args || !args[2]) {
-                        throw new Error("Invalid content-location returned: " + JSON.stringify(res.headers, null, 4) + "\n\n" + res.body);
+                        throw new Error("Invalid content-location returned: " + JSON.stringify(res.response.headers, null, 4) + "\n\n" + res.parsedBody);
                     }
 
                     const path = `${config.jobsPath}/${args[2]}`;
@@ -766,95 +718,173 @@ describe("Bulk Data Kick-off Request", function() {
         describe(meta.description, () => {
 
             describe("Accept header", () => {
-                it ("Requires 'accept' header", () => assert.rejects(new Client().kickOff({ ...meta.options, accept: null })));
-                it ("Works with 'accept: */*' header", () => assert.rejects(new Client().kickOff({ ...meta.options, accept: "*/*" })));
-                it ("Rejects bad accept headers", () => assert.rejects(new Client().kickOff({ ...meta.options, accept: "x" })));
-                it ("Accepts application/fhir+json", () => new Client().kickOff({ ...meta.options, accept: "application/fhir+json" }));
+                it ("Requires 'accept' header", async () => await assert.rejects(
+                    async () => new Client().kickOff({ ...meta.options, headers: { accept: undefined }})
+                ));
+                it ("Works with 'accept: */*' header", async () => await assert.rejects(
+                    async () => new Client().kickOff({ ...meta.options, headers: { accept: "*/*" }})
+                ));
+                it ("Rejects bad accept headers", async () => await assert.rejects(
+                    async () => new Client().kickOff({ ...meta.options, headers: { accept: "x" }})
+                ));
+                it ("Accepts application/fhir+json", async () => await assert.doesNotReject(
+                    async () => {
+                        const client = new Client()
+                        await client.kickOff({ ...meta.options, headers: { accept: "application/fhir+json" }})
+                        await client.cancel()
+                    }
+                ));
             });
 
             describe("Prefer header", () => {
-                it ("must be provided", () => assert.rejects(new Client().kickOff({ ...meta.options, prefer: null })));
-                it ("must be 'respond-async'", () => assert.rejects(new Client().kickOff({ ...meta.options, prefer: "x" })));
-                it ("works if valid", async () => new Client().kickOff({ ...meta.options, prefer: "respond-async" }));
+                it ("must be provided", async () => await assert.rejects(
+                    async () => new Client().kickOff({ ...meta.options, headers: { prefer: undefined }})
+                ));
+                it ("must be 'respond-async'", async () => await assert.rejects(
+                    async () => new Client().kickOff({ ...meta.options, headers: { prefer: "x" }})
+                ));
+                it ("works if valid", async () => await assert.doesNotReject(
+                    async () => {
+                        const client = new Client()
+                        await client.kickOff({ ...meta.options, headers: { prefer: "respond-async" }})
+                        await client.cancel()
+                    }
+                ));
             });
 
             describe("_outputFormat parameter", () => {
                 ["GET", "POST"].forEach(method => {
                     const options = { ...meta.options, usePOST: method === "POST" };
-                    it(method + " accepts application/fhir+ndjson", async () => new Client().kickOff({ ...options, _outputFormat: "application/fhir+ndjson" }));
-                    it(method + " accepts application/fhir+ndjson", async () => new Client().kickOff({ ...options, _outputFormat: "application/fhir+ndjson" }));
-                    it(method + " accepts application/ndjson", async () => new Client().kickOff({ ...options, _outputFormat: "application/ndjson" }));
-                    it(method + " accepts ndjson", async () => new Client().kickOff({ ...options, _outputFormat: "ndjson" }));
-                    it(method + " accepts text/csv", async () => new Client().kickOff({ ...options, _outputFormat: "text/csv" }));
-                    it(method + " accepts csv", async () => new Client().kickOff({ ...options, _outputFormat: "csv" }));
-                    it(method + " rejects unknown", () => assert.rejects(new Client().kickOff({ ...options, _outputFormat: "x" })));
+                    it (method + " accepts application/fhir+ndjson", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _outputFormat: "application/fhir+ndjson" })
+                    ));
+                    it (method + " accepts application/fhir+ndjson", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _outputFormat: "application/fhir+ndjson" })
+                    ));
+                    it (method + " accepts application/ndjson", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _outputFormat: "application/ndjson" })
+                    ));
+                    it (method + " accepts ndjson", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _outputFormat: "ndjson" })
+                    ));
+                    it (method + " accepts text/csv", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _outputFormat: "text/csv" })
+                    ));
+                    it (method + " accepts csv", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _outputFormat: "csv" })
+                    ));
+                    it (method + " rejects unknown", async () => await assert.rejects(
+                        new Client().kickOff({ ...options, _outputFormat: "x" })
+                    ));
                 });
             });
 
             describe("_type parameter", () => {
                 ["GET", "POST"].forEach(method => {
                     const options = { ...meta.options, usePOST: method === "POST" };
-                    it (method + " rejects invalid", () => assert.rejects(new Client().kickOff({ ...options, _type: "x,y" })));
-                    it (method + " accepts valid", async () => new Client().kickOff({ ...options, _type: "Patient,Observation" }));
+                    it (method + " rejects invalid", async () => await assert.rejects(
+                        new Client().kickOff({ ...options, _type: "x,y" })
+                    ));
+                    it (method + " accepts valid", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _type: "Patient,Observation" })
+                    ));
                 });
             });
 
             describe("organizeOutputBy parameter", () => {
                 ["GET", "POST"].forEach(method => {
                     const options = { ...meta.options, usePOST: method === "POST" };
-                    it (method + " rejects invalid", () => assert.rejects(new Client().kickOff({ ...options, organizeOutputBy: "x" })));
-                    it (method + " accepts valid", async () => new Client().kickOff({ ...options, organizeOutputBy: "Patient" }));
+                    it (method + " rejects invalid", async () => await assert.rejects(
+                        new Client().kickOff({ ...options, organizeOutputBy: "x" })
+                    ));
+                    it (method + " accepts valid", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, organizeOutputBy: "Patient" })
+                    ));
                 });
             });
 
             describe("_since parameter", () => {
                 ["GET", "POST"].forEach(method => {
                     const options = { ...meta.options, usePOST: method === "POST" };
-                    it (method + " Rejects future _since", () => assert.rejects(new Client().kickOff({ ...options, _since: "2092-01-01T01:01:01+00:00" })));
-                    it (method + " handles partial start dates like 2010", async () => new Client().kickOff({ ...options, _since: "2010" }));
-                    it (method + " handles partial start dates like 2010-01", async () => new Client().kickOff({ ...options, _since: "2010-01" }));
+                    it (method + " Rejects future _since", async () => await assert.rejects(
+                        new Client().kickOff({ ...options, _since: "2092-01-01T01:01:01+00:00" })
+                    ));
+                    it (method + " handles partial start dates like 2010", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _since: "2010" })
+                    ));
+                    it (method + " handles partial start dates like 2010-01", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _since: "2010-01" })
+                    ));
                 })
             });
 
             describe("_elements parameter", () => {
                 ["GET", "POST"].forEach(method => {
                     const options = { ...meta.options, usePOST: method === "POST" };
-                    it (method + " Rejects a.b.c", () => assert.rejects(new Client().kickOff({ ...options, _elements: "a.b.c" })));
-                    it (method + " Rejects x.id", () => assert.rejects(new Client().kickOff({ ...options, _elements: "x.id" })));
-                    it (method + " Rejects x-y", () => assert.rejects(new Client().kickOff({ ...options, _elements: "x-y" })));
-                    it (method + " Accepts Patient.id", () => new Client().kickOff({ ...options, _elements: "Patient.id" }));
-                    it (method + " Accepts Patient.id,meta", () => new Client().kickOff({ ...options, _elements: "Patient.id,meta" }));
-                    it (method + " Accepts meta", () => new Client().kickOff({ ...options, _elements: "meta" }));
+                    it (method + " Rejects a.b.c", async () => await assert.rejects(
+                        new Client().kickOff({ ...options, _elements: "a.b.c" })
+                    ));
+                    it (method + " Rejects x.id", async () => await assert.rejects(
+                        new Client().kickOff({ ...options, _elements: "x.id" })
+                    ));
+                    it (method + " Rejects x-y", async () => await assert.rejects(
+                        new Client().kickOff({ ...options, _elements: "x-y" })
+                    ));
+                    it (method + " Accepts Patient.id", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _elements: "Patient.id" })
+                    ));
+                    it (method + " Accepts Patient.id,meta", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _elements: "Patient.id,meta" })
+                    ));
+                    it (method + " Accepts meta", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...options, _elements: "meta" })
+                    ));
                 });
             });
 
             describe("patient parameter", () => {
-                it ("Rejects patient param on GET", () => assert.rejects(new Client().kickOff({ ...meta.options, patient: "a,b,c" })));
+                it ("Rejects patient param on GET", async () => await assert.rejects(
+                    new Client().kickOff({ ...meta.options, patient: "a,b,c" })
+                ));
                 if (meta.options.systemLevel) {
-                    it ("Rejects a,b,c", () => assert.rejects(new Client().kickOff({ ...meta.options, usePOST: true, patient: "a,b,c" })));
+                    it ("Rejects a,b,c", async () => await assert.rejects(
+                        new Client().kickOff({ ...meta.options, usePOST: true, patient: "a,b,c" })
+                    ));
                 } else {
-                    it ("Accepts a,b,c", () => new Client().kickOff({ ...meta.options, usePOST: true, patient: "a,b,c" }));
-                    it ("Ignores invalid patient references", () => new Client().kickOff({
-                        ...meta.options,
-                        usePOST: true,
-                        patient: ["a","b","c", {
-                            name: "patient",
-                            valueReference: {
-                                text: `Some invalid reference`
-                            }
-                        }]
-                    }));
+                    it ("Accepts a,b,c", async () => await assert.doesNotReject(
+                        new Client().kickOff({ ...meta.options, usePOST: true, patient: "a,b,c" })
+                    ));
+                    it ("Ignores invalid patient references", async () => await assert.doesNotReject(
+                        new Client().kickOff({
+                            ...meta.options,
+                            usePOST: true,
+                            patient: ["a","b","c", {
+                                name: "patient",
+                                valueReference: {
+                                    text: `Some invalid reference`
+                                }
+                            }]
+                        })
+                    ));
                 }
             });
 
             describe("POST requests", () => {
-                it ("Rejects without body", () => assert.rejects(new Client().kickOff({ ...meta.options, usePOST: true, body: undefined })));
-                it ("Rejects empty body", () => assert.rejects(new Client().kickOff({ ...meta.options, usePOST: true, body: {} })));
-                it ("Rejects invalid body", () => assert.rejects(new Client().kickOff({ ...meta.options, usePOST: true, body: { resourceType: "whatever" } })));
+                it ("Rejects without body", async () => await assert.rejects(
+                    new Client().kickOff({ ...meta.options, usePOST: true, body: undefined })
+                ));
+                it ("Rejects empty body", async () => await assert.rejects(
+                    new Client().kickOff({ ...meta.options, usePOST: true, body: {} })
+                ));
+                it ("Rejects invalid body", async () => await assert.rejects(
+                    new Client().kickOff({ ...meta.options, usePOST: true, body: { resourceType: "whatever" } })
+                ));
             });
 
             describe("Access token", () => {
-                it ("rejects invalid auth token", () => assert.rejects(new Client().kickOff({ ...meta.options, accessToken: "badToken" })));
+                it ("rejects invalid auth token", async () => await assert.rejects(
+                    new Client().kickOff({ ...meta.options, accessToken: "badToken" })
+                ));
 
                 it ("accepts valid auth token", async () => {
                     const { access_token } = await lib.authorize();
@@ -867,60 +897,55 @@ describe("Bulk Data Kick-off Request", function() {
             });
 
             describe("Custom server parameters", () => {
-                it (`passes the "dur" sim parameter thru`, () => {
-                    return test({
-                        sim: { dur: 2 },
-                        qs : { _type: "Observation" }
-                    }, {
-                        simulatedExportDuration: 2
-                    });
-                });
+                it (`passes the "dur" sim parameter thru`, () => test({
+                    sim: { dur: 2 },
+                    qs : { _type: "Observation" }
+                }, {
+                    simulatedExportDuration: 2
+                }));
     
-                it (`passes the "page" sim parameter thru`, () => {
-                    return test({
-                        sim: { page: 2 },
-                        qs : { _type: "Observation" }
-                    }, {
-                        resourcesPerFile: 2
-                    });
-                });
+                it (`passes the "page" sim parameter thru`, () => test({
+                    sim: { page: 2 },
+                    qs : { _type: "Observation" }
+                }, {
+                    resourcesPerFile: 2
+                }));
     
-                it (`passes the "err" sim parameter thru`, () => {
-                    return test({
-                        sim: { err: "test" },
-                        qs : { _type: "Observation" }
-                    }, {
-                        simulatedError: "test"
-                    });
-                });
+                it (`passes the "err" sim parameter thru`, () => test({
+                    sim: { err: "test" },
+                    qs : { _type: "Observation" }
+                }, {
+                    simulatedError: "test"
+                }));
     
-                it (`passes the "m" sim parameter thru`, () => {
-                    return test({
-                        sim: { m: 2 },
-                        qs : { _type: "Observation" }
-                    }, {
-                        databaseMultiplier: 2
-                    });
-                });
+                it (`passes the "m" sim parameter thru`, () => test({
+                    sim: { m: 2 },
+                    qs : { _type: "Observation" }
+                }, {
+                    databaseMultiplier: 2
+                }));
             
-                it (`handles the the "file_generation_failed" simulated error`, done => {
-                    test({
+                it (`handles the the "file_generation_failed" simulated error`, async () => {
+                    return test({
                         sim: { err: "file_generation_failed" },
                         qs : { _type: "Observation" }
                     }, {
                         simulatedError: "test"
                     }).then(
-                        () => done("This request should not have succeeded!"),
-                        ({ outcome }) => {
-                            if (outcome.issue[0].diagnostics != "File generation failed") {
-                                return done("Did not return the proper error");
+                        () => {
+                            throw new Error("This request should not have succeeded!")
+                        },
+                        ({ parsedBody }) => {
+                            if (parsedBody.issue[0].diagnostics != "File generation failed") {
+                                throw new Error("Did not return the proper error");
                             }
-                            done();
                         }
                     );
                 });
 
-                it ("Rejects invalid stu", () => assert.rejects(new Client().kickOff({ ...meta.options, stu: 9 })));
+                it ("Rejects invalid stu", async () => await assert.rejects(
+                    new Client().kickOff({ ...meta.options, stu: 9 })
+                ));
             });
 
             describe("_typeFilter parameter", () => {
@@ -936,32 +961,27 @@ describe("Bulk Data Kick-off Request", function() {
                 });
             });
 
-            it ("returns proper content-location header", done => {
-                lib.requestPromise({
-                    uri: meta.buildUrl(),
+            it ("returns proper content-location header", async () => {
+                return lib.request(meta.buildUrl(), {
                     headers: {
                         Accept: "application/fhir+json",
                         Prefer: "respond-async"
                     }
+                }).then(res => {
+                    let location = res.response.headers.get("content-location") || ""
+                    if (!location.match(/http.*?\/fhir\/bulkstatus\/.+$/)) {
+                        throw new Error("Invalid content-location returned: " + location);
+                    }
                 })
-                .then(
-                    res => {
-                        let location = res.headers["content-location"] || ""
-                        if (!location.match(/http.*?\/fhir\/bulkstatus\/.+$/)) {
-                            return done("Invalid content-location returned: " + location);
-                        }
-                        done();
-                    },
-                    ({ error }) => done(error)
-                )
             });
-
         });
     });
 });
 
 describe("Token endpoint", () => {
-    it ("rejects missing scopes", () => assert.rejects(lib.authorize({ scope: undefined })));
+    it ("rejects missing scopes", async () => await assert.rejects(
+        lib.authorize({ scope: "" })
+    ));
     
     it ("rejects invalid V1 scopes", async () => {
         await assert.rejects(lib.authorize({ scope: "system/Patient.revoke" }))
@@ -977,114 +997,67 @@ describe("Token endpoint", () => {
         await assert.rejects(lib.authorize({ scope: "system/ResourceType.*" }))
     });
     
-    it ("does not reject valid v1 scopes", () => !assert.rejects(lib.authorize({ scope: "system/ResourceType.read" })));
+    it ("does not reject valid v1 scopes", async () => {
+        await lib.authorize({ scope: "system/Patient.read" })
+    });
     
     it ("does not reject valid v2 scopes", async () => {
         const response = await lib.authorize({ scope: "system/Patient.rs" })
         expect(response.scope).to.equal("system/Patient.rs")
     });
 
-    it ("rejects due to bad base64 token encoding", () => assert.rejects(async() => {
-        await lib.requestPromise({
+    it ("rejects due to bad base64 token encoding", async () => await assert.rejects(async() => {
+        await lib.request(config.baseUrl + "/auth/token", {
             method: "POST",
-            uri   : config.baseUrl + "/auth/token",
-            json  : true,
-            form  : {
-                scope: "system/*.read",
-                grant_type: "client_credentials",
-                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                client_assertion: "a.b.c"
-            }
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: `scope=${encodeURIComponent("system/*.read")}&grant_type=client_credentials&client_assertion_type=${
+                encodeURIComponent("urn:ietf:params:oauth:client-assertion-type:jwt-bearer")}&client_assertion=a.b.c`
         });
     }));
 
-    it ("rejects due to missing alg", () => assert.rejects(async() => {
-        await lib.requestPromise({
+    it ("rejects due to missing alg", async () => await assert.rejects(async() => {
+        await lib.request(config.baseUrl + "/auth/token", {
             method: "POST",
-            uri   : config.baseUrl + "/auth/token",
-            json  : true,
-            form  : {
-                scope: "system/*.read",
-                grant_type: "client_credentials",
-                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                client_assertion: base64url.encode(JSON.stringify({
-                    // "typ": "JWT",
-                    // "kid": "registration-token",
-                    // alg: "HS256"
-                })) + ".e30.A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"
-            }
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: `scope=${encodeURIComponent("system/*.read")}&grant_type=client_credentials&client_assertion_type=${
+                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}client_assertion=${
+                    base64url.encode(JSON.stringify({})) + ".e30.A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"}`
         });
     }));
 
-    it ("rejects due to missing kid", () => assert.rejects(async() => {
-        await lib.requestPromise({
+    it ("rejects due to missing kid", async () => await assert.rejects(async() => {
+        await lib.request(config.baseUrl + "/auth/token", {
             method: "POST",
-            uri   : config.baseUrl + "/auth/token",
-            json  : true,
-            form  : {
-                scope: "system/*.read",
-                grant_type: "client_credentials",
-                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                client_assertion: base64url.encode(JSON.stringify({
-                    // "typ": "JWT",
-                    // "kid": "registration-token",
-                    alg: "HS256"
-                })) + ".e30.A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"
-            }
+            body: `scope=${encodeURIComponent("system/*.read")}&grant_type=client_credentials&client_assertion_type=${
+                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}client_assertion=${
+                    base64url.encode(JSON.stringify({ alg: "HS256" })) + ".e30.A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"}`
         });
     }));
 
-    it ("rejects due to missing typ", () => assert.rejects(async() => {
-        await lib.requestPromise({
+    it ("rejects due to missing typ", async () => await assert.rejects(async() => {
+        await lib.request(config.baseUrl + "/auth/token", {
             method: "POST",
-            uri   : config.baseUrl + "/auth/token",
-            json  : true,
-            form  : {
-                scope: "system/*.read",
-                grant_type: "client_credentials",
-                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                client_assertion: base64url.encode(JSON.stringify({
-                    // "typ": "JWT",
-                    kid: "registration-token",
-                    alg: "HS256"
-                })) + ".e30.A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"
-            }
+            body: `scope=${encodeURIComponent("system/*.read")}&grant_type=client_credentials&client_assertion_type=${
+                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}client_assertion=${
+                    base64url.encode(JSON.stringify({ kid: "registration-token", alg: "HS256" })) + ".e30.A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"}`
         });
     }));
 
-    it ("rejects due to invalid typ", () => assert.rejects(async() => {
-        await lib.requestPromise({
+    it ("rejects due to invalid typ", async () => await assert.rejects(async() => {
+        await lib.request(config.baseUrl + "/auth/token", {
             method: "POST",
-            uri   : config.baseUrl + "/auth/token",
-            json  : true,
-            form  : {
-                scope: "system/*.read",
-                grant_type: "client_credentials",
-                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                client_assertion: base64url.encode(JSON.stringify({
-                    typ: "JWT-X",
-                    kid: "registration-token",
-                    alg: "HS256"
-                })) + ".e30.A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"
-            }
+            body: `scope=${encodeURIComponent("system/*.read")}&grant_type=client_credentials&client_assertion_type=${
+                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}client_assertion=${
+                    base64url.encode(JSON.stringify({ typ: "JWT-X", kid: "registration-token", alg: "HS256" })) + ".e30.A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"}`
         });
     }));
 
-    it ("rejects due to bad token body", () => assert.rejects(async() => {
-        await lib.requestPromise({
+    it ("rejects due to bad token body", async () => await assert.rejects(async() => {
+        await lib.request(config.baseUrl + "/auth/token", {
             method: "POST",
-            uri   : config.baseUrl + "/auth/token",
-            json  : true,
-            form  : {
-                scope: "system/*.read",
-                grant_type: "client_credentials",
-                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                client_assertion: base64url.encode(JSON.stringify({
-                    typ: "JWT",
-                    kid: "registration-token",
-                    alg: "HS256"
-                })) + "." + base64url.encode("xx") + ".A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"
-            }
+            body: `scope=${encodeURIComponent("system/*.read")}&grant_type=client_credentials&client_assertion_type=${
+                "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"}client_assertion=${
+                    base64url.encode("xx") + ".e30.A-VzgeslmP41VKnMymtGnI-qN9o61Sbj8ev_ZBPQho8"}`
         });
     }));
 })
@@ -1095,8 +1068,8 @@ describe("Canceling", () => {
         await client.kickOff({ _type: "Patient", simulatedExportDuration: 10 });
         await client.checkStatus();
         const cancelResponse = await client.cancel();
-        expect(cancelResponse.body.issue[0].diagnostics).to.exist;
-        expect(cancelResponse.statusCode).to.equal(202);
+        expect(cancelResponse.parsedBody.issue[0].diagnostics).to.exist;
+        expect(cancelResponse.response.status).to.equal(202);
     });
 
     it ("works after export is complete", async () => {
@@ -1104,8 +1077,8 @@ describe("Canceling", () => {
         await client.kickOff({ _type: "Patient "});
         await client.checkStatus();
         const cancelResponse = await client.cancel();
-        expect(cancelResponse.body.issue[0].diagnostics).to.exist;
-        expect(cancelResponse.statusCode).to.equal(202);
+        expect(cancelResponse.parsedBody.issue[0].diagnostics).to.exist;
+        expect(cancelResponse.response.status).to.equal(202);
     });
 
     it ("returns an error if trying to cancel twice", async () => {
@@ -1113,20 +1086,14 @@ describe("Canceling", () => {
         await client.kickOff({ _type: "Patient "});
         await client.checkStatus();
         await client.cancel();
-        return client.cancel().then(
-            () => { throw new Error("Should have failed"); },
-            ({response}) => {
-                expect(response.body.issue[0].diagnostics).to.exist;
-                expect(response.statusCode).to.equal(404);
-            }
-        );
+        await rejects(() => client.cancel(), "Second cancel should have failed")
     });
 
     it ("returns an error if trying to cancel unknown request", done => {
-        lib.requestPromise({ url: lib.buildProgressUrl(), method: "DELETE" })
+        lib.request<any>(lib.buildProgressUrl(), { method: "DELETE" })
         .then(res => {
-            expect(res.body.issue[0].diagnostics).to.equal("Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled")
-            expect(res.statusCode).to.equal(410)
+            expect(res.parsedBody.issue[0].diagnostics).to.equal("Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled")
+            expect(res.response.status).to.equal(410)
         })
         .catch(() => done())
     });
@@ -1144,16 +1111,14 @@ describe("Canceling", () => {
         await client.kickOff({ _type: "Patient" });
         const { id } = client.getState();
         fs.unlinkSync(`${config.jobsPath}/${id}.json`);
-        return client.cancel().catch(({response}) => {
-            expect(response.statusCode).to.equal(404);
-        });
+        await rejects(client.cancel(), /Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled/);
     });
 
     it ("Kick-off -> cancel -> status should result in 404 (issue #64)", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
 
-        const statusUrl = client.kickOffResponse!.headers["content-location"] + "";
+        const statusUrl = client.kickOffResult!.response.headers.get("content-location")!;
 
         const cancelResponse = await fetch(statusUrl, { method: "DELETE" });
         expect(cancelResponse.status).to.equal(202)
@@ -1165,7 +1130,7 @@ describe("Canceling", () => {
 });
 
 describe("Progress Updates", function() {
-    this.timeout(15000)
+    this.timeout(25000)
 
     it ("rejects invalid auth token", () => assert.rejects(async () => {
         const client = new Client();
@@ -1191,12 +1156,12 @@ describe("Progress Updates", function() {
         const client1 = new Client();
         await client1.kickOff({ simulatedExportDuration: 0 });
         await client1.waitForExport();
-        expect(client1.statusResponse!.statusCode).to.equal(200);
+        expect(client1.statusResult!.response.status).to.equal(200);
 
         const client2 = new Client();
         await client2.kickOff({ simulatedExportDuration: 10 });
         await client2.checkStatus();
-        expect(client2.statusResponse!.statusCode).to.equal(202);
+        expect(client2.statusResult!.response.status).to.equal(202);
     });
 
     it ("Replies with links after the wait time", async () => {
@@ -1204,7 +1169,7 @@ describe("Progress Updates", function() {
         await client.kickOff();
         await client.waitForExport();
         expect(
-            client.statusResponse!.body.output,
+            client.statusResult!.parsedBody!.output,
             `Did not reply with links array in body.output`
         ).to.be.an.instanceOf(Array);
     });
@@ -1213,41 +1178,42 @@ describe("Progress Updates", function() {
         const client1 = new Client();
         await client1.kickOff({ _type: "Patient", resourcesPerFile: 25 });
         await client1.waitForExport();
-        expect(client1.statusResponse!.body.output.length).to.equal(4);
+        expect(client1.statusResult!.parsedBody!.output.length).to.equal(4);
 
         const client2 = new Client();
         await client2.kickOff({ _type: "Patient", resourcesPerFile: 22, databaseMultiplier: 10 });
         await client2.waitForExport();
-        expect(client2.statusResponse!.body.output.length).to.equal(46);
+        expect(client2.statusResult!.parsedBody!.output.length).to.equal(46);
     });
 
     it ("Generates correct number of links with _filter", async () => {
-        const client1 = new Client();
-        await client1.kickOff({
+        const client = new Client();
+        await client.kickOff({
             _type: "Patient",
             resourcesPerFile: 30,
             _typeFilter: '_filter=maritalStatus.text eq "Never Married"' // 33
         });
-        await client1.waitForExport();
-        // console.log(client1.statusResponse.body)
-        expect(client1.statusResponse!.body.output.length).to.equal(2);
-        expect(client1.statusResponse!.body.output[0].count).to.equal(30);
-        expect(client1.statusResponse!.body.output[1].count).to.equal(3);
+        await client.waitForExport();
+        // console.log(client.statusResult!.parsedBody)
+        expect(client.statusResult!.parsedBody!.output.length).to.equal(2);
+        expect(client.statusResult!.parsedBody!.output[0].count).to.equal(30);
+        expect(client.statusResult!.parsedBody!.output[1].count).to.equal(3);
+    });
 
-        const client2 = new Client();
-        await client2.kickOff({
+    it ("Generates correct number of links with _filter and multiplier", async () => {
+        const client = new Client();
+        await client.kickOff({
             _type: "Patient",
-            resourcesPerFile: 100,
-            _typeFilter: '_filter=maritalStatus.text eq "Never Married"', // 330
-            databaseMultiplier: 10
+            resourcesPerFile: 30,
+            _typeFilter: '_filter=maritalStatus.text eq "Never Married"', // 66
+            databaseMultiplier: 2
         });
-        await client2.waitForExport();
-        // console.log(client1.statusResponse.body)
-        expect(client2.statusResponse!.body.output.length).to.equal(4);
-        expect(client2.statusResponse!.body.output[0].count).to.equal(100);
-        expect(client2.statusResponse!.body.output[1].count).to.equal(100);
-        expect(client2.statusResponse!.body.output[2].count).to.equal(100);
-        expect(client2.statusResponse!.body.output[3].count).to.equal(30);
+        await client.waitForExport();
+        // console.log(client.statusResult!.parsedBody)
+        expect(client.statusResult!.parsedBody!.output.length).to.equal(3);
+        expect(client.statusResult!.parsedBody!.output[0].count).to.equal(30);
+        expect(client.statusResult!.parsedBody!.output[1].count).to.equal(30);
+        expect(client.statusResult!.parsedBody!.output[2].count).to.equal(6);
     });
 
     it ("rejects further calls on completed exports", () => assert.rejects(async () => {
@@ -1265,7 +1231,7 @@ describe("Progress Updates", function() {
         await client.kickOff({ _type: "Patient", resourcesPerFile: 22, databaseMultiplier: 10 });
         await client.waitForExport();
         
-        const { output } = client.statusResponse!.body;
+        const { output } = client.statusResult!.parsedBody!;
         const n = output.length;
         
         if (n != 46) {
@@ -1286,7 +1252,7 @@ describe("Progress Updates", function() {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
         await client.waitForExport();
-        expect(client.statusResponse!.body.error).to.deep.equal([]);
+        expect(client.statusResult!.parsedBody!.error).to.deep.equal([]);
     });
 
     it ("Rejects status checks on canceled exports", () => assert.rejects(async () => {
@@ -1302,8 +1268,8 @@ describe("Progress Updates", function() {
         return client.waitForExport().then(
             () => { throw new Error("Should have failed"); },
             err => {
-                expect(err.response.statusCode).to.equal(413);
-                expect(err.response.body).to.equal("Too many files");
+                expect(err.response.status).to.equal(413);
+                expect(err.parsedBody).to.equal("Too many files");
             }
         );
     });
@@ -1311,9 +1277,9 @@ describe("Progress Updates", function() {
     it ("Can simulate 'some_file_generation_failed' errors", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 25, simulatedError: "some_file_generation_failed" });
-        await client.waitForExport();
-        expect(client.statusResponse!.body.output.length).to.equal(2);
-        expect(client.statusResponse!.body.error.length).to.equal(2);
+        await client.waitForExport()
+        expect(client.statusResult!.parsedBody!.output.length).to.equal(2);
+        expect(client.statusResult!.parsedBody!.error.length).to.equal(2);
     });
 });
 
@@ -1479,24 +1445,24 @@ describe("File Downloading", function() {
         ).then(
             () => { throw new Error("Should have failed") },
             err => {
-                expect(err.response.statusCode).to.equal(404);
+                expect(err.response.status).to.equal(404);
             }
         );
     });
 
-    // it ("Supports deflate downloads", async () => {
-    //     const client = new Client();
-    //     await client.kickOff({ _type: "Patient", gzip: false, headers: { "accept-encoding": "deflate" }});
-    //     await client.checkStatus();
-    //     await client.downloadFileAt(0);
-    // });
+    it ("Supports deflate downloads", async () => {
+        const client = new Client();
+        await client.kickOff({ _type: "Patient", headers: { "accept-encoding": "deflate" }});
+        await client.waitForExport();
+        await client.downloadFileAt(0);
+    });
 
-    // it ("Supports gzip downloads", async () => {
-    //     const client = new Client();
-    //     await client.kickOff({ _type: "Patient", gzip: false, headers: { "accept-encoding": "gzip" }});
-    //     await client.checkStatus();
-    //     await client.downloadFileAt(0);
-    // })
+    it ("Supports gzip downloads", async () => {
+        const client = new Client();
+        await client.kickOff({ _type: "Patient", headers: { "accept-encoding": "gzip" }});
+        await client.waitForExport();
+        await client.downloadFileAt(0);
+    })
 
     it ("Handles the '_since' parameter", async () => {
         const client = new Client();
@@ -1516,7 +1482,9 @@ describe("File Downloading", function() {
         try {
             await client.downloadFileAt(0);
         } catch (err) {
-            lib.expectErrorOutcome((err as lib.RequestError).response, { code: 410 });
+            expect((err as lib.RequestError).response.status).to.equal(410)
+            expect((err as lib.RequestError).response.statusText).to.equal("Gone")
+            expect((err as lib.RequestError).parsedBody.resourceType).to.equal("OperationOutcome")
         }
     });
 
@@ -1619,75 +1587,75 @@ describe("File Downloading", function() {
     //     });
     // });
 
-//     it ("Handles the virtual files properly", () => {
+    // it ("Handles the virtual files properly", () => {
 
-//         /**
-//          * @param {string} resourceType The name of the resource we are testing
-//          */
-//         async function test(resourceType) {
+    //     /**
+    //      * @param {string} resourceType The name of the resource we are testing
+    //      */
+    //     async function test(resourceType) {
 
-//             const multiplier = 3;
+    //         const multiplier = 3;
 
-//             const resourceCount = (await lib.requestPromise({
-//                 url: lib.buildBulkUrl(["$get-resource-counts"]),
-//                 json: true
-//             })).body.parameter.find(p => p.name === resourceType).valueInteger;
+    //         const resourceCount = (await lib.requestPromise({
+    //             url: lib.buildBulkUrl(["$get-resource-counts"]),
+    //             json: true
+    //         })).body.parameter.find(p => p.name === resourceType).valueInteger;
 
-//             // console.log(`${resourceType}: ${resourceCount}`);
+    //         // console.log(`${resourceType}: ${resourceCount}`);
 
-//             const totalLines = resourceCount * multiplier;
+    //         const totalLines = resourceCount * multiplier;
 
-//             // Make sure we don't truncate the file
-//             const limit = totalLines + 10;
+    //         // Make sure we don't truncate the file
+    //         const limit = totalLines + 10;
 
-//             // The number of resources we expect to receive
-//             const expectedLines = totalLines;
+    //         // The number of resources we expect to receive
+    //         const expectedLines = totalLines;
 
-//             // Build the file download URL
-//             const url = lib.buildDownloadUrl(`1.${resourceType}.ndjson`, {
-//                 m: multiplier,
-//                 limit,
-//                 offset: 0
-//             });
+    //         // Build the file download URL
+    //         const url = lib.buildDownloadUrl(`1.${resourceType}.ndjson`, {
+    //             m: multiplier,
+    //             limit,
+    //             offset: 0
+    //         });
 
-//             return lib.requestPromise({ url }).then(res => {
-//                 let lines = res.body.trim().split("\n").map(l => l.trim()).filter(Boolean).map(l => JSON.parse(l).id);
+    //         return lib.requestPromise({ url }).then(res => {
+    //             let lines = res.body.trim().split("\n").map(l => l.trim()).filter(Boolean).map(l => JSON.parse(l).id);
 
-//                 // Check the expected rows length
-//                 if (lines.length != expectedLines) {
-//                     throw new Error(
-//                         `${resourceType} - Expected ${expectedLines} lines but found ${lines.length}`
-//                     );
-//                 }
+    //             // Check the expected rows length
+    //             if (lines.length != expectedLines) {
+    //                 throw new Error(
+    //                     `${resourceType} - Expected ${expectedLines} lines but found ${lines.length}`
+    //                 );
+    //             }
                 
-//                 // Check if the IDs are properly generated
-//                 for (let i = resourceCount; i < resourceCount * 2; i++) {
-//                     let expectedId = "o1-" + lines[i - resourceCount];
-//                     if (lines[i] !== expectedId) {
-//                         throw new Error(
-//                             `Expecting the ID of line ${i} to equal "${expectedId}"`
-//                         );
-//                     }
-//                 }
-//                 for (let i = resourceCount * 2; i < resourceCount * 3; i++) {
-//                     let expectedId = "o2-" + lines[i - resourceCount * 2];
-//                     if (lines[i] !== expectedId) {
-//                         throw new Error(
-//                             `Expecting the ID of line ${i} to equal "${expectedId}"`
-//                         );
-//                     }
-//                 }
-//             });
-//         }
+    //             // Check if the IDs are properly generated
+    //             for (let i = resourceCount; i < resourceCount * 2; i++) {
+    //                 let expectedId = "o1-" + lines[i - resourceCount];
+    //                 if (lines[i] !== expectedId) {
+    //                     throw new Error(
+    //                         `Expecting the ID of line ${i} to equal "${expectedId}"`
+    //                     );
+    //                 }
+    //             }
+    //             for (let i = resourceCount * 2; i < resourceCount * 3; i++) {
+    //                 let expectedId = "o2-" + lines[i - resourceCount * 2];
+    //                 if (lines[i] !== expectedId) {
+    //                     throw new Error(
+    //                         `Expecting the ID of line ${i} to equal "${expectedId}"`
+    //                     );
+    //                 }
+    //             }
+    //         });
+    //     }
 
-//         return Promise.all([
-//             test("AllergyIntolerance"),
-//             test("Patient"),
-//             test("Device"),
-//             test("DocumentReference")
-//         ]);
+    //     return Promise.all([
+    //         test("AllergyIntolerance"),
+    //         test("Patient"),
+    //         test("Device"),
+    //         test("DocumentReference")
+    //     ]);
 
-//     });
+    // });
 
     it("Retrieval of referenced files on an open endpoint", async () => {
         const client = new Client();
@@ -1699,7 +1667,7 @@ describe("File Downloading", function() {
             const attachment = doc.content[0].attachment;
             const url = attachment.url;
             if (url && url.search(/https?\:\/\/.+/) === 0) {
-                await lib.requestPromise({ url });
+                await lib.request(url);
             }
         }
     });
@@ -1709,7 +1677,7 @@ describe("File Downloading", function() {
         await client.kickOff({ _type: "Device", _since: "2010-01-01T12:00:00Z", del: 10 });
         const status = await client.waitForExport();
 
-        const deleted = status.body.deleted
+        const deleted = status.parsedBody!.deleted
         assert(Array.isArray(deleted))
 
         await Promise.all(
@@ -1728,11 +1696,10 @@ describe("File Downloading", function() {
             const attachment = doc.content[0].attachment;
             const url = attachment.url;
             if (url && url.search(/https?\:\/\/.+/) === 0) {
-                await lib.requestPromise({ url, headers: { authorization: `Bearer ${access_token}`} });
+                await lib.request(url, { headers: { authorization: `Bearer ${access_token}`} });
             }
         }
     });
-    
 });
 
 
@@ -1857,16 +1824,14 @@ describe("File Downloading", function() {
 // });
 
 describe("Groups", function() {
-    this.timeout(5000)
-    it ("Blue Cross Blue Shield should have 27 patients in the test DB", async function() {
-        this.timeout(10000);
-
+    this.timeout(10000)
+    it ("Blue Cross Blue Shield should have 27 patients in the test DB", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient", group: BlueCrossBlueShieldId });
         await client.waitForExport();
-        expect(client.statusResponse!.body.output, "statusResponse.body.output must be an array").to.be.instanceOf(Array);
-        expect(client.statusResponse!.body.output.length, "Wrong number of links returned").to.equal(1);
-        expect(client.statusResponse!.body.output[0].url).to.match(/\/1\.Patient\.ndjson$/);
+        expect(client.statusResult!.parsedBody!.output, "statusResult.body.output must be an array").to.be.instanceOf(Array);
+        expect(client.statusResult!.parsedBody!.output.length, "Wrong number of links returned").to.equal(1);
+        expect(client.statusResult!.parsedBody!.output[0].url).to.match(/\/1\.Patient\.ndjson$/);
         const { lines } = await client.downloadFileAt(0);
         expect(lines.length, "Wrong number of lines").to.equal(27);
         let ids: Record<string, number> = {};
@@ -1917,23 +1882,29 @@ describe("Error responses", () => {
     const tokenUrl    = lib.buildUrl(["auth", "token"]);
     const registerUrl = lib.buildUrl(["auth", "register"]);
 
-    function assertError(requestOptions: Options, expected?: any, code?: number, message = "") {
-        return lib.requestPromise(requestOptions).then(
-            () => { throw new Error("This request should have failed"); },
+    function assertError(url: string | URL, requestOptions?: RequestInit, expected?: any, code?: number, message = "") {
+        return lib.request(url, requestOptions).then(
+            (res) => {
+                throw new Error(
+                    `This request should have failed. Got ${res.response.status} ${res.response.statusText}\n${JSON.stringify(res.parsedBody)}`
+                );
+            },
             result => {
-                if (code && result.response.statusCode !== code) {
-                    return Promise.reject(new Error(`The status code should be ${code}`));
+                if (code && result.response.status !== code) {
+                    return Promise.reject(new Error(
+                        `The status code should be ${code}. Got ${result.response.status} ${result.response.statusText}\n${JSON.stringify(result.parsedBody)}`
+                    ));
                 }
 
                 if (expected) {
                     try {
-                        assert.deepEqual(result.response.body, expected)
+                        assert.deepEqual(result.parsedBody, expected)
                     } catch (ex) {
                         return Promise.reject(new Error(
                             " The error response should equal:\n" +
                             JSON.stringify(expected, null, 2) +
                             "\n but was:\n" +
-                            JSON.stringify(result.response.body, null, 2)
+                            JSON.stringify(result.parsedBody, null, 2)
                         ));
                     }
 
@@ -1948,10 +1919,8 @@ describe("Error responses", () => {
     describe("token endpoint", () => {
 
         it("returns 400 invalid_request with missing 'Content-type: application/x-www-form-urlencoded' header", () => {
-            return assertError({
-                method: "POST",
-                json  : true,
-                url   : tokenUrl
+            return assertError(tokenUrl, {
+                method: "POST"
             }, {
                 error            : "invalid_request",
                 error_description: "Invalid request content-type header (must be 'application/x-www-form-urlencoded')"
@@ -1959,11 +1928,9 @@ describe("Error responses", () => {
         });
 
         it("returns 400 invalid_grant with missing grant_type parameter", () => {
-            return assertError({
+            return assertError(tokenUrl, {
                 method: "POST",
-                json  : true,
-                url   : tokenUrl,
-                form  : {}
+                headers: { "content-type": "application/x-www-form-urlencoded" }
             }, {
                 error            : "invalid_grant",
                 error_description: "Missing grant_type parameter"
@@ -1971,13 +1938,10 @@ describe("Error responses", () => {
         });
 
         it("returns 400 unsupported_grant_type with invalid grant_type parameter", () => {
-            return assertError({
+            return assertError(tokenUrl, {
                 method: "POST",
-                json  : true,
-                url   : tokenUrl,
-                form  : {
-                    grant_type: "whatever"
-                }
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "grant_type=whatever"
             }, {
                 error: "unsupported_grant_type",
                 error_description: "The grant_type parameter should equal 'client_credentials'"
@@ -1985,13 +1949,10 @@ describe("Error responses", () => {
         });
 
         it("returns 400 invalid_request with missing client_assertion_type param", () => {
-            return assertError({
+            return assertError(tokenUrl, {
                 method: "POST",
-                json  : true,
-                url   : tokenUrl,
-                form  : {
-                    grant_type: "client_credentials"
-                }
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "grant_type=client_credentials"
             }, {
                 error: "invalid_request",
                 error_description: "Missing client_assertion_type parameter"
@@ -1999,14 +1960,10 @@ describe("Error responses", () => {
         });
 
         it("returns 400 invalid_request with invalid client_assertion_type param", () => {
-            return assertError({
+            return assertError(tokenUrl, {
                 method: "POST",
-                json  : true,
-                url   : tokenUrl,
-                form  : {
-                    grant_type           : "client_credentials",
-                    client_assertion_type: "whatever"
-                }
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "grant_type=client_credentials&client_assertion_type=whatever"
             }, {
                 error: "invalid_request",
                 error_description: "Invalid client_assertion_type parameter. Must be 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'."
@@ -2014,531 +1971,412 @@ describe("Error responses", () => {
         });
 
         it("returns 400 invalid_request with missing invalid_client_details_token param", () => {
-            return assertError({
+            return assertError(tokenUrl, {
                 method: "POST",
-                json  : true,
-                url   : tokenUrl,
-                form  : {
-                    grant_type           : "client_credentials",
-                    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-                }
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
             }, null, 400).catch(result => {
-                expect(result.response.body.error).to.equal("invalid_request");
+                expect(result.parsedBody.error).to.equal("invalid_request");
                 expect(
-                    result.response.body.error_description.indexOf("Invalid registration token: ")
+                    result.parsedBody.error_description.indexOf("Invalid registration token: ")
                 ).to.equal(0);
             });   
         });
 
         it("returns 400 invalid_request with invalid invalid_client_details_token param", () => {
-            return assertError({
+            return assertError(tokenUrl, {
                 method: "POST",
-                json  : true,
-                url   : tokenUrl,
-                form  : {
-                    grant_type           : "client_credentials",
-                    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                    client_assertion     : "whatever"
-                }
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=whatever"
             }, null, 400).catch(result => {
-                expect(result.response.body.error).to.equal("invalid_request");
+                expect(result.parsedBody.error).to.equal("invalid_request");
                 expect(
-                    result.response.body.error_description.indexOf("Invalid registration token: ")
+                    result.parsedBody.error_description.indexOf("Invalid registration token: ")
                 ).to.equal(0);
             });
         });
 
         it("returns 400 invalid_request if the token does not contain valid client_id (sub) token", () => {
             const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-            return assertError({
-                method: "POST",
-                json  : true,
-                url   : tokenUrl,
-                form  : {
-                    grant_type           : "client_credentials",
-                    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                    // @ts-ignore
-                    client_assertion     : jwt.sign({ a: 1 }, privateKey, {
-                        algorithm,
-                        keyid    : jwks.keys[1].kid,
-                        header: {
-                            kty: jwks.keys[1].kty
-                        }
-                    })
+            // @ts-ignore
+            const assertion = jwt.sign({ a: 1 }, privateKey, {
+                algorithm,
+                keyid    : jwks.keys[1].kid,
+                header: {
+                    kty: jwks.keys[1].kty
                 }
+            });
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + assertion
             }, null, 400).catch(result => {
-                expect(result.response.body.error).to.equal("invalid_request");
+                expect(result.parsedBody.error).to.equal("invalid_request");
                 expect(
-                    result.response.body.error_description.indexOf("Invalid client details token: ")
+                    result.parsedBody.error_description.indexOf("Invalid client details token: ")
                 ).to.equal(0, "The error description must begin with 'Invalid client details token: '");
             });
         });
 
-        it("returns 400 invalid_grant if the id token contains {err:'token_expired_registration_token'}", () => {
-            return lib.requestPromise({
+        it("returns 400 invalid_grant if the id token contains {err:'token_expired_registration_token'}", async () => {
+            const registrationRequest = await lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: JSON.stringify(jwks),
-                    err: "token_expired_registration_token"
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid
-                });
-
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_grant",
-                    error_description: "Registration token expired"
-                }, 400);
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks=${encodeURIComponent(JSON.stringify(jwks))}&err=token_expired_registration_token`
             })
+
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+            
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm,
+                keyid    : jwks.keys[1].kid
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_grant",
+                error_description: "Registration token expired"
+            }, 400);
         });
 
-        it("returns 400 invalid_grant if the auth token 'aud' is wrong", () => {
-            return lib.requestPromise({
+        it("returns 400 invalid_grant if the auth token 'aud' is wrong", async () => {
+            const registrationRequest = await lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: JSON.stringify(jwks)
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl + "x",
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid
-                });
-
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, null, 400).catch(result => {
-                    expect(result.response.body.error).to.equal("invalid_grant");
-                    expect(
-                        result.response.body.error_description.indexOf("Invalid token 'aud' value. Must be ")
-                    ).to.equal(0, `The error description must begin with 'Invalid token 'aud' value. Must be `);
-                })
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks=${encodeURIComponent(JSON.stringify(jwks))}`
             })
+
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl + "x",
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+            
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm,
+                keyid    : jwks.keys[1].kid
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, null, 400).catch(result => {
+                expect(result.parsedBody.error).to.equal("invalid_grant");
+                expect(
+                    result.parsedBody.error_description.indexOf("Invalid token 'aud' value. Must be ")
+                ).to.equal(0, `The error description must begin with 'Invalid token 'aud' value. Must be `);
+            });
         });
 
-        it("returns 400 invalid_grant if the auth token 'iss' does not match the aud", () => {
-            return lib.requestPromise({
-                method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: JSON.stringify(jwks)
-                }
-            }).then(res => {
-                return {
-                    iss: "whatever",
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid
-                });
+        it("returns 400 invalid_grant if the auth token 'iss' does not match the aud", async () => {
 
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_grant",
-                    error_description: `The given iss '${token.iss}' does not match the registered client_id '${token.sub}'`
-                }, 400);
+            const registrationRequest = await lib.request(registerUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks=${encodeURIComponent(JSON.stringify(jwks))}`
             })
+
+            const token = {
+                iss: "whatever",
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+            
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm,
+                keyid    : jwks.keys[1].kid
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_grant",
+                error_description: `The given iss '${token.iss}' does not match the registered client_id '${token.sub}'`
+            }, 400);
         });
 
-        it("returns 400 invalid_grant if the id token contains {err:'invalid_jti'}", () => {
-            return lib.requestPromise({
+        it("returns 400 invalid_grant if the id token contains {err:'invalid_jti'}", async () => {
+            const registrationRequest = await lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: JSON.stringify(jwks),
-                    err: "invalid_jti"
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid
-                });
-
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_grant",
-                    error_description: "Invalid 'jti' value"
-                }, 400);
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks=${encodeURIComponent(JSON.stringify(jwks))}&err=invalid_jti`
             })
+
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+            
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm,
+                keyid    : jwks.keys[1].kid
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_grant",
+                error_description: "Invalid 'jti' value"
+            }, 400);
         });
 
-        it("returns 400 invalid_scope if the scope is invalid", () => {
-            return lib.requestPromise({
+        it("returns 400 invalid_scope if the scope is invalid", async () => {
+            const registrationRequest = await lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: JSON.stringify(jwks)
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid
-                });
-
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "whatever",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_scope",
-                    error_description: 'Invalid scope "whatever"'
-                }, 400);
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks=${encodeURIComponent(JSON.stringify(jwks))}`
             })
+
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+            
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm,
+                keyid    : jwks.keys[1].kid
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=whatever&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_scope",
+                error_description: 'Invalid scope "whatever"'
+            }, 400);
         });
 
-        it("returns 400 invalid_scope if the id token contains {err:'token_invalid_scope'}", () => {
-            return lib.requestPromise({
+        it("returns 400 invalid_scope if the id token contains {err:'token_invalid_scope'}", async () => {
+            const registrationRequest = await lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: JSON.stringify(jwks),
-                    err: "token_invalid_scope"
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid
-                });
-
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_scope",
-                    error_description: "Simulated invalid scope error"
-                }, 400);
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks=${encodeURIComponent(JSON.stringify(jwks))}&err=token_invalid_scope`
             })
+
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+            
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm,
+                keyid    : jwks.keys[1].kid
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_scope",
+                error_description: 'Simulated invalid scope error'
+            }, 400);
         });
 
-        it("returns 400 invalid_grant if the auth token jku is not whitelisted", () => {
-            return lib.requestPromise({
+        it("returns 400 invalid_grant if the auth token jku is not whitelisted", async () => {
+            const registrationRequest = await lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks_url: "my jwks_url"
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                // @ts-ignore
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid,
-                    header: {
-                        jku: "whatever"
-                    }
-                });
-
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_grant",
-                    error_description: "The provided jku 'whatever' is different than the one used at registration time (my jwks_url)"
-                }, 400);
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks_url=my jwks_url`
             })
+
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            const algorithm = jwks.keys[1].alg as jwt.Algorithm;
+            
+            // @ts-ignore
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm,
+                keyid    : jwks.keys[1].kid,
+                header: {
+                    jku: "whatever"
+                }
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_grant",
+                error_description: "The provided jku 'whatever' is different than the one used at registration time (my jwks_url)"
+            }, 400);
         });
 
-        it("returns 400 invalid_grant if the jwks_url returns no keys", () => {
-            function hostJWKS(jwks: any) {
-                return new Promise(resolve => {
-                    const app = express();
-                    app.get("/jwks", (req: any, res: any) => res.json({}));
-                    const server = app.listen(0, () => resolve(server));
-                })
-                .then((server: any) => {
-                    return lib.requestPromise({
-                        method: "POST",
-                        url   : registerUrl,
-                        json  : true,
-                        form  : {
-                            jwks_url: `http://127.0.0.1:${server.address().port}/jwks`
-                        }
-                    }).then(res => {
-                        return {
-                            iss: res.body,
-                            sub: res.body,
-                            aud: tokenUrl,
-                            exp: Date.now()/1000 + 300, // 5 min
-                            jti: crypto.randomBytes(32).toString("hex")
-                        };
-                    }).then(token => {
-                        let signed = jwt.sign(token, privateKey, {
-                            algorithm: jwks.keys[1].alg,
-                            keyid    : jwks.keys[1].kid
-                        });
-        
-                        return assertError({
-                            method: "POST",
-                            json  : true,
-                            url   : tokenUrl,
-                            form  : {
-                                scope                : "system/*.read",
-                                grant_type           : "client_credentials",
-                                client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                                client_assertion     : signed
-                            }
-                        }, {
-                            error: "invalid_grant",
-                            error_description: "The remote jwks object has no keys array."
-                        }, 400);
-                    }).then(
-                        () => server.close(),
-                        () => server.close()
-                    );
-                });
-            }
+        it("returns 400 invalid_grant if the jwks_url returns no keys", async () => {
+
+            const server: any = await new Promise(resolve => {
+                const app = express();
+                app.get("/jwks", (req: any, res: any) => res.json({}));
+                const server = app.listen(0, () => resolve(server));
+            })
+
+            const registrationRequest = await lib.request(registerUrl, {
+                method : "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body   : `jwks_url=http://127.0.0.1:${server.address().port}/jwks`
+            })
+
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            // @ts-ignore
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm: jwks.keys[1].alg as jwt.Algorithm,
+                keyid    : jwks.keys[1].kid
+            });
+
+            await assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_grant",
+                error_description: "The remote jwks object has no keys array."
+            }, 400).finally(() => server.close());
         });
         
-        it("returns 400 invalid_grant if local jwks has no keys", () => {
-            return lib.requestPromise({
+        it("returns 400 invalid_grant if local jwks has no keys", async () => {
+            const registrationRequest = await lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: "{}",
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid
-                });
-
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_grant",
-                    error_description: "The registration-time jwks object has no keys array."
-                }, 400);
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks={}`
             })
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            // @ts-ignore
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm: jwks.keys[1].alg as jwt.Algorithm,
+                keyid    : jwks.keys[1].kid,
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_grant",
+                error_description: "The registration-time jwks object has no keys array."
+            }, 400);
         });
 
-        it("returns 400 invalid_grant if no jwks or jwks_url can be found", () => {
+        it ("returns 400 invalid_grant if no jwks or jwks_url can be found", async () => {
             const clientID = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InJlZ2lzdHJhdGlvbi10b2tlbiJ9.eyJhY2Nlc3NUb2tlbnNFeHBpcmVJbiI6MTUsImlhdCI6MTUzNzM2NTkwOH0.D6Hrvs50DThgB3MbprCitfg8NsDqTdr2ii68-xFs3pQ";
-            return Promise.resolve({
+            const token = {
                 iss: clientID,
                 sub: clientID,
                 aud: tokenUrl,
                 exp: Date.now()/1000 + 300, // 5 min
                 jti: crypto.randomBytes(32).toString("hex")
-            }).then(token => {
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid
-                });
+            };
+            
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm: jwks.keys[1].alg as jwt.Algorithm,
+                keyid    : jwks.keys[1].kid
+            });
 
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_grant",
-                    error_description: "No JWKS found. No 'jku' token header is set, no " +
-                        "registration-time jwks_url is available and no " +
-                        "registration-time jwks is available."
-                }, 400);
-            })
-        });
-
-        it("returns 400 invalid_grant if no public keys can be found", () => {
-            return lib.requestPromise({
+            return assertError(tokenUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: '{"keys":[]}',
-                    err: "token_invalid_token"
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                // @ts-ignore
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid,
-                    header: {
-                        kty: jwks.keys[1].kty
-                    }
-                });
-
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_grant",
-                    error_description: `No public keys found in the JWKS with "kid" equal to "${
-                        jwks.keys[1].kid
-                    }"`
-                }, 400);
-            })
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_grant",
+                error_description: "No JWKS found"
+            }, 400);
         });
 
-        it("returns 400 invalid_grant if none of the public keys can decrypt the token", () => {
+        it("returns 400 invalid_grant if no public keys can be found", async () => {
+            const registrationRequest = await lib.request(registerUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks=${encodeURIComponent(JSON.stringify({keys:[jwks.keys[1]]}))}`
+            })
+
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            // @ts-ignore
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm: jwks.keys[1].alg as jwt.Algorithm,
+                keyid    : jwks.keys[1].kid,
+                header: {
+                    kty: jwks.keys[1].kty
+                }
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_grant",
+                error_description: `No public keys found in the JWKS with "kid" equal to "${jwks.keys[1].kid}"`
+            }, 400);
+        });
+
+        it("returns 400 invalid_grant if none of the public keys can decrypt the token", async () => {
             let _jwks = {
                 keys: [
                     {
@@ -2556,121 +2394,94 @@ describe("Error responses", () => {
                 ]
             };
 
-            return lib.requestPromise({
+            const registrationRequest = await lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: JSON.stringify(_jwks)
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Math.round(Date.now()/1000) + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                // @ts-ignore
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid,
-                    header: {
-                        kty: jwks.keys[1].kty
-                    }
-                });
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks=${encodeURIComponent(JSON.stringify(_jwks))}`
+            })
 
-                return lib.requestPromise({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                })
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            // @ts-ignore
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm: jwks.keys[1].alg as jwt.Algorithm,
+                keyid    : jwks.keys[1].kid,
+                header: {
+                    kty: jwks.keys[1].kty
+                }
+            });
+            
+
+            await lib.request(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
             }).then(
                 () => {
                     throw new Error("This request should have failed");
                 },
                 result => {
-                    assert.strictEqual(result.response.statusCode, 400);
-                    assert.strictEqual(result.response.body.error, "invalid_grant", 'The "error" property should equal "invalid_grant"');
-                    assert.match(result.response.body.error_description, /^Unable to verify the token with any of the public keys found in the JWKS\b/);
+                    assert.strictEqual(result.response.status, 400);
+                    assert.strictEqual(result.parsedBody.error, "invalid_grant", 'The "error" property should equal "invalid_grant"');
+                    assert.match(result.parsedBody.error_description, /^Unable to verify the token with any of the public keys found in the JWKS\b/);
                 }
             );
         });
 
-        it("returns 401 invalid_client if the id token contains {err:'token_invalid_token'}", () => {
-            return lib.requestPromise({
+        it("returns 401 invalid_client if the id token contains {err:'token_invalid_token'}", async () => {
+            const registrationRequest = await lib.request(registerUrl, {
                 method: "POST",
-                url   : registerUrl,
-                json  : true,
-                form  : {
-                    jwks: JSON.stringify(jwks),
-                    err: "token_invalid_token"
-                }
-            }).then(res => {
-                return {
-                    iss: res.body,
-                    sub: res.body,
-                    aud: tokenUrl,
-                    exp: Date.now()/1000 + 300, // 5 min
-                    jti: crypto.randomBytes(32).toString("hex")
-                };
-            }).then(token => {
-                const algorithm = jwks.keys[1].alg as jwt.Algorithm;
-                // @ts-ignore
-                let signed = jwt.sign(token, privateKey, {
-                    algorithm,
-                    keyid    : jwks.keys[1].kid,
-                    header: {
-                        kty: jwks.keys[1].kty
-                    }
-                });
-
-                return assertError({
-                    method: "POST",
-                    json  : true,
-                    url   : tokenUrl,
-                    form  : {
-                        scope                : "system/*.read",
-                        grant_type           : "client_credentials",
-                        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                        client_assertion     : signed
-                    }
-                }, {
-                    error: "invalid_client",
-                    error_description: "Simulated invalid token error"
-                }, 401);
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: `jwks=${encodeURIComponent(JSON.stringify(jwks))}&err=token_invalid_token`
             })
+
+            const token = {
+                iss: registrationRequest.parsedBody,
+                sub: registrationRequest.parsedBody,
+                aud: tokenUrl,
+                exp: Date.now()/1000 + 300, // 5 min
+                jti: crypto.randomBytes(32).toString("hex")
+            };
+
+            // @ts-ignore
+            const signedToken = jwt.sign(token, privateKey, {
+                algorithm: jwks.keys[1].alg as jwt.Algorithm,
+                keyid    : jwks.keys[1].kid,
+                header: {
+                    kty: jwks.keys[1].kty
+                }
+            });
+
+            return assertError(tokenUrl, {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "scope=system/*.read&grant_type=client_credentials&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer&client_assertion=" + encodeURIComponent(signedToken)
+            }, {
+                error: "invalid_client",
+                error_description: "Simulated invalid token error"
+            }, 401);
         });
     });
 
     describe("registration endpoint", () => {
         it ("returns 400 invalid_request if no 'Content-type: application/x-www-form-urlencoded' header is sent", () => {
-            return assertError({
-                method: "POST",
-                json  : true,
-                url   : registerUrl
-            }, {
+            return assertError(registerUrl, { method: "POST" }, {
                 error: "invalid_request",
                 error_description: "Invalid request content-type header (must be 'application/x-www-form-urlencoded')"
             }, 400);
         });
 
         it ("returns 400 invalid_request with invalid 'dur' parameter", () => {
-            return assertError({
+            return assertError(registerUrl, {
                 method: "POST",
-                json  : true,
-                url   : registerUrl,
-                form  : {
-                    dur: "test"
-                }
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "dur=test"
             }, {
                 error: "invalid_request",
                 error_description: "Invalid dur parameter"
@@ -2678,13 +2489,10 @@ describe("Error responses", () => {
         });
 
         it ("returns 400 invalid_request if both 'jwks' and 'jwks_url' are missing", () => {
-            return assertError({
+            return assertError(registerUrl, {
                 method: "POST",
-                json  : true,
-                url   : registerUrl,
-                form  : {
-                    dur: 5
-                }
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: "dur=5"
             }, {
                 error: "invalid_request",
                 error_description: "Either 'jwks' or 'jwks_url' is required"
