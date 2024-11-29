@@ -779,10 +779,6 @@ class ExportManager
             );
         }
 
-        if (this.jobStatus === "EXPORTED") {
-            return lib.outcomes.cancelCompleted(res);
-        }
-
         // ensure requestStart param is present
         // let requestStart = moment(this.requestStart);
 
@@ -821,9 +817,6 @@ class ExportManager
             });
         }
 
-        this.jobStatus = "EXPORTED";
-        await this.save()
-
         res.set({
             "Expires": new Date(this.createdAt + config.maxExportAge * 60000).toUTCString()
         }).json(this.manifest);
@@ -835,10 +828,6 @@ class ExportManager
 
         if (this.secure && !req.headers.authorization) {
             return lib.operationOutcome(res, "Not authorized", { httpCode: 401 });
-        }
-
-        if (this.jobStatus !== "EXPORTED") {        
-            return lib.outcomes.exportNotCompleted(res);
         }
 
         // console.log(req.sim, this)

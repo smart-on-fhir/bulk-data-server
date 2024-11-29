@@ -1216,13 +1216,6 @@ describe("Progress Updates", function() {
         expect(client.statusResult!.parsedBody!.output[2].count).to.equal(6);
     });
 
-    it ("rejects further calls on completed exports", () => assert.rejects(async () => {
-        const client = new Client();
-        await client.kickOff({ _type: "Patient" });
-        await client.waitForExport();
-        await client.checkStatus();
-    }));
-
     it ('Generates correct "count" property for each link', async () => {
         // We have 100 patients. Using  a multiplier (`m`) of 10 and 22 records
         // per file, the result should contain 45 files of 22 resources and one
@@ -1434,20 +1427,6 @@ describe("File Downloading", function() {
         await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
         expect(lines[0]).to.equal("resourceType,id,identifier,name,gender,meta");
-    });
-
-    it ("Rejects download from uncompleted exports", async () => {
-        const client = new Client();
-        await client.kickOff({ _type: "Patient", simulatedExportDuration: 10 });
-        const { id } = client.getState();
-        return client.downloadFile(
-            config.baseUrl + "/" + base64url.encode(JSON.stringify({ id })) + "/fhir/bulkfiles/whatever"
-        ).then(
-            () => { throw new Error("Should have failed") },
-            err => {
-                expect(err.response.status).to.equal(404);
-            }
-        );
     });
 
     it ("Supports deflate downloads", async () => {

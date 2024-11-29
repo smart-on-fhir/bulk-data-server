@@ -608,11 +608,6 @@ export const outcomes = {
         "The procedure was canceled",
         { severity: "information", httpCode: 202 /* Accepted */ }
     ),
-    cancelCompleted: (res: Response) => operationOutcome(
-        res,
-        "The export was already completed",
-        { httpCode: 404 }
-    ),
     cancelNotFound: (res: Response) => operationOutcome(
         res,
         "Unknown procedure. Perhaps it is already completed and thus, it cannot be canceled",
@@ -631,11 +626,6 @@ export const outcomes = {
     exportDeleted: (res: Response) => operationOutcome(
         res,
         "The exported resources have been deleted",
-        { httpCode: 404 }
-    ),
-    exportNotCompleted: (res: Response) => operationOutcome(
-        res,
-        "The export is not completed yet",
         { httpCode: 404 }
     )
 };
