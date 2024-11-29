@@ -10,8 +10,9 @@ import QueryBuilder                              from "./QueryBuilder"
 import getDB                                     from "./db"
 import toNdjson                                  from "./transforms/dbRowToNdjson"
 import toCSV                                     from "./transforms/dbRowToCSV"
-import fhirStream                                from "./FhirStream"
 import translator                                from "./transforms/dbRowTranslator"
+import prependFileHeader                         from "./transforms/prependFileHeader"
+import fhirStream                                from "./FhirStream"
 import { ExportManifest, RequestWithSim }        from "./types"
 import { ScopeList }                             from "./scope"
 import { Manifest }                              from "./Manifest"
@@ -888,6 +889,11 @@ class ExportManager
                 deleted    : !!sim.del,
                 secure     : this.secure
             }));
+
+            // Prepend header row if needed
+            if (this.organizeOutputBy) {
+                pipeline = pipeline.pipe(prependFileHeader(this.organizeOutputBy))
+            }
 
             const transform = exportTypes[this.outputFormat].transform;
             if (transform) {
