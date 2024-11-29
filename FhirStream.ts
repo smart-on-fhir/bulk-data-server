@@ -111,7 +111,7 @@ export default class FhirStream extends Readable
         callback && callback(error);
     }
 
-    init()
+    async init()
     {
         return this.countRecords()
             .then(() => this.prepare())
@@ -190,7 +190,9 @@ export default class FhirStream extends Readable
 
         if (row && this.filter && !this.filter(JSON.parse(row.resource_json))) {
             this.rowIndex += 1;
-            return this.getNextRow()
+
+            // Must defer this call to avoid max call stack exceeded errors
+            return setImmediate(() => this.getNextRow())
         }
 
         // If there is no row returned - check why

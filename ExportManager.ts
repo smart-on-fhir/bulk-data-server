@@ -95,7 +95,8 @@ const ABORT_CONTROLLERS = new Map();
  */
 const SUPPORTED_ORGANIZE_BY_TYPES = {
     ""       : "fhir_type",
-    "Patient": "patient_id"
+    "Patient": "patient_id",
+    "Group"  : "group_id"
 }
 
 interface JobState {
@@ -302,10 +303,9 @@ class ExportManager
     static createCancelHandler()
     {
         return function cancelFlow(req: Request, res: Response) {
-            return ExportManager.load(req.params.id).then(
-                job => job.cancel(res),
-                () => lib.outcomes.cancelNotFound(res)
-            );
+            return ExportManager.load(req.params.id)
+                .then(job => job.cancel(res))
+                .catch(() => lib.outcomes.cancelNotFound(res));
         };
     }
 
@@ -409,8 +409,10 @@ class ExportManager
         }
 
         const path = `${config.jobsPath}/${this.id}.json`;
+        const unlock = await lib.lock(path)
         const data = JSON.stringify(this.toJSON(), null, 4);
         fs.writeFileSync(path, data, "utf8");
+        await unlock();
         return true;
     }
 
@@ -757,16 +759,19 @@ class ExportManager
 
     async handleStatus(req: Request, res: Response) {
 
+        // Reject unauthorized
         if (this.secure && !req.headers.authorization) {
             return lib.operationOutcome(res, "Not authorized", { httpCode: 401 });
         }
 
+        // Reject too many files
         if (this.tooManyFiles) {
             return res.status(413).send("Too many files");
         }
 
         // const signal = this.getAbortController().signal
 
+        // Reject transient errors
         if (!this.ignoreTransientError && this.simulatedError == "transient_error") {
             this.ignoreTransientError = true;
             await this.save();

@@ -116,7 +116,9 @@ export default class QueryBuilder {
             params = Object.assign({}, params, where.params);
         }
 
-        if (this._limit) {
+        sql += ` ORDER BY "${this._stratifier}" ASC`;
+
+        if (this._limit && isFinite(this._limit)) {
             sql += ` LIMIT $_limit`;
             params.$_limit = this._limit;
 
@@ -156,7 +158,9 @@ export default class QueryBuilder {
 
         len = where.push(`"${this._stratifier}" IS NOT NULL`);
 
-        len = where.push(`"fhir_type" IN("${this._fhirTypes.join('", "')}")`);
+        if (this._fhirTypes.length) {
+            len = where.push(`"fhir_type" IN("${this._fhirTypes.join('", "')}")`);
+        }
 
         if (this._startTime) {
             len = where.push(`dateTime(modified_date) >= dateTime($_startTime)`);
