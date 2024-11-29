@@ -3,7 +3,6 @@ import { NextFunction, RequestHandler } from "express-serve-static-core"
 import cors              from "cors"
 import * as Lib          from "./lib"
 import OpDef             from "./fhir/OperationDefinition/index"
-import bulkImporter      from "./import/bulk_data_import_handler"
 import ExportManager     from "./ExportManager"
 import metadata          from "./fhir/metadata"
 import * as group        from "./fhir/group"
@@ -71,20 +70,6 @@ router.delete("/bulkstatus/:id", [
     Lib.checkAuth,
     ExportManager.createCancelHandler()
 ]);
-
-// =============================================================================
-// BulkData Import Endpoints
-// =============================================================================
-
-// Return import progress by task id generated during kick-off request
-// and provide time interval for client to wait before checking again
-router.get("/import-status/:taskId", bulkImporter.createImportStatusHandler());
-
-// Stop an import that has not completed
-router.delete("/import-status/:taskId", bulkImporter.cancelImport);
-
-// @ts-ignore Kick-off import
-router.post("/\\$import", bulkImporter.createImportKickOffHandler());
 
 // =============================================================================
 // FHIR/Other Endpoints
