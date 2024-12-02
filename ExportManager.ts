@@ -12,7 +12,7 @@ import toNdjson                                  from "./transforms/dbRowToNdjso
 import toCSV                                     from "./transforms/dbRowToCSV"
 import translator                                from "./transforms/dbRowTranslator"
 import prependFileHeader                         from "./transforms/prependFileHeader"
-import fhirStream                                from "./FhirStream"
+import FhirStream                                from "./FhirStream"
 import { ExportManifest, RequestWithSim }        from "./types"
 import { ScopeList }                             from "./scope"
 import { Manifest }                              from "./Manifest"
@@ -616,12 +616,7 @@ class ExportManager
         return DB.promise("all", sql, params);
     }
 
-    /**
-     * Creates and returns a ReadableStream of JSON FHIR resources
-     */
-    getStreamForResource(resourceType: string, limit: number) {
-        return new fhirStream({
-            types      : [resourceType],
+        const stream = new FhirStream({
             stu        : this.stu,
             databaseMultiplier: this.databaseMultiplier,
             extended   : this.extended,
@@ -866,10 +861,12 @@ class ExportManager
         }
         else if (shouldDeflate) {
             res.set({ "Content-Encoding": "deflate" });
-        } 
+        }
 
-        let input = new fhirStream({
-            types      : [req.params.file.split(".")[1]],
+        const stratifier = SUPPORTED_ORGANIZE_BY_TYPES[this.organizeOutputBy] as any
+        
+        let input = new FhirStream({
+            types      : this.organizeOutputBy ? [] : [req.params.file.split(".")[1]],
             stu        : this.stu,
             databaseMultiplier: this.databaseMultiplier,
             extended   : this.extended,
@@ -879,7 +876,8 @@ class ExportManager
             since      : this.since,
             systemLevel: this.systemLevel,
             patients   : this.patients,
-            filter     : this.typeFilter.get("_filter")
+            filter     : this.typeFilter.get("_filter"),
+            stratifier
         });
         
         input.on("error", error => {
