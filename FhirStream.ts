@@ -149,11 +149,9 @@ export default class FhirStream extends Readable
      */
     async countRecords(): Promise<FhirStream>
     {
-        // SELECT "fhir_type", COUNT(*) as "totalRows" FROM "data"
-        // WHERE "fhir_type" IN("Patient") GROUP BY "fhir_type"
         let { sql, params } = this.builder.compileCount();
-        return this.db.promise("get", sql, params).then((row: { rowCount: number }) => {
-            this.total = row && row.rowCount ? row.rowCount || 0 : 0;
+        return this.db.promise("all", sql, params).then((rows: { rowCount: number }[]) => {
+            this.total = rows.reduce((prev, cur) => prev + cur.rowCount, 0)
             this.page = Math.floor(this.offset / this.limit) + 1;
             this.overflow = Math.floor(this.offset/this.total);
             return this;
