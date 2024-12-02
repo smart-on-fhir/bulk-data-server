@@ -28,7 +28,7 @@ interface FhirStreamOptions {
 
 export default class FhirStream extends Readable
 {
-    limit: number;
+    limit: number; // can also be Infinity!
     multiplier: number;
     offset: number;
     extended: boolean;
@@ -56,7 +56,7 @@ export default class FhirStream extends Readable
 
         this.db = getDB(+options.stu);
 
-        this.limit      = Lib.uInt(options.limit, config.defaultPageSize);
+        this.limit      = options.limit || config.defaultPageSize;
         this.multiplier = Lib.uInt(options.databaseMultiplier, 1);
         this.offset     = Lib.uInt(options.offset, 0);
         this.extended   = Lib.bool(options.extended);
