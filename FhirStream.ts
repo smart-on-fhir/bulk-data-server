@@ -87,8 +87,8 @@ export default class FhirStream extends Readable
             systemLevel: options.systemLevel,
             patients   : this.patients,
             columns    : this.extended ?
-                ["resource_json", "modified_date"] :
-                ["resource_json"],
+                ["resource_json", "fhir_type", "patient_id", "group_id", "modified_date"] :
+                ["resource_json", "fhir_type", "patient_id", "group_id"],
             stratifier : this.stratifier
         });
 
