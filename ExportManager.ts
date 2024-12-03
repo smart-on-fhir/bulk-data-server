@@ -94,9 +94,10 @@ const ABORT_CONTROLLERS = new Map();
  * stratify by
  */
 const SUPPORTED_ORGANIZE_BY_TYPES = {
-    ""       : "fhir_type",
-    "Patient": "patient_id",
-    "Group"  : "group_id"
+    ""            : "fhir_type",
+    "Patient"     : "patient_id",
+    "Group"       : "group_id",
+    "Organization": "org"
 }
 
 interface JobState {

@@ -99,6 +99,11 @@ export default class QueryBuilder {
             this._patients = options.patients;
         }
         this._stratifier = options.stratifier || "fhir_type"
+        
+        if (this._stratifier === "org") {
+            this._table = "data_with_org"
+            this._columns.push("org")
+        }
     }
 
     compile() {

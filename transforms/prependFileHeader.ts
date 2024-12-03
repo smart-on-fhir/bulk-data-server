@@ -12,7 +12,9 @@ export default function prependFileHeader(organizeOutputBy: string) {
                     row.patient_id :
                     organizeOutputBy === "Group" ?
                         row.group_id :
-                        null;
+                        organizeOutputBy === "Organization" ?
+                            row.org :
+                            null;
 
                 if (groupId) {
                     this.push({
