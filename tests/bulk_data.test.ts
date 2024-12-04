@@ -758,9 +758,6 @@ describe("Bulk Data Kick-off Request", function() {
                     it (method + " accepts application/fhir+ndjson", async () => await assert.doesNotReject(
                         new Client().kickOff({ ...options, _outputFormat: "application/fhir+ndjson" })
                     ));
-                    it (method + " accepts application/fhir+ndjson", async () => await assert.doesNotReject(
-                        new Client().kickOff({ ...options, _outputFormat: "application/fhir+ndjson" })
-                    ));
                     it (method + " accepts application/ndjson", async () => await assert.doesNotReject(
                         new Client().kickOff({ ...options, _outputFormat: "application/ndjson" })
                     ));
