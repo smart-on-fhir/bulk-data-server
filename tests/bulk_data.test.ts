@@ -894,13 +894,6 @@ describe("Bulk Data Kick-off Request", function() {
             });
 
             describe("Custom server parameters", () => {
-                it (`passes the "dur" sim parameter thru`, () => test({
-                    sim: { dur: 2 },
-                    qs : { _type: "Observation" }
-                }, {
-                    simulatedExportDuration: 2
-                }));
-    
                 it (`passes the "page" sim parameter thru`, () => test({
                     sim: { page: 2 },
                     qs : { _type: "Observation" }
@@ -1062,7 +1055,7 @@ describe("Token endpoint", () => {
 describe("Canceling", () => {
     it ("works while exporting", async () => {
         const client = new Client();
-        await client.kickOff({ _type: "Patient", simulatedExportDuration: 10 });
+        await client.kickOff({ _type: "Patient" });
         await client.checkStatus();
         const cancelResponse = await client.cancel();
         expect(cancelResponse.parsedBody.issue[0].diagnostics).to.exist;
@@ -1148,18 +1141,6 @@ describe("Progress Updates", function() {
         await client.kickOff({ accessToken: access_token });
         await client.checkStatus();
     }));
-
-    it ("Respects the 'simulatedExportDuration' parameter", async () => {
-        const client1 = new Client();
-        await client1.kickOff({ simulatedExportDuration: 0 });
-        await client1.waitForExport();
-        expect(client1.statusResult!.response.status).to.equal(200);
-
-        const client2 = new Client();
-        await client2.kickOff({ simulatedExportDuration: 10 });
-        await client2.checkStatus();
-        expect(client2.statusResult!.response.status).to.equal(202);
-    });
 
     it ("Replies with links after the wait time", async () => {
         const client = new Client();
