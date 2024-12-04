@@ -353,6 +353,8 @@ class Client
 }
 
 // Begin tests =================================================================
+afterEach(async () => await ExportManager.deleteAll());
+
 describe("Conformance Statement", () => {
     describe("works with json types", () => {
         [
@@ -628,7 +630,6 @@ describe("System-level Export", function() {
         const client = new Client();
         await client.kickOff({ _type: "Group,Patient", systemLevel: true });
         const { parsedBody } = await client.waitForExport();
-        client.cancel();
         expect(parsedBody!.output.map(x => x.type)).to.deep.equal(["Group", "Patient"]);
     });
 
@@ -637,7 +638,6 @@ describe("System-level Export", function() {
         const client = new Client();
         await client.kickOff({ _type: "Group,Patient", systemLevel: true, accessToken: access_token });
         const { parsedBody } = await client.waitForExport({ accessToken: access_token });
-        client.cancel();
         expect(parsedBody!.output.map(x => x.type)).to.deep.equal(["Patient"]);
     });
 });

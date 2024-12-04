@@ -4,6 +4,7 @@ import fs                                        from "fs"
 import zlib                                      from "zlib"
 import { NextFunction, Request, Response }       from "express"
 import { OperationOutcome, ParametersParameter } from "fhir/r4"
+import lockfile                                  from "proper-lockfile"
 import config                                    from "./config"
 import * as lib                                  from "./lib";
 import toNdjson                                  from "./transforms/dbRowToNdjson"
@@ -352,6 +353,21 @@ class ExportManager
         });
     }
 
+    static async deleteAll()
+    {
+        return lib.forEachFile({ dir: config.jobsPath, filter: path => path.endsWith(".json") }, async path => {
+            const isLocked = await lockfile.check(path);
+            if (!isLocked) {
+                const options = await lib.readJSON<JobState>(path);
+                const instance = new ExportManager();
+                instance.setOptions(options);
+                instance.getAbortController().abort();
+                ABORT_CONTROLLERS.delete(instance.id);
+                await fs.promises.unlink(path);
+            }
+        })
+    }
+
     // ========================================================================
     static async create(options: Partial<JobState>) {
         const instance = new ExportManager()
@@ -633,7 +649,7 @@ class ExportManager
 
         this.manifest = manifestInstance.toJSON()
 
-        signal.addEventListener("abort", () => stream.destroy(new Error("Aborted")))
+        signal.addEventListener("abort", () => stream.destroy())
 
         let fileCount      = 0;
         let offset         = 0;
