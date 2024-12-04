@@ -6,8 +6,6 @@ import { NextFunction, Request, Response }       from "express"
 import { OperationOutcome, ParametersParameter } from "fhir/r4"
 import config                                    from "./config"
 import * as lib                                  from "./lib";
-import QueryBuilder                              from "./QueryBuilder"
-import getDB                                     from "./db"
 import toNdjson                                  from "./transforms/dbRowToNdjson"
 import toCSV                                     from "./transforms/dbRowToCSV"
 import translator                                from "./transforms/dbRowTranslator"
@@ -15,7 +13,7 @@ import prependFileHeader                         from "./transforms/prependFileH
 import FhirStream                                from "./FhirStream"
 import { ExportManifest, RequestWithSim }        from "./types"
 import { ScopeList }                             from "./scope"
-import { Manifest }                              from "./Manifest"
+import { getManifestPage, Manifest }             from "./Manifest"
 
 const supportedFormats = {
     "application/fhir+ndjson" : "ndjson",
@@ -603,21 +601,23 @@ class ExportManager
         lib.outcomes.exportAccepted(res, url);
     }
 
-    async stratify(): Promise<{ stratifier: string, rowCount: number }[]> {
-        const builder = new QueryBuilder({
-            type       : this.resourceTypes,
-            patients   : this.patients,
-            group      : this.group,
-            systemLevel: this.systemLevel,
-            start      : this.since,
-            stratifier : SUPPORTED_ORGANIZE_BY_TYPES[this.organizeOutputBy] as any
-        });
-        const { sql, params } = builder.compileCount();
-        const DB = getDB(this.stu);
-        return DB.promise("all", sql, params);
-    }
+    async buildManifest(signal: AbortSignal) {
+
+        const manifestInstance = new Manifest({
+            jobId            : this.id,
+            transactionTime  : moment(this.requestStart).format(),
+            secure           : this.secure,
+            request          : this.request,
+            outputOrganizedBy: this.organizeOutputBy,
+            outputFormat     : this.outputFormat,
+            outputPerPage    : this.allowPartialManifests ? 10 : Infinity,
+            _pages           : []
+        })
+
+        const stratifier = SUPPORTED_ORGANIZE_BY_TYPES[this.organizeOutputBy] as any
 
         const stream = new FhirStream({
+            types      : this.resourceTypes,
             stu        : this.stu,
             databaseMultiplier: this.databaseMultiplier,
             extended   : this.extended,
@@ -627,130 +627,136 @@ class ExportManager
             patients   : this.patients,
             offset     : 0,
             filter     : this.typeFilter.get("_filter"),
-            stratifier : "fhir_type",
-            limit
+            limit      : Infinity,
+            stratifier,
         });
-    }
-
-    async getCountsForResourceType(resourceType: string, limit: number): Promise<number> {
-        return new Promise((resolve, reject) => {
-            let input = this.getStreamForResource(resourceType, limit);
-            input.init().then(() => {
-                let count = 0;
-                input.once("error", reject)
-                input.once("close", () => resolve(count))
-                input.on("data", () => { count += 1; })
-            }, reject);
-        });
-    }
-
-    async buildManifest(signal: AbortSignal) {
-
-        const manifestInstance = new Manifest({
-            jobId            : this.id,
-            transactionTime  : moment(this.requestStart).format(),
-            secure           : this.secure,
-            request          : this.request,
-            outputOrganizedBy: this.organizeOutputBy,
-            outputFormat     : this.outputFormat
-        })
-
-        try {
-            var resourceTypes = await lib.abortablePromise(this.stratify(), signal);
-        } catch (e) {
-            if (!(e instanceof lib.AbortError)) {
-                console.error(e)
-            }
-            return null
-        }
-
-        const totalResourceCount = resourceTypes.reduce((prev, cur) => prev + cur.rowCount, 0) * this.databaseMultiplier;
-
-        if (resourceTypes.length > 0) {
-            for (const { stratifier, rowCount } of resourceTypes) {
-                
-                if (signal.aborted) {
-                    return null;
-                }
-
-                this.statusMessage = `currently processing ${stratifier} resources`;
-                await this.save()
-
-                let resourceCount = rowCount * this.databaseMultiplier;
-                let filteredCount = resourceCount;
-
-                // If a filter is used we need to actually loop tru, filter and count how many
-                // resources would remain after the filter
-                if (this.typeFilter.get("_filter")) {
-                    try {
-                        filteredCount = await lib.abortablePromise<number>(this.getCountsForResourceType(stratifier, resourceCount), signal);
-                    } catch (e) {
-                        if (!(e instanceof lib.AbortError)) {
-                            console.error(e)
-                            return null
-                        }
-                    }
-                }
-
-                if (filteredCount > 0) {
-                    const numFiles = Math.ceil(filteredCount / this.resourcesPerFile);
-                    for (let i = 0; i < numFiles; i++) {
-
-                        await lib.wait(config.statusThrottle)
-
-                        // ~ half of the links might fail if such error is requested
-                        if (this.simulatedError == "some_file_generation_failed" && i % 2) {
-                            manifestInstance.addError(stratifier, `Failed to export ${i + 1}.${stratifier}.${this.outputFormat}`)
-                        }
-
-                        // Add normal download link
-                        else {
-                            let offset = this.resourcesPerFile * i;
-                            let count = Math.min(this.resourcesPerFile, filteredCount - offset);
-                            
-
-                            // Here we know we have a list of {count} resources that
-                            // we can put into a file by generating the proper link
-                            // to it. However, if {this.simulateDeletedPct} is set,
-                            // certain percentage of them should go into the
-                            // "deleted" array instead!
-                            if (this.simulateDeletedPct && this.since) {
-                                let cnt = Math.round(count/100 * this.simulateDeletedPct);
-                                if (cnt) {
-                                    manifestInstance.addDeleted(
-                                        stratifier,
-                                        cnt,
-                                        offset,
-                                        Math.min(this.resourcesPerFile, Math.abs(filteredCount - offset))
-                                    )
-                                    count  -= cnt;
-                                    offset += cnt;
-                                }
-                            }
-
-                            manifestInstance.addFile(stratifier, count, offset, Math.max(Math.min(this.resourcesPerFile, filteredCount - offset), 0))
-                        }
-
-                        // Limit the manifest size based on total number of file links
-                        if (manifestInstance.size() > config.maxFiles) {
-                            this.tooManyFiles = true;
-                            await this.save();
-                            return null;
-                        }
-                    }
-                }
-
-                this.progress += (rowCount * this.databaseMultiplier / totalResourceCount * 100)
-                // console.log(`Progress =======> ${this.progress}%`);
-                await this.save()
-            }
-        } else {
-            this.progress = 100
-        }
 
         this.manifest = manifestInstance.toJSON()
-        await this.save()
-        return this.manifest
+
+        signal.addEventListener("abort", () => stream.destroy(new Error("Aborted")))
+
+        let fileCount      = 0;
+        let offset         = 0;
+        let lastStratifier = "";
+
+        const addOutputEntry = async ({ stratifier, count, continues }: {
+            stratifier: string
+            count     : number
+            continues?: boolean
+        }) => {
+
+            if (lastStratifier !== stratifier) {
+                offset = 0
+            }
+
+            if (!this.organizeOutputBy && lastStratifier !== stratifier) {
+                lastStratifier = stratifier
+                fileCount = 0
+            }
+
+            const fileName = this.organizeOutputBy ?
+                ++fileCount + ".output." + this.outputFormat :
+                ++fileCount + "." + stratifier + "." + this.outputFormat
+
+            const entry: any = { url: fileName, count }
+
+            if (!this.organizeOutputBy) {
+                entry.type = stratifier
+            }
+
+            if (continues) {
+                entry.continuesInFile = (fileCount + 1) + "." + (this.organizeOutputBy ? "output" : stratifier) + ".ndjson"
+            }
+
+            // ~ half of the links might fail if such error is requested
+            if (this.simulatedError == "some_file_generation_failed" && fileCount % 2) {
+                manifestInstance.addError(entry, `Failed to export ${fileName}`)
+            } else {
+                if (manifestInstance.addFile(entry, { limit: count, offset })) {
+                    if (this.allowPartialManifests) {
+                        this.manifest = manifestInstance.toJSON()
+                    }
+                }
+            }
+
+            // // Limit the manifest size based on total number of file links
+            if (manifestInstance.size() > config.maxFiles) {
+                this.tooManyFiles = true;
+                await this.save();
+                stream.destroy(new Error("Too many files"))
+                return null;
+            }
+
+            offset += count
+        }
+
+        await stream.init()
+
+        return new Promise((resolve, reject) => {
+            let count   = 0;
+            let groupId = "";
+
+            // This is called once for every resource. Note that resources are
+            // sorted by stratifier, meaning by resource_type or patient_id
+            stream.on("data", async (data) => {
+
+                stream.pause();
+
+                const group = data[stratifier]
+
+                const beganNewGroup = groupId && group !== groupId
+                
+                if (!groupId) {
+                    groupId = group
+                }
+
+                if (beganNewGroup) {
+                    await addOutputEntry({ stratifier: groupId, count })
+                    this.progress = (stream.rowIndex/this.databaseMultiplier) / stream.total * 100
+                    await this.save()
+                    groupId = group
+                    count = 1
+                }
+                else if (count === this.resourcesPerFile + 1) {
+                    await addOutputEntry({
+                        stratifier: groupId,
+                        count     : count - 1,
+                        continues : this.progress < 100
+                    })
+                    this.progress = (stream.rowIndex/this.databaseMultiplier) / stream.total * 100
+                    await this.save()
+                    groupId = group
+                    count = 2
+                }
+                else {
+                    count++
+                }
+
+                stream.resume()
+            })
+            
+            // Check for remaining resources
+            stream.once("close", async () => {
+                if (count) {
+                    await addOutputEntry({ stratifier: groupId, count })
+                    if (this.allowPartialManifests) {
+                        manifestInstance.savePage()
+                    }
+                }
+
+                this.progress = 100
+                this.manifest = manifestInstance.toJSON();
+                await this.save()
+                resolve(this.manifest)
+            })
+
+            stream.on("error", error => {
+                if (signal.aborted) {
+                    return resolve(null);
+                }
+                reject(error)
+            })
+        });
     }
 
     async handleStatus(req: Request, res: Response) {
@@ -781,36 +787,26 @@ class ExportManager
             );
         }
 
-        // ensure requestStart param is present
-        // let requestStart = moment(this.requestStart);
-
         // If waiting - show progress and exit
-        if (this.typeFilter.get("_filter") || this.simulatedExportDuration <= 0) {
-            if (Math.round(this.progress) < 100) {
-                return res.set({
-                    "X-Progress" : Math.round(this.progress) + "% complete, " + this.statusMessage,
-                    "Retry-After": 1
-                }).status(202).end();
-            }
-        } 
-        else {
-            // check if the user should (continue to) wait
-            let requestStart = moment(this.requestStart);
-            let endTime = moment(requestStart).add(this.simulatedExportDuration, "seconds");
-            let now = moment();
-        
-            // If waiting - show progress and exit
-            if (endTime.isAfter(now, "second")) {
-                let diff = (+now - +requestStart)/1000;
-                let pct = Math.round((diff / this.simulatedExportDuration) * 100);
-                return res.set({
-                    "X-Progress" : pct + "% complete, " + this.statusMessage,
-                    "Retry-After": 2//Math.ceil(this.simulatedExportDuration - diff)
-                }).status(202).end();
-            }
-        }
+        if (this.progress < 100) {
+            res.set({
+                "X-Progress" : Math.floor(this.progress) + "% complete, " + this.statusMessage,
+                "Retry-After": 1
+            }).status(202);
 
-        
+            if (this.allowPartialManifests && this.manifest) {
+                const page = getManifestPage(this.id, this.manifest, lib.uInt(req.query.page, 1))
+                try {
+                    res.json(page)
+                } catch (ex) {
+                    console.log(page)
+                    console.log(ex)
+                }
+                return
+            }
+
+            return res.end();
+        }
 
         if (!this.manifest) {
             return lib.operationOutcome(res, "Failed to build export manifest.", {
@@ -821,7 +817,11 @@ class ExportManager
 
         res.set({
             "Expires": new Date(this.createdAt + config.maxExportAge * 60000).toUTCString()
-        }).json(this.manifest);
+        }).json(
+            this.allowPartialManifests ?
+            getManifestPage(this.id, this.manifest, lib.uInt(req.query.page, 1)) :
+            this.manifest
+        );
     };
 
     async download(req: Request, res: Response)

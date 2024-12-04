@@ -1,7 +1,7 @@
-import base64url              from "base64-url"
-import config                 from "./config"
-import * as lib               from "./lib"
-import { ExportManifest }     from "./types"
+import base64url                              from "base64-url"
+import config                                 from "./config"
+import * as lib                               from "./lib"
+import { ExportManifest, ExportManifestFile } from "./types"
 
 
 interface ManifestOptions {
@@ -11,6 +11,8 @@ interface ManifestOptions {
     outputOrganizedBy: string
     transactionTime: string
     request: string
+    outputPerPage: number
+    _pages: [number, number, number, number, number, number][]
 }
 
 // When the allowPartialManifests kickoff parameter is true, the server MAY
@@ -49,6 +51,16 @@ export class Manifest {
 
     outputFormat: string;
 
+    outputOffset = 0
+
+    deletedOffset = 0
+
+    errorOffset = 0
+
+    _pages: ManifestOptions["_pages"] = []
+
+    outputPerPage = 0
+
     constructor(options: ManifestOptions) {
         this.jobId               = options.jobId
         this.outputFormat        = options.outputFormat
@@ -56,9 +68,11 @@ export class Manifest {
         this.request             = options.request
         this.requiresAccessToken = options.secure
         this.outputOrganizedBy   = options.outputOrganizedBy
-        this.deleted = [];
-        this.output  = [];
-        this.error   = [];
+        this._pages              = options._pages || []
+        this.outputPerPage       = options.outputPerPage
+        this.deleted             = [];
+        this.output              = [];
+        this.error               = [];
     }
 
     update(manifest: ExportManifest) {
@@ -69,32 +83,35 @@ export class Manifest {
         this.deleted             = manifest.deleted
         this.output              = manifest.output
         this.error               = manifest.error
+        this._pages              = manifest._pages || []
     }
 
-    addError(resourceType: string, fileError: string) {
+    addError(entry: ExportManifestFile, fileError: string) {
         this.error.push({
+            ...entry,
             type: "OperationOutcome",
-            url : this.buildUrl(this.error.length, { fileError }, resourceType)
+            url : this.buildUrl({ fileError }, entry.url)
         });
     }
 
-    addFile(resourceType: string, limit: number, offset: number, count: number) {
-        this.output.push({
-            type : resourceType,
-            count,
-            url  : this.buildUrl(this.output.length, { offset, limit }, resourceType)
-        });
+    addFile(entry: ExportManifestFile, sim: object) {
+        const len = this.output.push({ ...entry, url: this.buildUrl(sim, entry.url) });
+        if (len - this.outputOffset === this.outputPerPage) {
+            this.savePage()
+            return true
+        }
+        return false
     }
 
     addDeleted(resourceType: string, limit: number, offset: number, count: number) {
         this.deleted!.push({
             type: "Bundle",
             count,
-            url: this.buildUrl(this.deleted!.length, { del: 1, limit, offset }, resourceType)
+            url: this.buildUrl({ del: 1, limit, offset }, resourceType)
         }); 
     }
 
-    buildUrl(index: number, sim: object, fileName = "output") {
+    buildUrl(sim: object, fileName = "output") {
         return lib.buildUrlPath(
             config.baseUrl,
             base64url.encode(JSON.stringify({
@@ -102,28 +119,12 @@ export class Manifest {
                 secure: this.requiresAccessToken,
                 ...sim
             })),
-            "/fhir/bulkfiles/",
-            `${index + 1}.${fileName}.${this.outputFormat}`
+            `/fhir/bulkfiles/${fileName}`
         )
     }
 
     size() {
         return this.output.length + this.error.length + this.deleted!.length
-    }
-
-    generateNextLink() {
-        const outputOffset  = this.output.length
-        const deletedOffset = this.deleted?.length || 0
-        const errorOffset   = this.error.length
-        return lib.buildUrlPath(
-            config.baseUrl,
-            base64url.encode(JSON.stringify({
-                id    : this.jobId,
-                secure: this.requiresAccessToken,
-            })),
-            `/bulkstatus/${this.jobId}?outputOffset=${outputOffset
-            }&deletedOffset=${deletedOffset}&errorOffset=${errorOffset}`
-        )
     }
 
     toJSON(): ExportManifest {
@@ -135,45 +136,59 @@ export class Manifest {
             deleted            : this.deleted,
             output             : this.output,
             error              : this.error,
-            link: [{
-                relation: "next",
-                url     : this.generateNextLink()
-            }]
+            _pages             : this._pages
         }
     }
 
-    getPage(options: {
-        outputOffset : number
-        outputLimit  : number
-        deletedOffset: number
-        deletedLimit : number
-        errorOffset  : number
-        errorLimit   : number
-    }) {
-        return {
-            transactionTime    : this.transactionTime,
-            request            : this.request,
-            requiresAccessToken: this.requiresAccessToken,
-            outputOrganizedBy  : this.outputOrganizedBy,
-            deleted            : this.deleted?.slice(options.deletedOffset, options.deletedOffset + options.deletedLimit),
-            output             : this.output  .slice(options.outputOffset , options.outputOffset  + options.outputLimit ),
-            error              : this.error   .slice(options.errorOffset  , options.errorOffset   + options.errorLimit  ),
-        }
+    savePage() {
+        const index = this._pages.push([
+            this.outputOffset , this.output.length,
+            this.errorOffset  , this.error.length,
+            this.deletedOffset, this.deleted?.length || 0
+        ])
+        
+        this.outputOffset  = this.output.length
+        this.errorOffset   = this.error.length
+        this.deletedOffset = (this.deleted?.length || 0)
+        
+        return index
+    }
+}
+
+export function getManifestPage(jobId: string, manifest: ExportManifest, pageNumber = 1)
+{
+    // Requested a page that is not ready yet
+    if (pageNumber > manifest._pages.length) {
+        return null
     }
 
-    extractPage(options: {
-        outputOffset ?: number
-        deletedOffset?: number
-        errorOffset  ?: number
-    } = {}) {
-        return {
-            transactionTime    : this.transactionTime,
-            request            : this.request,
-            requiresAccessToken: this.requiresAccessToken,
-            outputOrganizedBy  : this.outputOrganizedBy,
-            deleted            : this.deleted?.slice(options.deletedOffset || 0),
-            output             : this.output  .slice(options.outputOffset  || 0),
-            error              : this.error   .slice(options.errorOffset   || 0),
-        }
+    const page = manifest._pages[pageNumber - 1] || manifest._pages[0]
+
+    if (!page) {
+        return { ...manifest, _pages: undefined }
     }
+
+    const [outputOffset, outputLimit, errorOffset, errorLimit, deletedOffset, deletedLimit] = page
+    var out: any = {
+        transactionTime    : manifest.transactionTime,
+        request            : manifest.request,
+        requiresAccessToken: manifest.requiresAccessToken,
+        outputOrganizedBy  : manifest.outputOrganizedBy,
+        deleted            : manifest.deleted?.slice(deletedOffset, deletedLimit),
+        output             : manifest.output  .slice(outputOffset , outputLimit ),
+        error              : manifest.error   .slice(errorOffset  , errorLimit  ),
+    }
+
+    if (pageNumber < manifest._pages.length + 1 && (
+        manifest.output.length > outputLimit ||
+        manifest.error.length  > errorLimit  ||
+        (manifest.deleted?.length || 0) > deletedLimit)
+     ) {
+        out.link = [{
+            relation: "next",
+            url: lib.buildUrlPath(config.baseUrl, `/fhir/bulkstatus/${jobId}?page=${pageNumber+1}`)
+        }]
+    }
+
+    return out
 }

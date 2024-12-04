@@ -28,7 +28,7 @@ export default {
     // How many rows to select (load into memory and then stream them one by one).
     // The bigger the number the fewer sql queries will be executed but more
     // memory will be needed to store those bigger chunks of data
-    rowsPerChunk: 500,
+    rowsPerChunk: 1000,
 
     // In minutes! Files created after export are deleted after 60 minutes.
     maxExportAge: 60,

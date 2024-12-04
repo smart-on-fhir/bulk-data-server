@@ -124,6 +124,8 @@ export interface ExportManifest {
     outputOrganizedBy?: string
 
     link?: { relation: "next"; url: string }[]
+
+    _pages: [number, number, number, number, number, number][]
 }
 
 export interface ExportManifestFile<Type = string> {
