@@ -5,5 +5,6 @@ module.exports = {
     // ignore: ["tests/import.test.js"],
     // parallel: true,
     timeout: 2000, // defaults to 2000ms; increase if needed
-    checkLeaks: true
+    checkLeaks: true,
+    bail: true
 }
