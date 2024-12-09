@@ -832,13 +832,21 @@ class ExportManager
             });
         }
 
-        res.set({
-            "Expires": new Date(this.createdAt + config.maxExportAge * 60000).toUTCString()
-        }).json(
-            this.allowPartialManifests ?
-            getManifestPage(this.id, this.manifest, lib.uInt(req.query.page, 1)) :
-            this.manifest
-        );
+        const expires = new Date(this.createdAt + config.maxExportAge * 60000).toUTCString()
+
+        if (this.allowPartialManifests) {
+            const page = getManifestPage(this.id, this.manifest, lib.uInt(req.query.page, 1))
+            if (page) {
+                return res.set({ expires }).json(page);
+            } else {
+                return res.set({
+                    "X-Progress" : Math.floor(this.progress) + "% complete, " + this.statusMessage,
+                    "Retry-After": 1
+                }).status(202).end()
+            }
+        }
+
+        res.set({ expires }).json(this.manifest);
     };
 
     async download(req: Request, res: Response)
@@ -882,7 +890,7 @@ class ExportManager
         }
 
         const stratifier = SUPPORTED_ORGANIZE_BY_TYPES[this.organizeOutputBy] as any
-        
+
         let input = new FhirStream({
             types      : this.organizeOutputBy ? this.resourceTypes : [sim.stratifier!],
             stu        : this.stu,
