@@ -290,6 +290,51 @@ class Client
             }
         }
     }
+
+    async waitForExport2({
+        onPage,
+        delay = 100,
+        statusUrl,
+        cache = new Map()
+    }: {
+        onPage   ?: (page: ExportManifest, statusUrl: string, progress: string, response: Response) => void
+        delay    ?: number
+        statusUrl?: string
+        cache    ?: Map<string, ExportManifest>
+    }): Promise<Map<string, ExportManifest>> {
+        
+        const url = statusUrl || this.kickOffResult!.response.headers.get("content-location")!
+        const { response, parsedBody, responseText } = await lib.request<ExportManifest>(url);
+        const nextUrl        = Array.isArray(parsedBody?.link) ? parsedBody.link.find(l => l.relation === "next")?.url : "";
+        const shouldContinue = response.status === 202 || nextUrl;
+        const isLastPage     = response.status === 200 && !nextUrl;
+
+        if (nextUrl || isLastPage) {
+            if (parsedBody) {
+                if (!cache.has(url)) {
+                    cache.set(url, parsedBody)
+                    onPage?.(parsedBody, url, response.headers.get("x-progress") || "100% complete", response)
+                }
+            }
+        }
+
+        if (shouldContinue) {
+            await wait(delay)
+            if (nextUrl) {
+                return await this.waitForExport2({ onPage, delay, cache, statusUrl: nextUrl })
+            } else {
+                return await this.waitForExport2({ onPage, delay, cache, statusUrl })
+            }
+        }
+
+        if (isLastPage) {
+            if (!cache.size) {
+                console.log("parsedBody:", parsedBody, response.status, responseText, url)
+            }
+            return cache
+        }
+
+        throw new Error(`Unexpected status code ${response.status}`)
     }
 
     /**
@@ -1250,6 +1295,138 @@ describe("Progress Updates", function() {
         expect(client.statusResult!.parsedBody!.error.length).to.equal(2);
     });
 });
+
+describe("Partial manifests and pagination", function() {
+    this.timeout(15000)
+
+    function getFileLinks(manifest: ExportManifest) {
+        return manifest.output.map(entry => {
+            const sim = entry.url.substring(config.baseUrl.length + 1).replace(/\/fhir\/bulkfiles\/.+$/, "")
+            return {
+                ...entry,
+                sim: JSON.parse(atob(sim))
+            }
+        })
+    }
+    
+    it ("allowPartialManifests + organizeOutputBy", async () => {
+        const client = new Client();
+        await client.kickOff({
+            allowPartialManifests: true,
+            organizeOutputBy     : "Patient",
+            _type                : "Device,DocumentReference,Patient",
+            resourcesPerFile     : 10_000,
+        });
+        const manifests = await client.waitForExport2({ delay: 10 })
+        const statusUrl = client.kickOffResult?.response.headers.get("content-location")!
+
+        expect(manifests.size).to.equal(1, "Expecting one page. Got " + manifests.size)
+        expect(manifests.has(statusUrl)).to.equal(true, "The url of the first and only page mys equal the initial status url")
+        expect(manifests.get(statusUrl)!.output[0].count).to.equal(107, "Expect 100 Patients, 4 Devices, and 3 DocRefs (107 total)")
+        expect(manifests.get(statusUrl)!.output[0].type).to.equal(undefined, "Expect an entry with mixed content due to organizeOutputBy to have no type specified")
+    })
+
+    it ("allowPartialManifests without organizeOutputBy", async () => {
+        const client = new Client();
+        await client.kickOff({
+            allowPartialManifests: true,
+            resourcesPerFile: 1000,
+            _type: "Device,DocumentReference,Patient,AllergyIntolerance,ImagingStudy,CareTeam,CarePlan,Condition,DiagnosticReport,Encounter,Claim"
+        });
+        const manifests = await client.waitForExport2({ delay: 10 })
+        const statusUrl = client.kickOffResult?.response.headers.get("content-location")!
+
+        expect(manifests.size).to.equal(2, "Expecting 2 pages. Got " + manifests.size)
+        expect(manifests.get(statusUrl)?.output.map(entry => [entry.count, entry.type])).to.deep.equal([
+            [  38, "AllergyIntolerance"],
+            [ 278, "CarePlan"          ],
+            [ 278, "CareTeam"          ],
+            [1000, "Claim"             ],
+            [1000, "Claim"             ],
+            [1000, "Claim"             ],
+            [1000, "Claim"             ],
+            [1000, "Claim"             ],
+            [1000, "Claim"             ],
+            [  83, "Claim"             ],
+        ]);
+        expect(manifests.get(statusUrl + "?page=2")?.output.map(entry => [entry.count, entry.type])).to.deep.equal([
+            [ 639, "Condition"         ],
+            [   4, "Device"            ],
+            [ 897, "DiagnosticReport"  ],
+            [   3, "DocumentReference" ],
+            [1000, "Encounter"         ],
+            [1000, "Encounter"         ],
+            [1000, "Encounter"         ],
+            [ 697, "Encounter"         ],
+            [  16, "ImagingStudy"      ],
+            [ 100, "Patient"           ],
+        ]);
+    })
+
+    it ("Generates proper download links", async () => {
+        const client = new Client();
+        await client.kickOff({ _type: "Device" });
+        const manifests = await client.waitForExport2({ delay: 10 })
+        const statusUrl = client.kickOffResult?.response.headers.get("content-location")!
+        const links = getFileLinks(manifests.get(statusUrl)!)
+        expect(links.length).to.equal(1)
+        expect(links[0].count).to.equal(4)
+        expect(links[0].type).to.equal("Device")
+        expect(links[0].sim.secure).to.equal(false)
+        expect(links[0].sim.offset).to.equal(0)
+        expect(links[0].sim.limit).to.equal(4)
+        expect(links[0].sim.stratifier).to.equal("Device")
+        // console.log(links)
+    })
+
+    it ("Generates proper download links with allowPartialManifests", async () => {
+        const client = new Client();
+        await client.kickOff({ _type: "Device", allowPartialManifests: true });
+        const manifests = await client.waitForExport2({ delay: 10 })
+        const statusUrl = client.kickOffResult?.response.headers.get("content-location")!
+        const links = getFileLinks(manifests.get(statusUrl)!)
+        expect(links.length).to.equal(1)
+        expect(links[0].count).to.equal(4)
+        expect(links[0].type).to.equal("Device")
+        expect(links[0].sim.secure).to.equal(false)
+        expect(links[0].sim.offset).to.equal(0)
+        expect(links[0].sim.limit).to.equal(4)
+        expect(links[0].sim.stratifier).to.equal("Device")
+        // console.log(links)
+    })
+
+    it ("Generates proper download links with organizeOutputBy", async () => {
+        const client = new Client();
+        await client.kickOff({ organizeOutputBy: "Patient", _type: "Device" });
+        const manifests = await client.waitForExport2({ delay: 10 })
+        const statusUrl = client.kickOffResult?.response.headers.get("content-location")!
+        const links = getFileLinks(manifests.get(statusUrl)!)
+        expect(links.length).to.equal(1)
+        expect(links[0].count).to.equal(4)
+        expect(links[0].type).to.equal(undefined)
+        expect(links[0].url).to.include("/fhir/bulkfiles/1.output.ndjson")
+        expect(links[0].sim.secure).to.equal(false)
+        expect(links[0].sim.offset).to.equal(0)
+        expect(links[0].sim.limit).to.equal(4)
+        // console.log(links)
+    })
+
+    it ("Generates proper download links with organizeOutputBy and allowPartialManifests", async () => {
+        const client = new Client();
+        await client.kickOff({ allowPartialManifests: true, organizeOutputBy: "Patient", _type: "Device" });
+        const manifests = await client.waitForExport2({ delay: 10 })
+        const statusUrl = client.kickOffResult?.response.headers.get("content-location")!
+        const links = getFileLinks(manifests.get(statusUrl)!)
+        expect(links.length).to.equal(1)
+        expect(links[0].count).to.equal(4)
+        expect(links[0].type).to.equal(undefined)
+        expect(links[0].url).to.include("/fhir/bulkfiles/1.output.ndjson")
+        expect(links[0].sim.secure).to.equal(false)
+        expect(links[0].sim.offset).to.equal(0)
+        expect(links[0].sim.limit).to.equal(4)
+        // console.log(links)
+    })
+})
 
 describe("File Downloading", function() {
     

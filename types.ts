@@ -19,6 +19,7 @@ export interface Sim {
     offset   ?: number
     stu      ?: number
     extended ?: boolean
+    stratifier?: string
 }
 
 export interface RequestWithSim extends Request {
