@@ -660,6 +660,26 @@ async function insertDocumentReferences()
     );
 }
 
+async function createOrgView() {
+    const subjectPath = +App.fhirVersion === 2 ?
+        "patient.reference" :
+        "subject.reference";
+
+    await DB.promise("run", `DROP VIEW IF EXISTS "data_with_org"`);
+
+    await DB.promise(
+        "run",
+        `CREATE VIEW "data_with_org" AS 
+        WITH "subject_orgs" AS (
+            SELECT 
+            substr(json_extract(resource_json , '$.${subjectPath}'), 9) as "subject",
+            substr(json_extract(resource_json , '$.serviceProvider.reference'), 14) AS "org"
+            FROM data
+            WHERE fhir_type = 'Encounter'
+            GROUP BY "subject", "org"
+        ) SELECT d.*, o.org FROM data d LEFT JOIN subject_orgs o ON (d.patient_id = o.subject);`
+    );
+}
 
 async function main()
 {
@@ -680,6 +700,9 @@ async function main()
 
     // Insert groups and update records to belong to them
     await insertGroups();
+
+    // Create view to be used when organizing by Organization
+    await createOrgView()
 
     // Close the DB connection
     DB.close();
