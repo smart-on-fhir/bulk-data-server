@@ -36,6 +36,7 @@ function extractSim(req: Request, res: Response, next: NextFunction) {
 router.route("/\\$export")
     .post(express.json({ type: jsonTypes }) as RequestHandler)
     .all(
+        Lib.rateLimiter(),
         extractSim,
         Lib.requireFhirJsonAcceptHeader,
         Lib.requireRespondAsyncHeader,
@@ -48,6 +49,7 @@ router.route("/\\$export")
 router.route(["/Patient/\\$export", "/group/:groupId/\\$export"])
     .post(express.json({ type: jsonTypes }) as RequestHandler)
     .all(
+        Lib.rateLimiter(),
         extractSim,
         Lib.requireFhirJsonAcceptHeader,
         Lib.requireRespondAsyncHeader,
@@ -56,7 +58,7 @@ router.route(["/Patient/\\$export", "/group/:groupId/\\$export"])
     );
 
 // This is the endPoint that should provide progress information
-router.get("/bulkstatus/:id", [Lib.checkAuth, ExportManager.createStatusHandler()]);
+router.get("/bulkstatus/:id", [Lib.rateLimiter(), Lib.checkAuth, ExportManager.createStatusHandler()]);
 
 // The actual file downloads 
 router.get("/bulkfiles/:file", [

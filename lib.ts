@@ -650,3 +650,52 @@ export class AbortError extends Error {
         super(message)
     }
 }
+
+export function rateLimiter({
+    requestLimit = process.env.NODE_ENV === "test" ? 600 : 60,
+    timeWindow   = 60 * 1000,     // n requests per 1 minute
+    blockDuration = 5 * 60 * 1000 // block for 5 minutes
+}: {
+    /** Maximum requests */
+    requestLimit?: number
+    /** Time window in milliseconds (e.g., 1 minute) */
+    timeWindow?: number
+    /** Block duration in milliseconds (e.g., 5 minutes) */
+    blockDuration?: number
+} = {}) {
+    /** Map to store client request timestamps for this url */
+    const rateLimitMap = new Map();
+
+    return function(req: Request, res: Response, next: NextFunction) {
+        const clientIP = req.ip; // Use the client's IP address as the key
+
+        const now = Date.now();
+        const clientData = rateLimitMap.get(clientIP) || { requests: [], blockedUntil: null };
+
+        // Check if the client is currently blocked
+        if (clientData.blockedUntil && now < clientData.blockedUntil) {
+            return res.status(429)
+                .set({ "retry-after": Math.ceil(clientData.blockedUntil / 1000) })
+                .send('Too Many Requests. Try again later.');
+        }
+
+        // Filter out timestamps outside the time window
+        const recentRequests = clientData.requests.filter((ts: any) => now - ts < timeWindow);
+        recentRequests.push(now); // Add the current request timestamp
+
+        if (recentRequests.length > requestLimit) {
+            // Block the client
+            rateLimitMap.set(clientIP, {
+                requests: recentRequests,
+                blockedUntil: now + blockDuration,
+            });
+            return res.status(429)
+                .set({ "retry-after": Math.ceil(now + blockDuration) })
+                .send('Too Many Requests. Try again later.');
+        }
+
+        // Update the map with the new request data
+        rateLimitMap.set(clientIP, { requests: recentRequests, blockedUntil: null });
+        next();
+    }
+}
