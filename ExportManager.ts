@@ -688,14 +688,14 @@ class ExportManager
             if (this.simulatedError == "some_file_generation_failed" && fileCount % 2) {
                 manifestInstance.addError(entry, `Failed to export ${fileName}`)
             } else {
-                if (manifestInstance.addFile(entry, { limit: count, offset })) {
+                if (manifestInstance.addFile(entry, { limit: count, offset, stratifier: this.organizeOutputBy ? undefined : stratifier })) {
                     if (this.allowPartialManifests) {
                         this.manifest = manifestInstance.toJSON()
                     }
                 }
             }
 
-            // // Limit the manifest size based on total number of file links
+            // Limit the manifest size based on total number of file links
             if (manifestInstance.size() > config.maxFiles) {
                 this.tooManyFiles = true;
                 await this.save();
@@ -883,7 +883,7 @@ class ExportManager
         const stratifier = SUPPORTED_ORGANIZE_BY_TYPES[this.organizeOutputBy] as any
         
         let input = new FhirStream({
-            types      : this.organizeOutputBy ? [] : [req.params.file.split(".")[1]],
+            types      : this.organizeOutputBy ? this.resourceTypes : [sim.stratifier!],
             stu        : this.stu,
             databaseMultiplier: this.databaseMultiplier,
             extended   : this.extended,
