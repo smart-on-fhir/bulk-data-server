@@ -21,6 +21,7 @@ export class RequestError extends Error
 export interface FetchResponse<T=string | object> {
     response: globalThis.Response
     parsedBody: T
+    responseText: string
 }
 
 export async function request<T=string | object>(url: string | URL, options?: RequestInit): Promise<FetchResponse<T>> {
@@ -32,11 +33,13 @@ export async function request<T=string | object>(url: string | URL, options?: Re
 
     let out = {
         response,
-        parsedBody: await response.text()
-    }
+        responseText: await response.text()
+    } as FetchResponse<T>
 
-    if (out.parsedBody.length && type.match(/\bjson\b/i)) {
-        out.parsedBody = JSON.parse(out.parsedBody);
+    if (out.responseText.length && type.match(/\bjson\b/i)) {
+        out.parsedBody = JSON.parse(out.responseText);
+    } else {
+        out.parsedBody = out.responseText as any
     }
 
     if (response.status >= 400) {
