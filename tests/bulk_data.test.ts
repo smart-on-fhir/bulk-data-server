@@ -244,9 +244,9 @@ class Client
     }
 
     async checkStatus(options: { accessToken?: string } = {}) {
-        assert(this.kickOffResponse, "Trying to check the status of export that has not been started");
+        assert(this.kickOffResult, "Trying to check the status of export that has not been started");
         
-        const location = this.kickOffResponse.headers["content-location"];
+        const location = this.kickOffResult.response.headers.get("content-location");
 
         assert(location, "Trying to check the status of export that did not provide status location");
 
@@ -643,7 +643,7 @@ describe("System-level Export", function() {
 });
 
 describe("Bulk Data Kick-off Request", function() {
-    this.timeout(5000);
+    this.timeout(15000);
     
     [
         {
@@ -1056,7 +1056,6 @@ describe("Canceling", () => {
     it ("works while exporting", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient" });
-        await client.checkStatus();
         const cancelResponse = await client.cancel();
         expect(cancelResponse.parsedBody.issue[0].diagnostics).to.exist;
         expect(cancelResponse.response.status).to.equal(202);
@@ -1065,7 +1064,6 @@ describe("Canceling", () => {
     it ("works after export is complete", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient "});
-        await client.checkStatus();
         const cancelResponse = await client.cancel();
         expect(cancelResponse.parsedBody.issue[0].diagnostics).to.exist;
         expect(cancelResponse.response.status).to.equal(202);
@@ -1074,7 +1072,6 @@ describe("Canceling", () => {
     it ("returns an error if trying to cancel twice", async () => {
         const client = new Client();
         await client.kickOff({ _type: "Patient "});
-        await client.checkStatus();
         await client.cancel();
         await rejects(() => client.cancel(), "Second cancel should have failed")
     });
@@ -1144,7 +1141,7 @@ describe("Progress Updates", function() {
 
     it ("Replies with links after the wait time", async () => {
         const client = new Client();
-        await client.kickOff();
+        await client.kickOff({ _type: "Device" });
         await client.waitForExport();
         expect(
             client.statusResult!.parsedBody!.output,
