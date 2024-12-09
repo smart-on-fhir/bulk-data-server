@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "NODE_ENV=test nyc --cache false mocha --exit -n trace-warnings",
-    "test:watch": "nodemon -e ts,js -w . -x 'npm test'",
+    "test:watch": "nodemon -e ts,js -w . -x 'npm test || exit 1'",
     "coverage": "nyc npm run test",
     "start": "ts-node --transpile-only .",
     "start:dev": "ts-node .",
