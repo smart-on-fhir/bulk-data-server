@@ -718,6 +718,8 @@ class ExportManager
 
                 stream.pause();
 
+                count++
+
                 const group = data[stratifier]
 
                 const beganNewGroup = groupId && group !== groupId
@@ -727,11 +729,13 @@ class ExportManager
                 }
 
                 if (beganNewGroup) {
-                    await addOutputEntry({ stratifier: groupId, count })
+                    if (!this.organizeOutputBy) {
+                        await addOutputEntry({ stratifier: groupId, count: count - 1 })
+                        count = 1
+                    }
                     this.progress = (stream.rowIndex/this.databaseMultiplier) / stream.total * 100
                     await this.save()
                     groupId = group
-                    count = 1
                 }
                 else if (count === this.resourcesPerFile + 1) {
                     await addOutputEntry({
@@ -742,10 +746,7 @@ class ExportManager
                     this.progress = (stream.rowIndex/this.databaseMultiplier) / stream.total * 100
                     await this.save()
                     groupId = group
-                    count = 2
-                }
-                else {
-                    count++
+                    count = 1
                 }
 
                 stream.resume()
