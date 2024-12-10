@@ -42,7 +42,7 @@
     "jsonwebtoken": "^9.0.0",
     "jwk-lite": "^0.1.2",
     "jwk-to-pem": "^2.0.0",
-    "mocha": "^10.2.0",
+    "mocha": "^10.8.2",
     "moment": "^2.19.4",
     "morgan": "^1.10.0",
     "request": "^2.88.2",
