@@ -603,7 +603,7 @@ class ExportManager
 
         await this.save();
 
-        lib.abortablePromise(this.buildManifest(abortSignal), abortSignal).catch(e => {
+        this.buildManifest(abortSignal).catch(e => {
             if (!(e instanceof lib.AbortError)) {
                 console.error(e)
             }
@@ -712,6 +712,13 @@ class ExportManager
             let count   = 0;
             let groupId = "";
 
+            stream.on("error", error => {
+                if (signal.aborted) {
+                    return resolve(null);
+                }
+                reject(error)
+            })
+
             // This is called once for every resource. Note that resources are
             // sorted by stratifier, meaning by resource_type or patient_id
             stream.on("data", async (data) => {
@@ -765,13 +772,6 @@ class ExportManager
                 this.manifest = manifestInstance.toJSON();
                 await this.save()
                 resolve(this.manifest)
-            })
-
-            stream.on("error", error => {
-                if (signal.aborted) {
-                    return resolve(null);
-                }
-                reject(error)
             })
         });
     }

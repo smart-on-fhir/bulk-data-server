@@ -97,10 +97,14 @@ export default class FhirStream extends Readable
         this.getNextRow  = this.getNextRow .bind(this);
 
         this._read = () => {
-            if (config.throttle) {
-                this.timer = setTimeout(this.getNextRow, config.throttle);    
-            } else {
-                this.getNextRow()
+            try {
+                if (config.throttle) {
+                    this.timer = setTimeout(this.getNextRow, config.throttle);    
+                } else {
+                    this.getNextRow()
+                }
+            } catch (ex) {
+                this.destroy(ex as Error)
             }
         };
     }
