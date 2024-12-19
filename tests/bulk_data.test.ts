@@ -1,19 +1,19 @@
-import fs             from "fs"
-import assert         from "assert/strict"
-import base64url      from "base64-url"
-import moment         from "moment"
-import crypto         from "crypto"
-import jwkToPem       from "jwk-to-pem"
-import jwt            from "jsonwebtoken"
-import express        from "express"
-import { expect }     from "chai"
-import { rejects }    from "assert"
+import fs                  from "fs"
+import assert              from "assert/strict"
+import base64url           from "base64-url"
+import moment              from "moment"
+import crypto              from "crypto"
+import jwkToPem            from "jwk-to-pem"
+import jwt                 from "jsonwebtoken"
+import express             from "express"
+import { expect }          from "chai"
+import { rejects }         from "assert"
 import { OperationOutcome, Parameters } from "fhir/r4"
 const { server }    = require("../index")
-import config         from "../config"
-import ExportManager  from "../ExportManager"
-import { wait }       from "../lib"
-import * as lib       from "./lib"
+import config              from "../config"
+import ExportManager       from "../ExportManager"
+import { makeArray, wait } from "../lib"
+import * as lib            from "./lib"
 import { ExportManifest, JWKS, JWT } from "../types";
 
 const BlueCrossBlueShieldId = "BlueCrossBlueShield"
@@ -65,7 +65,7 @@ interface KickOffOptions {
     secure                 ?: boolean
     fileError              ?: string
     del                    ?: number
-    _typeFilter            ?: string
+    _typeFilter            ?: string | string[]
     organizeOutputBy       ?: string
     allowPartialManifests  ?: boolean
 }
@@ -100,26 +100,6 @@ class Client
 
     statusResult?: lib.FetchResponse<ExportManifest>
 
-    /**
-     * @param {object}     [options]
-     * @param {boolean}    [options.systemLevel]
-     * @param {string}     [options.simulatedError = ""]
-     * @param {number}     [options.simulatedExportDuration = 0]
-     * @param {number}     [options.resourcesPerFile]
-     * @param {number}     [options.accessTokenLifeTime]
-     * @param {string}     [options._type]
-     * @param {string}     [options._elements]
-     * @param {string}     [options._outputFormat]
-     * @param {string}     [options.accessToken]
-     * @param {boolean}    [options.extended = false]
-     * @param {string|*[]} [options.patient = ""]
-     * @param {object}     [options.body = {}]
-     * @param {object}     [options.headers = {}]
-     * @param {boolean}    [options.secure = false]
-     * @param {string}     [options.fileError]
-     * @param {number}     [options.del]
-     * @param {string}     [options._typeFilter]
-     */
     async kickOff(options: KickOffOptions = {})
     {
         const sim: Sim = {
@@ -219,7 +199,7 @@ class Client
             }
 
             if ("_typeFilter" in options) {
-                body.parameter!.push({ name: "_typeFilter", valueString: options._typeFilter });
+                body.parameter!.push(...makeArray(options._typeFilter).map(f => ({ name: "_typeFilter", valueString: f + "" })));
             }
 
             if (options.allowPartialManifests) {
@@ -234,7 +214,10 @@ class Client
                 "_typeFilter", "organizeOutputBy", "allowPartialManifests"
             ].forEach(key => {
                 if (key in options) {
-                    url.searchParams.set(key, options[key as keyof typeof options] + "")
+                    const values = makeArray(options[key as keyof typeof options]);
+                    values.forEach(v => {
+                        url.searchParams.append(key, v + "")
+                    })
                 }
             });
         }
@@ -989,7 +972,13 @@ describe("Bulk Data Kick-off Request", function() {
                         const options = { ...meta.options, usePOST: method === "POST" };
                         it ("works with " + method, async () => {
                             const client = new Client()
-                            await client.kickOff({ ...options, _typeFilter: '_filter=id sw "0"' });
+                            await client.kickOff({
+                                ...options,
+                                _typeFilter: [
+                                    '_filter=id sw "0"',
+                                    'Patient?gender=male'
+                                ]
+                            });
                             await client.cancel()
                         });
                     });
@@ -1211,13 +1200,17 @@ describe("Progress Updates", function() {
         await client.kickOff({
             _type: "Patient",
             resourcesPerFile: 30,
-            _typeFilter: '_filter=maritalStatus.text eq "Never Married"' // 33
+            _typeFilter: [
+                '_filter=maritalStatus.text eq "Never Married"',
+                'Patient?gender=male'
+             ] // 72
         });
         await client.waitForExport();
         // console.log(client.statusResult!.parsedBody)
-        expect(client.statusResult!.parsedBody!.output.length).to.equal(2);
+        expect(client.statusResult!.parsedBody!.output.length).to.equal(3);
         expect(client.statusResult!.parsedBody!.output[0].count).to.equal(30);
-        expect(client.statusResult!.parsedBody!.output[1].count).to.equal(3);
+        expect(client.statusResult!.parsedBody!.output[1].count).to.equal(30);
+        expect(client.statusResult!.parsedBody!.output[2].count).to.equal(12);
     });
 
     it ("Generates correct number of links with _filter and multiplier", async () => {
