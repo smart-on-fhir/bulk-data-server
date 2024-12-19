@@ -1,9 +1,10 @@
-import { Request, Response } from "express";
-import moment                from "moment"
-import config                from "../config"
-import { replyWithError }    from "../lib"
-import pkg                   from "../package.json"
-import { RequestWithSim }    from "../types";
+import { Request, Response }               from "express"
+import moment                              from "moment"
+import { CapabilityStatementRestResource } from "fhir/r4"
+import pkg                                 from "../package.json"
+import config                              from "../config"
+import { replyWithError }                  from "../lib"
+import schema                              from "../schema"
 
 const SERVER_START_TIME = moment().format("YYYY-MM-DDTHH:mm:ssZ");
 
@@ -25,91 +26,29 @@ const SUPPORTED_ACCEPT_MIME_TYPES = [
     "*/*"
 ];
 
-const FHIR_VERSION_TO_CONTENT_TYPE = {
-    4: "application/fhir+json; charset=utf-8",
-    3: "application/json+fhir; charset=utf-8",
-    2: "application/json; charset=utf-8"
-};
-
-function getFhirVersion(stu: number): string {
-    switch (+stu) {
-        case 2:
-            return "1.0.2";
-        case 3:
-            return "3.0.2";
-        default:
-            return "4.0.1";
-    }
+function getCapabilityStatementRestResource(schema: any): CapabilityStatementRestResource {
+    const out = { ...schema as CapabilityStatementRestResource }
+    out.searchParam = (out.searchParam || []).map(p => {
+        const out: any = {}
+        for (const key in p) {
+            if (key !== "resolver") {
+                out[key] = p[key as keyof typeof p]
+            }
+        }
+        return out
+    })
+    return out
 }
+
 
 class CapabilityStatement
 {
     /**
-     * Numeric FHIR version
+     * Get array of supported resources to be listed in the CapabilityStatement
      */
-    private stu: number;
-
-    constructor(stu = 4)
+    getResources(): CapabilityStatementRestResource[]
     {
-        this.stu = +stu;
-    }
-
-    getResources()
-    {
-        /**
-         * Array of supported resources to be listed in the CapabilityStatement
-         * @type {*[]}
-         */
-        const resources = [
-            {
-                "type": "Patient",
-                "operation": [
-                    {
-                        "extension": [
-                            {
-                                "url": "http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation",
-                                "valueCode": "SHOULD"
-                            }
-                        ],
-                        "name": "export",
-                        "definition": this.stu === 4 ?
-                            "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/patient-export" :
-                            { reference: "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/patient-export" }
-                    }
-                ]
-            },
-            {
-                "type": "Group",
-                "operation": [
-                    {
-                        "extension": [
-                            {
-                                "url": "http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation",
-                                "valueCode": "SHOULD"
-                            }
-                        ],
-                        "name": "export",
-                        "definition": this.stu === 4 ?
-                            "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/group-export" :
-                            { reference: "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/group-export" }
-                    }
-                ]
-            },
-            {
-                "type": "OperationDefinition",
-                "profile": this.stu === 4 ?
-                    "http://hl7.org/fhir/Profile/OperationDefinition" :
-                    { "reference": "http://hl7.org/fhir/Profile/OperationDefinition" },
-                "interaction": [
-                    {
-                        "code": "read"
-                    }
-                ],
-                "searchParam": []
-            }
-        ];
-
-        return resources;
+        return Object.keys(schema).map(key => getCapabilityStatementRestResource(schema[key]));
     }
 
     getOperations()
@@ -117,9 +56,7 @@ class CapabilityStatement
         return [
             {
                 "name": "get-resource-counts",
-                "definition": this.stu === 4 ?
-                    "OperationDefinition/-s-get-resource-counts" :
-                    { reference: "OperationDefinition/-s-get-resource-counts" }
+                "definition": "OperationDefinition/-s-get-resource-counts"
             },
             {
                 "extension": [
@@ -129,9 +66,7 @@ class CapabilityStatement
                   }
                 ],
                 "name": "export",
-                "definition": this.stu === 4 ?
-                    "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/export" :
-                    { reference: "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/export" }
+                "definition": "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/export"
             }
         ];
     }
@@ -154,8 +89,7 @@ class CapabilityStatement
             implementation: {
                 "description": "SMART Sample Bulk Data Server"
             },
-            fhirVersion: getFhirVersion(this.stu),
-            ...(this.stu < 4 && {acceptUnknown: "extensions"}),
+            fhirVersion: "4.0.1",
             format: [ "json" ],
             rest: [
                 {
@@ -198,7 +132,6 @@ class CapabilityStatement
 }
 
 export default function(req: Request, res: Response) {
-    const stu = (req as RequestWithSim).sim.stu || 4
     const { query } = req
 
     if (query._format) {
@@ -213,8 +146,9 @@ export default function(req: Request, res: Response) {
         return replyWithError(res, "only_json_supported", 400);
     }
 
-    const statement = new CapabilityStatement(stu);
+    const statement = new CapabilityStatement();
 
-    const key = stu as keyof typeof FHIR_VERSION_TO_CONTENT_TYPE
-    res.set("content-type", FHIR_VERSION_TO_CONTENT_TYPE[key]).send(JSON.stringify(statement.toJSON(), null, 4));
+    res
+        .set("content-type", "application/fhir+json; charset=utf-8")
+        .send(JSON.stringify(statement.toJSON(), null, 4));
 }
