@@ -15,7 +15,7 @@
         patients        : null,
         _since          : null,
         _elements       : null,
-        _typeFilter     : null,
+        _typeFilter     : [], // string[]
         group           : null,
         httpMethod      : "GET",
         exportType      : "",
@@ -495,10 +495,7 @@
         }
 
         // _typeFilter --------------------------------------------------------
-        const _typeFilter = MODEL.get("_typeFilter");
-        if (_typeFilter) {
-            q.append("_typeFilter", _typeFilter);
-        }
+        MODEL.get("_typeFilter").forEach(f => q.append("_typeFilter", f));
 
         // organizeOutputBy ---------------------------------------------------
         const organizeOutputBy = MODEL.get("organizeOutputBy");
@@ -564,13 +561,12 @@
         }
 
         // _typeFilter --------------------------------------------------------
-        const _typeFilter = MODEL.get("_typeFilter");
-        if (_typeFilter) {
+        MODEL.get("_typeFilter").forEach(f => {
             payload.parameter.push({
                 name: "_typeFilter",
-                valueString: _typeFilter
+                valueString: f
             });
-        }
+        });
 
         // patient -------------------------------------------------------------
         // if (MODEL.get("exportType") != "system") {
@@ -918,7 +914,12 @@
         $(document).on("change", '[name="code-type"]', e => MODEL.set("codeType", e.target.value));
         $("#show-request").on("change", e => MODEL.set("showRequest", e.target.checked));
         $("#_elements").on("input change", e => MODEL.set("_elements", e.target.value.split(",").map(x => x.trim()).filter(Boolean).join(",")));
-        $("#_typeFilter").on("input change", e => MODEL.set("_typeFilter", e.target.value));
+        $("#_typeFilter").on("input change", e => {
+            try {
+                const f = new URLSearchParams(e.target.value).getAll("_typeFilter")
+                MODEL.set("_typeFilter", f)
+            } catch {}
+        });
         $("#organizeOutputBy").on("change", e => MODEL.set("organizeOutputBy", e.target.value));
         $("form").on("submit", onFormSubmit);
         $("#delete-export, #cancel-btn").on("click", cancelExport);

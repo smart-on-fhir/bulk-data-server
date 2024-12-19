@@ -1,9 +1,9 @@
-import { Readable } from "stream"
-import QueryBuilder from "./QueryBuilder"
-import fhirFilter   from "fhir-filter/dist"
-import config       from "./config"
-import * as Lib     from "./lib"
-import getDB        from "./db"
+import { Readable }               from "stream"
+import QueryBuilder               from "./QueryBuilder"
+import { createTypeFilterTester } from "./typeFilter"
+import config                     from "./config"
+import * as Lib                   from "./lib"
+import getDB                      from "./db"
 
 const HEX    = "[a-fA-F0-9]"
 const RE_UID = new RegExp(
@@ -21,7 +21,7 @@ interface FhirStreamOptions {
     since             ?: string
     systemLevel       ?: boolean
     patients          ?: string[]|null
-    filter            ?: string|null
+    filter            ?: string[]|null
     databaseMultiplier?: number
     stratifier        ?: "fhir_type" | "patient_id"
 }
@@ -43,7 +43,7 @@ export default class FhirStream extends Readable
     total: number;
     rowIndex: number;
     overflow: number;
-    filter: any;
+    typeFilter: any;
     count: number;
     timer: NodeJS.Timeout | null;
     builder: QueryBuilder;
@@ -71,8 +71,10 @@ export default class FhirStream extends Readable
         this.total      = 0;
         this.rowIndex   = 0;
         this.overflow   = 0;
-        this.filter     = options.filter ? fhirFilter.create(options.filter) : null;
         this.stratifier = options.stratifier || "fhir_type";
+        this.typeFilter = options.filter && options.filter.length ?
+            createTypeFilterTester(options.filter) :
+            null;
 
         this.timer = null
 
@@ -186,7 +188,7 @@ export default class FhirStream extends Readable
 
         let row = this.cache.length ? this.cache.shift() : null;
 
-        if (row && this.filter && !this.filter(JSON.parse(row.resource_json))) {
+        if (row && this.typeFilter && !this.typeFilter(JSON.parse(row.resource_json))) {
             this.rowIndex += 1;
 
             // Must defer this call to avoid max call stack exceeded errors

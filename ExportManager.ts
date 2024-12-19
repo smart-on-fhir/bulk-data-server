@@ -124,7 +124,7 @@ interface JobState {
     ignoreTransientError   ?: boolean
     simulateDeletedPct     ?: number
     kickoffErrors          ?: OperationOutcome[]
-    typeFilter             ?: string
+    typeFilter             ?: string[]
     progress               ?: number
     statusMessage          ?: string
     manifest               ?: ExportManifest
@@ -213,7 +213,7 @@ class ExportManager
     /**
      * The _typeFilter parameter
      */
-    typeFilter: URLSearchParams = new URLSearchParams();
+    typeFilter: string[] = [];
 
     /**
      * true for system-level exports and false otherwise
@@ -466,7 +466,7 @@ class ExportManager
             ignoreTransientError   : this.ignoreTransientError,
             simulateDeletedPct     : this.simulateDeletedPct,
             kickoffErrors          : this.kickoffErrors,
-            typeFilter             : this.typeFilter.toString(),
+            typeFilter             : this.typeFilter,
             progress               : this.progress,
             statusMessage          : this.statusMessage,
             manifest               : this.manifest,
@@ -521,7 +521,7 @@ class ExportManager
         const _since                 = getExportParam(req, "_since")        || "";
         const _outputFormat          = getExportParam(req, "_outputFormat") || "application/fhir+ndjson";
         const _elements              = getExportParam(req, "_elements")     || "";
-        const _typeFilter            = getExportParam(req, "_typeFilter")   || "";
+        const _typeFilter            = getExportParam(req, "_typeFilter")   || [];
         const _includeAssociatedData = getExportParam(req, "_includeAssociatedData") || "";
         const _organizeOutputBy      = getExportParam(req, "organizeOutputBy") || "";
 
@@ -642,7 +642,7 @@ class ExportManager
             systemLevel: this.systemLevel,
             patients   : this.patients,
             offset     : 0,
-            filter     : this.typeFilter.get("_filter"),
+            filter     : this.typeFilter,
             limit      : Infinity,
             stratifier,
         });
@@ -902,7 +902,7 @@ class ExportManager
             since      : this.since,
             systemLevel: this.systemLevel,
             patients   : this.patients,
-            filter     : this.typeFilter.get("_filter"),
+            filter     : this.typeFilter,
             stratifier
         });
         
@@ -1107,9 +1107,9 @@ class ExportManager
     /**
      * Sets the _typeFilter parameter
      */
-    setTypeFilter(_typeFilter = "")
+    setTypeFilter(_typeFilter: string | string[] = [])
     {
-        this.typeFilter = new URLSearchParams(_typeFilter);
+        this.typeFilter = lib.makeArray(_typeFilter);
         return this;
     }
 
