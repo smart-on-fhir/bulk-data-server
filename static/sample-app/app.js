@@ -914,12 +914,7 @@
         $(document).on("change", '[name="code-type"]', e => MODEL.set("codeType", e.target.value));
         $("#show-request").on("change", e => MODEL.set("showRequest", e.target.checked));
         $("#_elements").on("input change", e => MODEL.set("_elements", e.target.value.split(",").map(x => x.trim()).filter(Boolean).join(",")));
-        $("#_typeFilter").on("input change", e => {
-            try {
-                const f = new URLSearchParams(e.target.value).getAll("_typeFilter")
-                MODEL.set("_typeFilter", f)
-            } catch {}
-        });
+        $("#_typeFilter").on("input change", e => { try { MODEL.set("_typeFilter", e.target.value.replace(/^_typeFilter=/, "").split("&_typeFilter=")).map(decodeURIComponent) } catch {}});
         $("#organizeOutputBy").on("change", e => MODEL.set("organizeOutputBy", e.target.value));
         $("form").on("submit", onFormSubmit);
         $("#delete-export, #cancel-btn").on("click", cancelExport);
