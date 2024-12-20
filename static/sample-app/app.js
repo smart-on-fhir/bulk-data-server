@@ -1,13 +1,6 @@
 (function($, Lib, moment, Prism) {
 
-    const fhirVersions = {
-        2: "FHIR DSTU2",
-        3: "FHIR STU3",
-        4: "FHIR R4"
-    };
-
     const MODEL = new Lib.Model({
-        fhirVersion     : null,
         error           : null,
         baseURL         : "",
         groups          : null,
@@ -34,15 +27,6 @@
     });
 
     // Rendering functions (Views) ---------------------------------------------
-    function renderFHIRVersion(version)
-    {
-        if (!fhirVersions[version + ""]) {
-            MODEL.set("error", `Invalid FHIR version "${version}"`);
-        } else {
-            $("#fhir-version").html(fhirVersions[version]);
-        }
-    }
-
     function renderError(error)
     {
         if (error) {
@@ -504,7 +488,7 @@
         }
 
         // allowPartialManifests ----------------------------------------------
-        q.append("allowPartialManifests", "true")
+        // q.append("allowPartialManifests", "true")
 
         return q.toString();
     }
@@ -590,10 +574,10 @@
         }
 
         // allowPartialManifests -----------------------------------------------
-        payload.parameter.push({
-            name: "allowPartialManifests",
-            valueBoolean: true
-        });
+        // payload.parameter.push({
+        //     name: "allowPartialManifests",
+        //     valueBoolean: true
+        // });
 
         return payload;
     }
@@ -759,77 +743,63 @@
         return n;
     }
 
-    function waitForFiles() {
-        const url = MODEL.get("statusUrl");
-        $.ajax({ url }).then(function(body, resultCode, xhr) {
-            var dur = uInt(xhr.getResponseHeader("retry-after"));
+    async function waitForFiles(url) {
+        url                  = url || MODEL.get("statusUrl");
+        const res            = await fetch(url);
+        const progress       = res.headers.get("x-progress") || "";
+        const type           = res.headers.get("content-type") || "";
+        const dur            = uInt(res.headers.get("retry-after"), 1);
+        const match          = progress.match(/^(\d+)%\s*(.+)?$/);
+        const pct            = uInt(match?.[1], res.status === 200 ? 100 : 1);
+        const txt            = await res.text();
+        const body           = type.includes("json") ? JSON.parse(txt) : txt;
+        const nextUrl        = Array.isArray(body?.link) ? body.link.find(l => l.relation === "next")?.url : "";
+        const shouldContinue = res.status === 202 || nextUrl;
+        const isLastPage     = res.status === 200 && !nextUrl;
+        const isError        = res.status !== 200 && res.status !== 202;
 
-            // When the export manifast is finally available, animate progress
-            // to 100%, then hide it and render the files
-            if (xhr.status == 200) {
+        // console.log(res.status, progress, match)
 
-                $({ x: MODEL.get("progressValue") }).animate({ x: 100 }, {
-                    duration: 600,
+        if (isError) {
+            MODEL.set("progressValue", 100);
+            MODEL.set("progressMessage", "Error");
+            MODEL.set("error", `Requesting '${url}' returned: ${body ? JSON.stringify(body, null, 4) : txt}`);
+        }
+        
+        else if (shouldContinue) {
+            MODEL.set("progressMessage", match?.[2] || "Please wait...");
+            if (pct < 100) {
+                $({ x: MODEL.get("progressValue") }).animate({ x: pct }, {
+                    duration: dur * 1000,
                     easing: "linear",
-                    step(now) {
-                        MODEL.set("progressValue", now);
-                    },
+                    step(now) { MODEL.set("progressValue", now); },
                     complete() {
-                        if (body.output) {
-                            MODEL.set({
-                                progressVisible : false,
-                                files           : body.output,
-                                deletedFiles    : body.deleted,
-                                fileErrors      : body.error,
-                                inTransientError: false
-                            });
+                        if (pct < 100) {
+                            waitForFiles(nextUrl || url);
                         }
                     }
-                })
+                });
+            } else {
+                setTimeout(() => waitForFiles(nextUrl || url), 100);
             }
-
-            // If still waiting
-            else if (xhr.status == 202) {
-                var progressHeader = xhr.getResponseHeader("x-progress") || "";
-                var match = progressHeader.match(/^(\d+)%\s*(.+)$/);
-                var pct = uInt(match[1]);
-                if (!isNaN(pct) && isFinite(pct)) {
-
-                    // -1% could mean "canceled"
-                    if (pct === -1) {
-                        MODEL.set("progressValue", 0);
-                        MODEL.set("progressMessage", "Canceled");    
-                    } else {
-                        MODEL.set("progressMessage", match[2]);
-
-                        $({ x: MODEL.get("progressValue") }).animate({ x: pct }, {
-                            duration: dur * 1000,
-                            easing: "linear",
-                            step(now) {
-                                MODEL.set("progressValue", now);
-                            },
-                            complete() {
-                                if (pct < 100) {
-                                    waitForFiles();
-                                }
-                            }
-                        });
-                    }
+        }
+        
+        else if (isLastPage) {
+            $({ x: MODEL.get("progressValue") }).animate({ x: 100 }, {
+                duration: dur * 1000,
+                easing: "linear",
+                step(now) { MODEL.set("progressValue", now); },
+                complete() {
+                    MODEL.set({
+                        progressVisible : false,
+                        files           : body.output,
+                        deletedFiles    : body.deleted,
+                        fileErrors      : body.error,
+                        inTransientError: false
+                    });
                 }
-            }
-            else {
-                MODEL.set("progressValue", 100);
-                MODEL.set("progressMessage", "");
-                MODEL.set("error", getAjaxError(xhr, `Requesting '${url}' returned: `));
-            }
-        }, xhr => {
-            MODEL.set("error", getAjaxError(xhr, `Requesting '${url}' returned: `));
-            try {
-                if (xhr.responseJSON.issue[0].code == "transient") {
-                    MODEL.set("inTransientError", true);
-                }
-            } catch {}
-        });
+            });
+        }
     }
 
     function copyToClipboard(e)
@@ -849,7 +819,6 @@
     function main()
     {
         const QUERY   = Lib.getUrlQuery({ camelCaseKeys: true });
-        const PARAMS  = getHiddenParams(QUERY.server);
         const baseURL = QUERY.server//new URL(QUERY.server).pathname;
 
         // Debug events? Do this first if needed
@@ -860,9 +829,6 @@
         // ---------------------------------------------------------------------
         // Bindings
         // ---------------------------------------------------------------------
-
-        // Display the FHIR version when it changes. Currently only happens once on load
-        MODEL.on("change:fhirVersion", e => renderFHIRVersion(e.data.newValue));
 
         // Display the group selector. Currently only happens once on load
         MODEL.on("change:groups", e => renderGroupSelector(e.data.newValue));
@@ -922,7 +888,6 @@
 
         // INIT ----------------------------------------------------------------
         renderSinceSelector();
-        MODEL.set("fhirVersion", PARAMS.stu);
         MODEL.set("baseURL", baseURL);
         MODEL.set("codeType", "http");
         

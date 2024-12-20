@@ -104,7 +104,6 @@ interface JobState {
     simulatedError         ?: string
     simulatedExportDuration?: number
     databaseMultiplier     ?: number
-    stu                    ?: number
     resourcesPerFile       ?: number
     accessTokenLifeTime    ?: number
     resourceTypes          ?: string[]
@@ -149,11 +148,6 @@ class ExportManager
      * Database size multiplier
      */
     databaseMultiplier = 1;
-
-    /**
-     * FHIR version as integer (2|3|4)
-     */
-    stu = 4;
 
     /**
      * How many FHIR resources to include in one file
@@ -287,7 +281,6 @@ class ExportManager
                     simulatedError         : sim.err,
                     simulatedExportDuration: sim.dur,
                     databaseMultiplier     : sim.m,
-                    stu                    : sim.stu,
                     resourcesPerFile       : sim.page,
                     accessTokenLifeTime    : sim.tlt,
                     fileError              : sim.fileError,
@@ -391,7 +384,6 @@ class ExportManager
         this.setSimulatedError(options.simulatedError)
             .setSimulatedExportDuration(options.simulatedExportDuration)
             .setDatabaseMultiplier(options.databaseMultiplier)
-            .setSTU(options.stu)
             .setResourcesPerFile(options.resourcesPerFile)
             .setAccessTokenLifeTime(options.accessTokenLifeTime)
             .setSystemLevel(options.systemLevel)
@@ -445,7 +437,6 @@ class ExportManager
             simulatedError         : this.simulatedError,
             simulatedExportDuration: this.simulatedExportDuration,
             databaseMultiplier     : this.databaseMultiplier,
-            stu                    : this.stu,
             resourcesPerFile       : this.resourcesPerFile,
             accessTokenLifeTime    : this.accessTokenLifeTime,
             resourceTypes          : this.resourceTypes,
@@ -503,12 +494,6 @@ class ExportManager
         // Simulate file_generation_failed error if requested ------------------
         if (this.simulatedError == "file_generation_failed") {
             return lib.outcomes.fileGenerationFailed(res);
-        }
-
-        try {
-            this.setSTU(sim.stu);
-        } catch (ex) {
-            return lib.operationOutcome(res, (ex as Error).message, { httpCode: 400 });
         }
 
         this.setGroup(req.params.groupId);
@@ -634,7 +619,6 @@ class ExportManager
 
         const stream = new FhirStream({
             types      : this.resourceTypes,
-            stu        : this.stu,
             databaseMultiplier: this.databaseMultiplier,
             extended   : this.extended,
             group      : this.group,
@@ -893,7 +877,6 @@ class ExportManager
 
         let input = new FhirStream({
             types      : this.organizeOutputBy ? this.resourceTypes : [sim.stratifier!],
-            stu        : this.stu,
             databaseMultiplier: this.databaseMultiplier,
             extended   : this.extended,
             group      : this.group,
@@ -987,19 +970,6 @@ class ExportManager
         return this;
     }
 
-    /**
-     * Sets the numeric FHIR version
-     */
-    setSTU(version = 4)
-    {
-        const ver = lib.uInt(version, 4);
-        if (ver < 2 || ver > 4) {
-            throw new Error(`Invalid FHIR version "${version}". Must be 2, 3 or 4`);
-        }
-        this.stu = ver;
-        return this;
-    }
-
     setOrganizeOutputBy(organizeOutputBy = "")
     {
         if (!(organizeOutputBy in SUPPORTED_ORGANIZE_BY_TYPES)) {
@@ -1054,7 +1024,7 @@ class ExportManager
      */
     async setResourceTypes(types: string | string[], grantedScopes: ScopeList)
     {
-        const availableTypes = await lib.getAvailableResourceTypes(this.stu);
+        const availableTypes = await lib.getAvailableResourceTypes();
         const requestedTypes = types ?
             lib.makeArray(types || "").map(t => String(t || "").trim()).filter(Boolean) :
             [...availableTypes];
@@ -1116,7 +1086,7 @@ class ExportManager
     async setFHIRElements(elements: string|string[])
     {
         const _elements = lib.makeArray(elements || "").map(t => String(t || "").trim()).filter(Boolean);
-        const availableTypes = await lib.getAvailableResourceTypes(this.stu);
+        const availableTypes = await lib.getAvailableResourceTypes();
     
         for (let element of _elements) {
             const match = element.match(/^([a-zA-Z]+)(\.([a-zA-Z]+))?$/);

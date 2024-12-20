@@ -11,7 +11,7 @@
     "test:watch": "nodemon -e ts,js -w . -x 'npm test || exit 1'",
     "coverage": "nyc npm run test",
     "start": "ts-node --transpile-only .",
-    "start:dev": "ts-node .",
+    "start:dev": "ts-node --transpile-only --watch .",
     "import": "ts-node ./data/import.ts",
     "deprecated:postinstall": "ts-node ./data/import.ts -f 4 -d ./data/fhir/ && ts-node ./data/import.ts -f 3 -d ./data/fhir_stu3/ && ts-node ./data/import.ts -f 2 -d ./data/fhir_dstu2/"
   },

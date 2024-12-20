@@ -79,17 +79,7 @@ function getInputDir()
     if (App.input) {
         return App.input;
     }
-
-    switch (App.fhirVersion) {
-        case "2":
-            return Path.join(__dirname, "fhir_dstu2");
-        case "3":
-            return Path.join(__dirname, "fhir_stu3");
-        case "4":
-            return Path.join(__dirname, "fhir");
-        default:
-            throw new Error("Unable to determine the input directory");
-    }
+    return Path.join(__dirname, "fhir");
 }
 
 function randomMoment(after: moment.MomentInput, before?: moment.MomentInput)
@@ -480,7 +470,7 @@ async function insertDocumentReferences()
         id: uuid.v4(),
         meta: {
             versionId: "1",
-            lastUpdated: randomMoment("2018-05-25").format()
+            lastUpdated: moment("2018-05-25").format()
         },
         text: {
             status: "generated",
@@ -500,8 +490,7 @@ async function insertDocumentReferences()
         subject: {
             reference: `Patient/${patient.resource_id}`
         },
-        created: randomMoment("2016-05-25", "2018-05-25").format(),
-        indexed: randomMoment("2019-05-25").format(),
+        date: moment("2018-05-26").format(),
         author: [
             {
                 "reference": `Practitioner/${practitioner.resource_id}`
@@ -520,12 +509,6 @@ async function insertDocumentReferences()
         ]
     };
 
-    if (App.fhirVersion == "4") {
-        docRef1.date = docRef1.created;
-        delete docRef1.created;
-        delete docRef1.indexed;
-    }
-
     await insertRow(
         docRef1.id,
         JSON.stringify(docRef1),
@@ -543,7 +526,7 @@ async function insertDocumentReferences()
         id : uuid.v4(),
         meta: {
             versionId: "1",
-            lastUpdated: randomMoment("2018-05-25").format()
+            lastUpdated: moment("2018-05-25").format()
         },
         text: {
             status: "generated",
@@ -563,8 +546,7 @@ async function insertDocumentReferences()
         subject: {
             reference: `Patient/${patient.resource_id}`
         },
-        created: randomMoment("2016-05-25", "2018-05-25").format(),
-        indexed: randomMoment("2019-05-25").format(),
+        date: moment("2018-05-26").format(),
         author: [
             {
                 reference: `Practitioner/${practitioner.resource_id}`
@@ -581,12 +563,6 @@ async function insertDocumentReferences()
             }
         ]
     };
-
-    if (App.fhirVersion == "4") {
-        docRef2.date = docRef2.created;
-        delete docRef2.created;
-        delete docRef2.indexed;
-    }
 
     await insertRow(
         docRef2.id,
@@ -605,7 +581,7 @@ async function insertDocumentReferences()
         id: uuid.v4(),
         meta: {
             versionId: "1",
-            lastUpdated: randomMoment("2018-05-25").format()
+            lastUpdated: moment("2018-05-25").format()
         },
         text: {
             status:"generated",
@@ -625,8 +601,7 @@ async function insertDocumentReferences()
         subject: {
             reference: `Patient/${patient.resource_id}`
         },
-        created: randomMoment("2016-05-25", "2018-05-25").format(),
-        indexed: randomMoment("2019-05-25").format(),
+        date: moment("2018-05-26").format(),
         author: [
             {
                 reference: `Practitioner/${practitioner.resource_id}`
@@ -644,12 +619,6 @@ async function insertDocumentReferences()
         ]
     };
 
-    if (App.fhirVersion == "4") {
-        docRef3.date = docRef3.created;
-        delete docRef3.created;
-        delete docRef3.indexed;
-    }
-
     await insertRow(
         docRef3.id,
         JSON.stringify(docRef3),
@@ -661,18 +630,13 @@ async function insertDocumentReferences()
 }
 
 async function createOrgView() {
-    const subjectPath = +App.fhirVersion === 2 ?
-        "patient.reference" :
-        "subject.reference";
-
     await DB.promise("run", `DROP VIEW IF EXISTS "data_with_org"`);
-
     await DB.promise(
         "run",
         `CREATE VIEW "data_with_org" AS 
         WITH "subject_orgs" AS (
             SELECT 
-            substr(json_extract(resource_json , '$.${subjectPath}'), 9) as "subject",
+            substr(json_extract(resource_json , '$.subject.reference'), 9) as "subject",
             substr(json_extract(resource_json , '$.serviceProvider.reference'), 14) AS "org"
             FROM data
             WHERE fhir_type = 'Encounter'
@@ -684,7 +648,7 @@ async function createOrgView() {
 async function main()
 {
     // Connect to the specified database
-    DB = db(App.fhirVersion);
+    DB = db();
 
     // build a map to be used for reference translation later
     await buildUrnMap();
@@ -712,11 +676,6 @@ async function main()
 App
     .version('0.1.0')
     .option('-d, --input <path>', 'Input folder containing JSON FHIR patient bundles', String)
-    .option('-f, --fhir-version <version>', 'FHIR Version (2, 3 or 4)', String)
     .parse(process.argv);
 
-if (App.fhirVersion) {
-    main();
-} else {
-    App.outputHelp();
-}
+main();

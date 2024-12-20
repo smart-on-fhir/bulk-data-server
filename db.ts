@@ -9,14 +9,12 @@ export interface CustomizedDB extends sqlite3.Database {
 /**
  * Stores one database instance per fhir version
  */
-const DB_INSTANCES: Record<number, CustomizedDB> = {};
+let DB_INSTANCE: CustomizedDB;
 
-function getDatabase(fhirVersion: number)
+function getDatabase()
 {
-    if (!DB_INSTANCES[fhirVersion]) {
-        const DB = new sqlite3.Database(
-            `${__dirname}/database.r${fhirVersion}.db`
-        );
+    if (!DB_INSTANCE) {
+        const DB = new sqlite3.Database(`${__dirname}/database.r4.db`);
 
         /**
          * Calls database methods and returns a promise
@@ -39,10 +37,10 @@ function getDatabase(fhirVersion: number)
             }
         });
 
-        DB_INSTANCES[fhirVersion] = DB as CustomizedDB;
+        DB_INSTANCE = DB as CustomizedDB
     }
 
-    return DB_INSTANCES[fhirVersion];
+    return DB_INSTANCE;
 }
 
 export default getDatabase;

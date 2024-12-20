@@ -6,19 +6,18 @@ export type JSONObject = { [ key: string ]: JSONValue };
 export type JSONValue  = JSONScalar | JSONArray | JSONObject;
 
 export interface Sim {
-    id        : string
-    secure   ?: boolean
-    err      ?: string // simulated error
-    dur      ?: number // simulatedExportDuration
-    m        ?: number // databaseMultiplier
-    page     ?: number // resourcesPerFile
-    tlt      ?: number // accessTokenLifeTime
-    fileError?: string // fileError
-    del      ?: number // simulateDeletedPct
-    limit    ?: number
-    offset   ?: number
-    stu      ?: number
-    extended ?: boolean
+    id         : string
+    secure    ?: boolean
+    err       ?: string // simulated error
+    dur       ?: number // simulatedExportDuration
+    m         ?: number // databaseMultiplier
+    page      ?: number // resourcesPerFile
+    tlt       ?: number // accessTokenLifeTime
+    fileError ?: string // fileError
+    del       ?: number // simulateDeletedPct
+    limit     ?: number
+    offset    ?: number
+    extended  ?: boolean
     stratifier?: string
 }
 

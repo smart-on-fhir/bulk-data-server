@@ -75,9 +75,8 @@ export function getOne(req: Request, res: Response) {
     const {id} = req.params 
     const sim = getRequestedParams(req);
     let multiplier = sim.m || 1;
-    let stu = sim.stu || 3;
 
-    DB(stu).get(`SELECT "resource_json" FROM "data" WHERE "resource_id" = ?`, [id], (error: Error, row: Row) => {
+    DB().get(`SELECT "resource_json" FROM "data" WHERE "resource_id" = ?`, [id], (error: Error, row: Row) => {
         
         if (error) {
             console.error(error);
@@ -93,9 +92,8 @@ export function getOne(req: Request, res: Response) {
 export function getAll(req: Request, res: Response) {
     const sim = getRequestedParams(req);
     let multiplier = sim.m || 1;
-    let stu = sim.stu || 3;
 
-    DB(stu).all(
+    DB().all(
         `SELECT g.resource_json, g.resource_id AS id, COUNT(*) AS "quantity"
         FROM "data" as "g"
         LEFT JOIN "data" AS "d" ON (d.group_id = g.resource_id)

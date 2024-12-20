@@ -6,8 +6,7 @@ import { getRequestedParams } from "../lib"
 export default function getResourceCounts(req: Request, res: Response) { // $get-resource-counts
     let sim = getRequestedParams(req);
     let multiplier = sim.m || 1;
-    let stu = +(sim.stu || 3);
-    DB(stu).all(
+    DB().all(
         `SELECT 
             fhir_type AS "resourceType",
             COUNT(*)  AS "resourcesCount"

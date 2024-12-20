@@ -1,11 +1,7 @@
-import { Request, Response } from "express";
-import { HumanName, Patient } from "fhir/r4";
-import DB from "../db"
-import {
-    makeArray,
-    getRequestedParams,
-    operationOutcome
-} from "../lib"
+import { Request, Response }           from "express"
+import { HumanName, Patient }          from "fhir/r4"
+import DB                              from "../db"
+import { makeArray, operationOutcome } from "../lib"
 
 
 function getPatientName(json: Patient) {
@@ -27,8 +23,6 @@ function getPatientName(json: Patient) {
 }
 
 export default function(req: Request, res: Response) {
-    const sim = getRequestedParams(req);
-    let stu = sim.stu || 4;
     let params = [];
     let sql = 'SELECT resource_json FROM "data" WHERE fhir_type = "Patient"';
 
@@ -37,7 +31,7 @@ export default function(req: Request, res: Response) {
         params.push(req.query.group);
     }
 
-    DB(stu).all(sql, params, (error: Error, rows: any[]) => {
+    DB().all(sql, params, (error: Error, rows: any[]) => {
         if (error) {
             console.error(error);
             return operationOutcome(res, "DB query error");

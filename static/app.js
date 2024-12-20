@@ -9,7 +9,6 @@
         tlt       : { type: "number", defaultValue: CFG.defaultTokenLifeTime || 15 },
         dur       : { type: "number", defaultValue: CFG.defaultWaitTime || 10 },
         m         : { type: "number", defaultValue: 1 },
-        stu       : { type: "number", defaultValue: 4 },
         del       : { type: "number", defaultValue: 0 },
         secure    : { type: "number", defaultValue: 1 },
     };
@@ -136,7 +135,6 @@
             dur   : +MODEL.get("dur"),
             tlt   : +MODEL.get("tlt"),
             m     : +MODEL.get("m"),
-            stu   : +MODEL.get("stu"),
             del   : +MODEL.get("del"),
             secure: +MODEL.get("secure"),
         })));
@@ -146,7 +144,6 @@
             dur   : +MODEL.get("dur"),
             tlt   : +MODEL.get("tlt"),
             m     : +MODEL.get("m"),
-            stu   : +MODEL.get("stu"),
             del   : +MODEL.get("del"),
             secure: 0,
         })));
@@ -293,7 +290,7 @@
         MODEL.on("change:jwks change:jwks_url change:err change:tlt", generateClientId);
 
         // Whenever the advanced options change (re)generate the launchData
-        MODEL.on("change:page change:dur change:del change:err change:tlt change:m change:stu change:secure", updateLaunchData);
+        MODEL.on("change:page change:dur change:del change:err change:tlt change:m change:secure", updateLaunchData);
         
         // Whenever launchData changes, update the fhir server fhir_server_url
         MODEL.on("change:launchData", function updateFhirUrl(e) {
@@ -349,16 +346,14 @@
         });
 
         // Display the table with available groups
-        MODEL.on("change:stu change:m", function updateFhirUrl(e) {
-            if (MODEL.get("stu") && MODEL.get("m")) { // skip double fetch on load
-                const url = BASE_URL + "/" + MODEL.get("openLaunchData") + "/fhir/Group"
-                fetch(url).then(r => r.json()).then(bundle => {
-                    $("#groups-table tbody").html(bundle.entry.map((entry) => `<tr><td class="hidden-xs"><i class="glyphicon glyphicon-folder-open" aria-hidden="true">&nbsp;</i>${
-                        entry.resource.name}</td><td><code>${entry.resource.id}</code></td><td>${
-                            entry.resource.quantity.toLocaleString()}</td></tr>`
-                    ));
-                }, console.error)
-            }
+        MODEL.on("change:m", function updateFhirUrl(e) {
+            const url = BASE_URL + "/" + MODEL.get("openLaunchData") + "/fhir/Group"
+            fetch(url).then(r => r.json()).then(bundle => {
+                $("#groups-table tbody").html(bundle.entry.map((entry) => `<tr><td class="hidden-xs"><i class="glyphicon glyphicon-folder-open" aria-hidden="true">&nbsp;</i>${
+                    entry.resource.name}</td><td><code>${entry.resource.id}</code></td><td>${
+                        entry.resource.quantity.toLocaleString()}</td></tr>`
+                ));
+            }, console.error)
         });
     }
 

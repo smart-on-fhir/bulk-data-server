@@ -98,7 +98,7 @@ export default async (req: Request, res: Response) => {
     // Note that the scope check is FHIR version dependent and makes sure that
     // no unknown resources are involved. However, this code is common for every
     // FHIR version so we just use "4" here.
-    let tokenError = await validateScopesForBulkDataExport(req.body.scope, 4);
+    let tokenError = await validateScopesForBulkDataExport(req.body.scope);
     if (tokenError) {
         return res.status(400).json({
             error: "invalid_scope",
@@ -232,7 +232,7 @@ export default async (req: Request, res: Response) => {
             return Promise.reject();
         }
     })
-    .then(() => ScopeList.fromString(req.body.scope).negotiateForExport(4))
+    .then(() => ScopeList.fromString(req.body.scope).negotiateForExport())
     .then(grantedScopes => {
         if (!grantedScopes.length) {
             Lib.replyWithOAuthError(res, "invalid_scope", {

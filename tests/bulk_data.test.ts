@@ -41,7 +41,6 @@ function cleanUp() {
 }
 
 interface KickOffOptions {
-    stu                    ?: number
     usePOST                ?: boolean
     databaseMultiplier     ?: number
     group                  ?: string
@@ -71,7 +70,6 @@ interface KickOffOptions {
 }
 
 interface Sim {
-    stu       : number
     m         : number
     dur       : number
     err       : string
@@ -103,7 +101,6 @@ class Client
     async kickOff(options: KickOffOptions = {})
     {
         const sim: Sim = {
-            stu      : options.stu || 4,
             m        : options.databaseMultiplier || 1,
             dur      : options.simulatedExportDuration || 0,
             err      : options.simulatedError || "",
@@ -960,10 +957,6 @@ describe("Bulk Data Kick-off Request", function() {
                         }
                     );
                 });
-
-                it ("Rejects invalid stu", async () => await assert.rejects(
-                    new Client().kickOff({ ...meta.options, stu: 9 })
-                ));
             });
 
             describe("_typeFilter parameter", () => {

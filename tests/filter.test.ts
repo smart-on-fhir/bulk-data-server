@@ -317,7 +317,7 @@ describe("match", () => {
 })
 
 describe("filter patients", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let patients: Patient[];
 
     before(async () => {
@@ -366,7 +366,7 @@ describe("filter patients", () => {
 })
 
 describe("typeFilter on Encounter", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -417,7 +417,7 @@ describe("typeFilter on Encounter", () => {
 })
 
 describe("typeFilter on Observation", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -451,7 +451,7 @@ describe("typeFilter on Observation", () => {
 })
 
 describe("typeFilter on Procedure", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -487,7 +487,7 @@ describe("typeFilter on Procedure", () => {
 })
 
 describe("typeFilter on Practitioner", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -530,7 +530,7 @@ describe("typeFilter on Practitioner", () => {
 })
 
 describe("typeFilter on Group", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -558,7 +558,7 @@ describe("typeFilter on Group", () => {
 })
 
 describe("typeFilter on AllergyIntolerance", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -595,7 +595,7 @@ describe("typeFilter on AllergyIntolerance", () => {
 })
 
 describe("typeFilter on CarePlan", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -644,7 +644,7 @@ describe("typeFilter on CarePlan", () => {
 })
 
 describe("typeFilter on CareTeam", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -680,7 +680,7 @@ describe("typeFilter on CareTeam", () => {
 })
 
 describe("typeFilter on DiagnosticReport", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -728,7 +728,7 @@ describe("typeFilter on DiagnosticReport", () => {
 })
 
 describe("typeFilter on Condition", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -780,8 +780,8 @@ describe("typeFilter on Condition", () => {
 })
 
 describe("typeFilter on DocumentReference", () => {
-    let db = getDatabase(4);
-    let resources: FhirResource[];
+    let db = getDatabase();
+    let resources: FhirResource[] = [];
 
     before(async () => {
         const rows = await db.promise("all", `SELECT resource_json FROM data WHERE fhir_type = 'DocumentReference'`)
@@ -791,8 +791,12 @@ describe("typeFilter on DocumentReference", () => {
 
     // total: 3
 
+    it ("_id=...", async () => {
+        const filtered = typeFilter(resources, `_typeFilter=${encodeURIComponent('DocumentReference?_id=' + resources[0].id)}`)
+        expect(filtered.length).to.equal(1)
+    })
+
     const matrix = {
-        "_id=0266aaf0-09d5-4e91-a4a5-4acb27cff61c"                : 1,
         "authenticator:missing=false"                             : 0,
         "author=Practitioner/4edac2d9-adb7-3723-a5d2-40ca35ae9e17": 3,
         "author=4edac2d9-adb7-3723-a5d2-40ca35ae9e17"             : 3,
@@ -815,9 +819,7 @@ describe("typeFilter on DocumentReference", () => {
         "security-label:missing=false"                            : 0,
         "setting:missing=false"                                   : 0,
         "status=current"                                          : 3,
-        "date=2017-12-28T13:26:00-05:00"                          : 1,
-        "date=eq2017-12-28T13:26:00-05:00"                        : 1,
-        "date=ap2017-12-28"                                       : 2,
+        "date=ap2018-05-26"                                       : 3,
         "patient=58c297c4-d684-4677-8024-01131d93835e"            : 3,
         "patient=Patient/58c297c4-d684-4677-8024-01131d93835e"    : 3,
         "subject=58c297c4-d684-4677-8024-01131d93835e"            : 3,
@@ -834,7 +836,7 @@ describe("typeFilter on DocumentReference", () => {
 })
 
 describe("typeFilter on MedicationRequest", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -880,7 +882,7 @@ describe("typeFilter on MedicationRequest", () => {
 })
 
 describe("typeFilter on Organization", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {
@@ -917,7 +919,7 @@ describe("typeFilter on Organization", () => {
 })
 
 describe("typeFilter on all resources", () => {
-    let db = getDatabase(4);
+    let db = getDatabase();
     let resources: FhirResource[];
 
     before(async () => {

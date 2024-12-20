@@ -207,14 +207,11 @@ export class ScopeList
     /**
      * Checks if the given scopes string is valid for use by backend services
      * for making bulk data exports. This will only accept system read and
-     * search scopes and will also reject empty scope.
-     * @param [fhirVersion = 0] The FHIR version that this scope should be
-     * validated against. If provided, the scope should match one of the
-     * resource types available in the database for that version (or *).
-     * Otherwise no check is performed.
+     * search scopes and will also reject empty scope. The scope should match
+     * one of the resource types available in the database.
      * @returns The invalid scope or empty string on success
      */
-    async validateForExport(fhirVersion = 0): Promise<string> {
+    async validateForExport(): Promise<string> {
 
         // Reject empty scope list
         if (!this.scopes.length) {
@@ -243,15 +240,11 @@ export class ScopeList
             return `Cannot grant permissions to delete resources requested by scope "${badScope}"`
         }
 
-        // If no FHIR version is specified accept anything that looks like a
-        // resourceType. Otherwise check the DB to see what types of resources
-        // we have.
-        if (fhirVersion) {
-            let availableResources = await getAvailableResourceTypes(fhirVersion);
-            badScope = this.scopes.find(x => x.resource !== "*" && !availableResources.includes(x.resource));
-            if (badScope) {
-                return `Resources of type "${badScope.resource}" do not exist on this server (requested by scope "${badScope}")`
-            }
+        // Check the DB to see what types of resources we have
+        let availableResources = await getAvailableResourceTypes();
+        badScope = this.scopes.find(x => x.resource !== "*" && !availableResources.includes(x.resource));
+        if (badScope) {
+            return `Resources of type "${badScope.resource}" do not exist on this server (requested by scope "${badScope}")`
         }
 
         return "";
@@ -260,14 +253,11 @@ export class ScopeList
     /**
      * Checks if the given scopes string is valid for use by backend services
      * for making bulk data exports. This will only accept system read and
-     * search scopes and will also reject empty scope.
-     * @param [fhirVersion = 0] The FHIR version that this scope should be
-     * validated against. If provided, the scope should match one of the
-     * resource types available in the database for that version (or *).
-     * Otherwise no check is performed.
+     * search scopes and will also reject empty scope. The scope should match
+     * one of the resource types available in the database.
      * @returns The invalid scope or empty string on success
      */
-    async negotiateForExport(fhirVersion = 0): Promise<Scope[]> {
+    async negotiateForExport(): Promise<Scope[]> {
 
         let scopes = [...this.scopes].filter(scope => {
 
@@ -287,24 +277,20 @@ export class ScopeList
             return true;
         });
 
-        // If no FHIR version is specified accept anything that looks like a
-        // resourceType. Otherwise check the DB to see what types of resources
-        // we have.
-        if (fhirVersion) {
-            let availableResources = await getAvailableResourceTypes(fhirVersion);
-            scopes = scopes.filter(scope => scope.resource === "*" || availableResources.includes(scope.resource));
-        }
+        // Check the DB to see what types of resources we have.
+        let availableResources = await getAvailableResourceTypes();
+        scopes = scopes.filter(scope => scope.resource === "*" || availableResources.includes(scope.resource));
 
         return scopes;
     }
 }
 
-export async function validateScopesForBulkDataExport(scopes: string, fhirVersion = 0) {
+export async function validateScopesForBulkDataExport(scopes: string) {
     try {
         var scopeList = ScopeList.fromString(scopes);
     } catch (ex) {
         return (ex as Error).message;
     }
 
-    return await scopeList.validateForExport(fhirVersion);
+    return await scopeList.validateForExport();
 }

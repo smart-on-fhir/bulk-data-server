@@ -506,9 +506,8 @@ export function requireJsonContentTypeHeader(req: Request, res: Response, next: 
 /**
  * Get a list of all the resource types present in the database
  */
-export function getAvailableResourceTypes(fhirVersion: number): Promise<string[]> {
-    const DB = getDB(fhirVersion);
-    return DB.promise("all", 'SELECT DISTINCT "fhir_type" FROM "data"')
+export function getAvailableResourceTypes(): Promise<string[]> {
+    return getDB().promise("all", 'SELECT DISTINCT "fhir_type" FROM "data"')
         .then((rows: any[]) => rows.map(row => row.fhir_type));
 }
 
@@ -541,27 +540,27 @@ export function tagResource(resource: Partial<FHIR.Resource>, code: string, syst
  * @returns The invalid scope or empty string on success
  * @static
  */
-export async function getInvalidSystemScopes(scopes: string, fhirVersion: number): Promise<string> {
-    scopes = String(scopes || "").trim();
+// export async function getInvalidSystemScopes(scopes: string, fhirVersion: number): Promise<string> {
+//     scopes = String(scopes || "").trim();
 
-    if (!scopes) {
-        return config.errors.missing_scope;
-    }
+//     if (!scopes) {
+//         return config.errors.missing_scope;
+//     }
 
-    const scopesArray = scopes.split(/\s+/);
+//     const scopesArray = scopes.split(/\s+/);
 
-    // If no FHIR version is specified accept anything that looks like a
-    // resource
-    let availableResources = "[A-Z][A-Za-z0-9]+";
+//     // If no FHIR version is specified accept anything that looks like a
+//     // resource
+//     let availableResources = "[A-Z][A-Za-z0-9]+";
 
-    // Otherwise check the DB to see what types of resources we have
-    if (fhirVersion) {
-        availableResources = (await getAvailableResourceTypes(fhirVersion)).join("|");
-    }
+//     // Otherwise check the DB to see what types of resources we have
+//     if (fhirVersion) {
+//         availableResources = (await getAvailableResourceTypes()).join("|");
+//     }
 
-    const re = new RegExp("^system/(\\*|" + availableResources + ")(\\.(read|write|\\*))?$");
-    return scopesArray.find(s => !(re.test(s))) || "";
-}
+//     const re = new RegExp("^system/(\\*|" + availableResources + ")(\\.(read|write|\\*))?$");
+//     return scopesArray.find(s => !(re.test(s))) || "";
+// }
 
 // Errors as operationOutcome responses
 export const outcomes = {

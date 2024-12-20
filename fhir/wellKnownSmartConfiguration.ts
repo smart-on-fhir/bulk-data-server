@@ -1,15 +1,12 @@
-import { Request, Response } from "express"
-import config                from "../config"
-import { getAvailableResourceTypes, uInt } from "../lib";
+import { Request, Response }         from "express"
+import config                        from "../config"
+import { getAvailableResourceTypes } from "../lib"
 
 
 export default async (req: Request, res: Response) => {
 
     try {
-        // @ts-ignore
-        const fhirVersion = uInt(req.sim.stu, 4)
-        
-        const availableResourceTypes = await getAvailableResourceTypes(fhirVersion);
+        const availableResourceTypes = await getAvailableResourceTypes();
         
         const json = {
 

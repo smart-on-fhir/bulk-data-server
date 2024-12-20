@@ -156,9 +156,9 @@ describe("Scopes", () => {
 
         it ("validateForExport reject if an unknown resource is requested", async () => {
             const list1 = ScopeList.fromString("system/MissingResource.read");
-            expect(await list1.validateForExport(3)).to.equal('Resources of type "MissingResource" do not exist on this server (requested by scope "system/MissingResource.read")');
+            expect(await list1.validateForExport()).to.equal('Resources of type "MissingResource" do not exist on this server (requested by scope "system/MissingResource.read")');
             const list2 = ScopeList.fromString("system/MissingResource.rs");
-            expect(await list2.validateForExport(3)).to.equal('Resources of type "MissingResource" do not exist on this server (requested by scope "system/MissingResource.rs")');
+            expect(await list2.validateForExport()).to.equal('Resources of type "MissingResource" do not exist on this server (requested by scope "system/MissingResource.rs")');
         })
 
         it ("negotiateForExport", async () => {
@@ -166,16 +166,11 @@ describe("Scopes", () => {
             expect((await ScopeList.fromString(
                 "system/MissingResource.read user/Patient.rs system/Observation.cruds system/Encounter.*"
                 ).negotiateForExport()).join(" ")
-            ).to.equal("system/MissingResource.read system/Observation.rs system/Encounter.read")
-
-            expect((await ScopeList.fromString(
-                "system/MissingResource.read user/Patient.rs system/Observation.cruds system/Encounter.*"
-                ).negotiateForExport(4)).join(" ")
             ).to.equal("system/Observation.rs system/Encounter.read")
             
-            expect((await ScopeList.fromString("system/*.read").negotiateForExport(4)).join(" ")).to.equal("system/*.read")
+            expect((await ScopeList.fromString("system/*.read").negotiateForExport()).join(" ")).to.equal("system/*.read")
             
-            expect(await ScopeList.fromString("").negotiateForExport(4)).to.deep.equal([])
+            expect(await ScopeList.fromString("").negotiateForExport()).to.deep.equal([])
         })
     })
 })

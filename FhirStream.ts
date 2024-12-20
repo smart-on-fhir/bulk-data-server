@@ -12,7 +12,6 @@ const RE_UID = new RegExp(
 );
 
 interface FhirStreamOptions {
-    stu                : number
     types              : string[]
     limit             ?: number
     offset            ?: number
@@ -54,7 +53,7 @@ export default class FhirStream extends Readable
     {
         super({ objectMode: true });
 
-        this.db = getDB(+options.stu);
+        this.db = getDB();
 
         this.limit      = options.limit || config.defaultPageSize;
         this.multiplier = Lib.uInt(options.databaseMultiplier, 1);
