@@ -698,3 +698,12 @@ export function rateLimiter({
         next();
     }
 }
+
+export function assert(condition: any, error?: string | ErrorConstructor, ctor: ErrorConstructor = Error): asserts condition {
+    if (!(condition)) {
+        if (typeof error === "function") {
+            throw new error()
+        }
+        throw new ctor(error || "Assertion failed")
+    }
+}

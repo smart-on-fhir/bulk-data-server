@@ -7,6 +7,7 @@ import FhirString                    from "./FhirString"
 import FhirReference                 from "./FhirReference"
 import SCHEMA, { SearchParamConfig } from "../schema"
 import { JSONObject }                from "../types"
+import { assert }                    from "../lib"
 
 enum TYPES {
     reference,
@@ -240,11 +241,4 @@ export function createTypeFilterTester(typeFilters: string[]) {
     }
 }
 
-export function assert(condition: any, error?: string | ErrorConstructor, ctor: ErrorConstructor = Error): asserts condition {
-    if (!(condition)) {
-        if (typeof error === "function") {
-            throw new error()
-        }
-        throw new ctor(error || "Assertion failed")
-    }
-}
+

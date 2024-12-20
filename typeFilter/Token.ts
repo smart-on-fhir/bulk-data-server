@@ -1,5 +1,5 @@
 import { Coding, Identifier } from "fhir/r4";
-import { assert } from ".";
+import { assert }             from "../lib";
 
 /**
  * A token type is a parameter that provides a close to exact match search on a
