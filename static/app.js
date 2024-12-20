@@ -7,7 +7,6 @@
         jwks      : { type: "object", defaultValue: null },
         jwks_url  : { type: "string", defaultValue: "" },
         tlt       : { type: "number", defaultValue: CFG.defaultTokenLifeTime || 15 },
-        dur       : { type: "number", defaultValue: CFG.defaultWaitTime || 10 },
         m         : { type: "number", defaultValue: 1 },
         del       : { type: "number", defaultValue: 0 },
         secure    : { type: "number", defaultValue: 1 },
@@ -132,7 +131,6 @@
         MODEL.set("launchData", Lib.base64UrlEncode(JSON.stringify({
             err   :  MODEL.get("err"),
             page  : +MODEL.get("page"),
-            dur   : +MODEL.get("dur"),
             tlt   : +MODEL.get("tlt"),
             m     : +MODEL.get("m"),
             del   : +MODEL.get("del"),
@@ -141,7 +139,6 @@
         MODEL.set("openLaunchData", Lib.base64UrlEncode(JSON.stringify({
             err   :  MODEL.get("err"),
             page  : +MODEL.get("page"),
-            dur   : +MODEL.get("dur"),
             tlt   : +MODEL.get("tlt"),
             m     : +MODEL.get("m"),
             del   : +MODEL.get("del"),
@@ -290,7 +287,7 @@
         MODEL.on("change:jwks change:jwks_url change:err change:tlt", generateClientId);
 
         // Whenever the advanced options change (re)generate the launchData
-        MODEL.on("change:page change:dur change:del change:err change:tlt change:m change:secure", updateLaunchData);
+        MODEL.on("change:page change:del change:err change:tlt change:m change:secure", updateLaunchData);
         
         // Whenever launchData changes, update the fhir server fhir_server_url
         MODEL.on("change:launchData", function updateFhirUrl(e) {

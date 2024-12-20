@@ -9,7 +9,6 @@ export interface Sim {
     id         : string
     secure    ?: boolean
     err       ?: string // simulated error
-    dur       ?: number // simulatedExportDuration
     m         ?: number // databaseMultiplier
     page      ?: number // resourcesPerFile
     tlt       ?: number // accessTokenLifeTime

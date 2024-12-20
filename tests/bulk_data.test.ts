@@ -47,7 +47,6 @@ interface KickOffOptions {
     _since                 ?: string
     systemLevel            ?: boolean
     simulatedError         ?: string
-    simulatedExportDuration?: number
     resourcesPerFile       ?: number
     accessTokenLifeTime    ?: number
     _type                  ?: string
@@ -71,7 +70,6 @@ interface KickOffOptions {
 
 interface Sim {
     m         : number
-    dur       : number
     err       : string
     extended  : boolean
     secure    : boolean
@@ -102,7 +100,6 @@ class Client
     {
         const sim: Sim = {
             m        : options.databaseMultiplier || 1,
-            dur      : options.simulatedExportDuration || 0,
             err      : options.simulatedError || "",
             extended : !!options.extended,
             secure   : !!options.secure,
@@ -710,7 +707,7 @@ describe("Bulk Data Kick-off Request", function() {
             headers?: Record<string, any>
         }, expected: Record<string, any>) {
 
-            const url = new URL(meta.buildUrl(options.sim || { dur: 0 }))
+            const url = new URL(meta.buildUrl(options.sim || {}))
             for (const param in options.qs || {}) {
                 url.searchParams.append(param, options.qs![param] + "")
             }
@@ -1818,127 +1815,6 @@ describe("File Downloading", function() {
         }
     });
 });
-
-
-// describe("All Together", () => {
-
-//     it ("Should download 2 valid Observation ndjson files", function(done) {
-
-//         this.timeout(50000);
-
-//         const TYPE = "AllergyIntolerance";
-
-//         lib.requestPromise({
-//             uri: lib.buildPatientUrl({ dur: 0, page: 20, m: 1 }),
-//             qs : {
-//                 _type: TYPE
-//             },
-//             headers: {
-//                 Accept: "application/fhir+json",
-//                 Prefer: "respond-async"
-//             }
-//         })
-
-//         // Get the progress endpoint
-//         .then(res => res.headers["content-location"])
-
-//         // Query the progress endpoint
-//         .then(statusUrl => lib.requestPromise({ uri: statusUrl, json: true }))
-
-//         // get the download links
-//         .then(res => res.body.output || [])
-
-//         // Check the links count
-//         .then(links => {
-//             if (links.length != 2) {
-//                 throw "Wrong number of links returned";
-//             }
-//             return links;
-//         })
-
-//         // convert links to URLs
-//         .then(links => links.map(l => l.url))
-
-//         // validate file names
-//         .then(links => {
-//             let re = /\/([^/]+)$/
-//             links.forEach((l, i) => {
-//                 let m = l.match(re);
-//                 if (!m || !m[1]) {
-//                     throw "Invalid file name";
-//                 }
-//                 let tokens = m[1].split(".");
-//                 if (tokens.length != 3) {
-//                     throw `Invalid file name "${m[1]}". Should have 3 parts`;
-//                 }
-//                 if (tokens[0] != i + 1) {
-//                     throw `Invalid file name "${m[1]}". Should start with ${i + 1}`;
-//                 }
-
-//                 if (tokens[1] != TYPE) {
-//                     throw `Invalid file name "${m[1]}". Should start with ${i + 1}.${TYPE}`;
-//                 }
-
-//                 if (tokens[2] != "ndjson") {
-//                     throw `Invalid file name "${m[1]}". Should end with ".ndjson"`;
-//                 }
-//             });
-//             return links;
-//         })
-
-//         // Check if multiple files have the same args
-//         .then(links => {
-//             let args1 = links[0].match(/\/bulkfiles2?\/([^/]+)/)[1];
-//             let args2 = links[1].match(/\/bulkfiles2?\/([^/]+)/)[1];
-//             if (args1 == args2) {
-//                 throw "Same args passed to two sequential files";
-//             }
-//             return links;
-//         })
-
-//         // .then(links => {
-//         //     links.forEach(l => console.log(l));
-//         //     return links;
-//         // })
-
-//         // Do download the files
-//         .then(links => Promise.all(links.map(l => lib.requestPromise({ url: l }))))
-
-//         // Convert to JSON lines
-//         .then(files => files.map(f => f.body.trim().split("\n")))
-
-//         // Count lines
-//         .then(files => {
-//             let l1 = files[0].length;
-//             let l2 = files[1].length;
-//             if (l1 != 20) {
-//                 throw `The first ${TYPE} file should have 20 lines but found ${l1}`;
-//             }
-//             if (l2 != 10) {
-//                 throw `The second ${TYPE} file should have 10 lines but found  ${l2}`;
-//             }
-//             return files;
-//         })
-
-//         // look for repeated IDs
-//         .then(files => {
-//             let ids = {};
-//             files.forEach(file => {
-//                 file.forEach(row => {
-//                     let r = JSON.parse(row)
-//                     if (ids[r.id]) {
-//                         throw `Duplicate id ${r.id} for ${r.resourceType}`
-//                     }
-//                     ids[r.id] = 1
-//                 })
-//             });
-//             return files;
-//         })
-
-//         // exit
-//         .then(() => done(), ({ error }) => done(error));
-//     });
-// });
 
 describe("Groups", function() {
     this.timeout(10000)

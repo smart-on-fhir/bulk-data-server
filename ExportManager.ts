@@ -279,7 +279,6 @@ class ExportManager
             ExportManager.create(
                 {
                     simulatedError         : sim.err,
-                    simulatedExportDuration: sim.dur,
                     databaseMultiplier     : sim.m,
                     resourcesPerFile       : sim.page,
                     accessTokenLifeTime    : sim.tlt,
