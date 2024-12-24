@@ -352,9 +352,9 @@ function assignTimes(json: fhir4.Bundle): fhir4.Bundle {
     return json
 }
 
-function createDatabase() {
-    return DB.promise("run", `DROP TABLE IF EXISTS "data"`)
-    .then(() => DB.promise(
+async function createDatabase() {
+    await DB.promise("run", `DROP TABLE IF EXISTS "data"`)
+    await DB.promise(
         "run",
         `CREATE TABLE "data"(
             "id"            Integer NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -366,7 +366,7 @@ function createDatabase() {
             "expires_at"    DateTime,
             "resource_json" Text
         );`
-    ));
+    );
 }
 
 async function insertGroups()

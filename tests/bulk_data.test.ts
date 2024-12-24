@@ -1522,7 +1522,7 @@ describe("File Downloading", function() {
         const res1 = await client.downloadFileAt(0);
         expect(res1.lines.length).to.equal(6);
         const res2 = await client.downloadFileAt(1);
-        expect(res2.lines.length).to.equal(2);
+        expect(res2.lines.length).to.be.greaterThanOrEqual(2); // 2 if no custom groups currently exist
     });
 
     it ("can download Group files", async () => {
@@ -1530,7 +1530,7 @@ describe("File Downloading", function() {
         await client.kickOff({ _type: "Group", systemLevel: true });
         await client.waitForExport();
         const { lines } = await client.downloadFileAt(0);
-        expect(lines.length).to.equal(8);
+        expect(lines.length).to.be.greaterThanOrEqual(8); // 8 if no custom groups currently exist
     });
 
     it ("rejects downloads from canceled exports", () => assert.rejects(async () => {

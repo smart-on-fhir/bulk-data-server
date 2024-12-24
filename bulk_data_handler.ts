@@ -86,9 +86,22 @@ router.get("/metadata", cors({ origin: true }), extractSim, metadata);
 // list all the groups with their IDs and the number of patients included
 router.get("/Group", cors({ origin: true }), group.getAll);
 
-// list groups with by ID
+// Get group by ID
 router.get("/Group/:id", cors({ origin: true }), group.getOne);
 
+// Update group by ID
+router.put("/Group/:id", cors({ origin: true }), express.json({ type: jsonTypes }), Lib.asyncRouteWrap(group.update));
+
+// Patch group by ID
+router.patch("/Group/:id", cors({ origin: true }), express.json({ type: jsonTypes }), Lib.asyncRouteWrap(group.patch));
+
+// Delete group by ID
+router.delete("/Group/:id", cors({ origin: true }), Lib.asyncRouteWrap(group.deleteOne));
+
+// Create group
+router.post("/Group", cors({ origin: true }), express.json({ type: jsonTypes }), Lib.asyncPatternHandler({ worker: group.create }));
+
+// $get-patients operation
 router.get("/\\$get-patients", cors({ origin: true }), patient);
 
 // $get-resource-counts operation

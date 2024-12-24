@@ -1,14 +1,15 @@
 import express, { NextFunction, Request, RequestHandler, Response } from "express"
-import http           from "http"
-import morgan         from "morgan"
-import cors           from "cors"
-import config         from "./config"
-import generator      from "./generator"
-import tokenHandler   from "./token_handler"
-import register       from "./registration_handler"
-import bulkData       from "./bulk_data_handler"
-import env            from "./env"
-import encodedOutcome from "./outcome_handler"
+import http                      from "http"
+import morgan                    from "morgan"
+import cors                      from "cors"
+import config                    from "./config"
+import generator                 from "./generator"
+import tokenHandler              from "./token_handler"
+import register                  from "./registration_handler"
+import bulkData                  from "./bulk_data_handler"
+import env                       from "./env"
+import encodedOutcome            from "./outcome_handler"
+import { OperationOutcomeError } from "./lib"
 
 const app = express();
 
@@ -69,6 +70,9 @@ app.use(express.static("static"));
 // global error handler
 /* istanbul ignore next */
 app.use(function (err: Error, req: Request, res: Response, next: NextFunction) {
+    if (err instanceof OperationOutcomeError) {
+        return res.status(err.httpCode).json(err.toJSON());
+    }
     console.error(err.stack);
     res.status(500).send('Something broke!');
 });

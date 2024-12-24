@@ -8,18 +8,18 @@ export default {
         {
             "code": "read"
         },
-        // {
-        //     "code": "update"
-        // },
-        // {
-        //     "code": "patch"
-        // },
-        // {
-        //     "code": "delete"
-        // },
-        // {
-        //     "code": "create"
-        // }
+        {
+            "code": "update"
+        },
+        {
+            "code": "patch"
+        },
+        {
+            "code": "delete"
+        },
+        {
+            "code": "create"
+        }
     ],
     searchParam: [
         {

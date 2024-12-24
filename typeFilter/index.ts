@@ -7,7 +7,7 @@ import FhirString                    from "./FhirString"
 import FhirReference                 from "./FhirReference"
 import SCHEMA, { SearchParamConfig } from "../schema"
 import { JSONObject }                from "../types"
-import { assert }                    from "../lib"
+import { assert, makeArray }         from "../lib"
 
 enum TYPES {
     reference,
@@ -241,4 +241,55 @@ export function createTypeFilterTester(typeFilters: string[]) {
     }
 }
 
+export function validateQuery(query: string | string[], {
+    compartment,
+    availableResourceTypes
+}: {
+    compartment?: string[]
+    availableResourceTypes?: string[]
+} = {}): void
+{
+    query = makeArray(query)
+
+    if (!query.length) {
+        throw new Error(`Invalid filter expression. Empty query.`)
+    }
+
+    for (const q of query) {
+        if (!q) {
+            throw new Error(`Invalid filter expression. Empty query.`)
+        }
+        
+        const [resourceType, resourceQuery] = q.split("?")
+
+        if (!resourceQuery) {
+            throw new Error(`Invalid filter expression. Missing resourceType.`)
+        }
+
+        if (compartment && !compartment.includes(resourceType)) {
+            throw new Error(`Invalid filter expression. Resources of type ${resourceType} are not included in the target compartment.`)
+        }
+
+        if (availableResourceTypes && !availableResourceTypes.includes(resourceType)) {
+            throw new Error(`Invalid filter expression. Resources of type ${resourceType} are not available.`)
+        }
+
+        for (const key of new URLSearchParams(resourceQuery).keys()) {
+
+            const [parameter] = key.split(":")
+            
+            const searchConfig = SCHEMA[resourceType]?.searchParam
+
+            if (!searchConfig) {
+                throw new Error(`Resources of type "${resourceType}" do not support searching`)
+            }
+
+            const paramConfig = searchConfig.find(x => x.name === parameter);
+
+            if (!paramConfig) {
+                throw new Error(`Resources of type "${resourceType}" do not support the "${parameter}" search parameter`)
+            }
+        }
+    }
+}
 

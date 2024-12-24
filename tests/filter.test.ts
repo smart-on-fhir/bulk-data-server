@@ -1,7 +1,8 @@
 import { expect }  from "chai"
 import { Encounter, FhirResource, Patient } from "fhir/r4"
-import { filter, matches, typeFilter }  from "../typeFilter"
+import { filter, matches, typeFilter, validateQuery }  from "../typeFilter"
 import getDatabase from "../db"
+import config from "../config"
 
 
 const TEST_PATIENT: Patient = {
@@ -543,10 +544,7 @@ describe("typeFilter on Group", () => {
 
     const matrix = {
         "_id=MinutemanHealth"                                 : 1,
-        "actual=true"                                         : 8,
-        "actual=false"                                        : 0,
-        "type=person"                                         : 8,
-        "member=urn:uuid:c852042b-1373-45e6-acb5-f252c733de3a": 1
+        "member=urn:uuid:c852042b-1373-45e6-acb5-f252c733de3a": 1,
     }
 
     for (const query in matrix) {
@@ -555,6 +553,21 @@ describe("typeFilter on Group", () => {
             expect(filtered.length).to.equal(matrix[query as keyof typeof matrix])
         })
     }
+
+    it ("actual=true", async () => {
+        const filtered = typeFilter(resources, `_typeFilter=${encodeURIComponent('Group?actual=true')}`)
+        expect(filtered.length).to.be.greaterThanOrEqual(8)
+    })
+
+    it ("actual=false", async () => {
+        const filtered = typeFilter(resources, `_typeFilter=${encodeURIComponent('Group?actual=false')}`)
+        expect(filtered.length).to.be.greaterThanOrEqual(0)
+    })
+
+    it ("type=person", async () => {
+        const filtered = typeFilter(resources, `_typeFilter=${encodeURIComponent('Group?type=person')}`)
+        expect(filtered.length).to.be.greaterThanOrEqual(8)
+    })
 })
 
 describe("typeFilter on AllergyIntolerance", () => {
@@ -923,7 +936,7 @@ describe("typeFilter on all resources", () => {
     let resources: FhirResource[];
 
     before(async () => {
-        const rows = await db.promise("all", `SELECT resource_json FROM data`)
+        const rows = await db.promise("all", `SELECT resource_json FROM data WHERE expires_at IS NULL`) // exclude custom groups
         resources = rows.map((r:any) => JSON.parse(r.resource_json))
     })
 
@@ -962,4 +975,43 @@ describe("typeFilter on all resources", () => {
     //         '_typeFilter=' + encodeURIComponent('Patient?gender=male&birthdate=gt1971')
     //     ).length
     // )
+})
+
+describe("validateQuery", () => {
+    it ("rejects empty queries", () => {
+        expect(() => validateQuery("")).throws(/Empty query/)
+        expect(() => validateQuery([])).throws(/Empty query/)
+        expect(() => validateQuery([""])).throws(/Empty query/)
+        expect(() => validateQuery(["", ""])).throws(/Empty query/)
+    })
+
+    it ("rejects missing resource types", () => {
+        expect(() => validateQuery("x")).throws(/Missing resourceType/)
+        expect(() => validateQuery(["x"])).throws(/Missing resourceType/)
+    })
+
+    it ("validate against the patient compartment", () => {
+        expect(() => validateQuery("x?y", { compartment: config.patientCompartment }))
+            .throws(/not included in the target compartment/)
+    })
+
+    it ("validate against the practitioner compartment", () => {
+        expect(() => validateQuery("x?y", { compartment: config.practitionerCompartment }))
+            .throws(/not included in the target compartment/)
+    })
+
+    it ("validate against the available resource types", () => {
+        expect(() => validateQuery("x?y", { availableResourceTypes: config.practitionerCompartment }))
+            .throws(/Resources of type x are not available/)
+    })
+
+    it ("rejects if the resource is not searchable", () => {
+        expect(() => validateQuery("x?a"))
+            .throws(/Resources of type "x" do not support searching/)
+    })
+
+    it ("rejects if the resource does not support the search parameter", () => {
+        expect(() => validateQuery("Patient?a=1"))
+            .throws(/Resources of type "Patient" do not support the "a" search parameter/)
+    })
 })

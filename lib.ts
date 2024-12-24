@@ -1,5 +1,6 @@
-import { NextFunction, Request, Response } from "express"
+import { NextFunction, Request, RequestHandler, Response } from "express"
 import FS                                  from "fs/promises"
+import crypto                              from "crypto"
 import Path                                from "path"
 import jwt, { Algorithm }                  from "jsonwebtoken"
 import moment                              from "moment"
@@ -8,6 +9,7 @@ import { format }                          from "util"
 import FHIR, { OperationOutcome }          from "fhir/r4"
 import { Dirent }                          from "fs"
 import lockfile                            from "proper-lockfile"
+import cors                                from "cors"
 import config                              from "./config"
 import getDB                               from "./db"
 import { JSONValue }                       from "./types"
@@ -699,11 +701,156 @@ export function rateLimiter({
     }
 }
 
-export function assert(condition: any, error?: string | ErrorConstructor, ctor: ErrorConstructor = Error): asserts condition {
+interface AsyncPatternHandlerResult {
+    body    : any
+    headers?: Record<string, string>
+    status ?: number
+}
+
+export function asyncPatternHandler({
+    worker,
+    keepCompletedJobs = 36_000, // 10min
+}: {
+    worker: (req: Request, res: Response) => Promise<AsyncPatternHandlerResult>
+    keepCompletedJobs?: number
+}) {
+    const jobs: Record<string, {
+        job     : Promise<AsyncPatternHandlerResult>
+        location: string
+        result ?: AsyncPatternHandlerResult
+        error  ?: Error
+    }> = {};
+
+    function removeJob(jobId: string) {
+        delete jobs[jobId];
+    }
+    
+    function kickOff(req: Request, res: Response)
+    {
+        // create job
+        const jobId = crypto.randomBytes(16).toString("hex");
+        const job = worker(req, res);
+
+        // triggers the async pattern?
+        if (req.headers.prefer === "respond-async") {
+            
+            // Store the job for later and keep it for 10 min
+            jobs[jobId] = {
+                location: req.url,
+                job: job.then(
+                    result => jobs[jobId].result = result,
+                    error  => jobs[jobId].error  = error
+                ).finally(() => {
+                    setTimeout(() => removeJob(jobId), keepCompletedJobs).unref()
+                })
+            }
+
+            // Compute the status location
+            const url = `http://${req.headers.host}${req.originalUrl}/async-jobs/${jobId}`
+
+            req.app.get(req.originalUrl + "/async-jobs/:id", cors({ origin: true }), status);
+            req.app.delete(req.originalUrl + "/async-jobs/:id", cors({ origin: true }), status);
+
+            // HTTP Status Code of 202 Accepted
+            // Content-Location: the absolute URL of the polling location
+            return res.status(202).header("Content-Location", url).end()
+        }
+
+        // Process directly
+        job.then(
+            result => res.set(result.headers || {}).status(result.status || 200).json(result.body),
+            error  => operationOutcome(res, error.message, { httpCode: 500 })
+        )
+    }
+
+    function status(req: Request, res: Response)
+    {
+        const job = jobs[req.params.id]
+
+        if (!job) {
+            return res.status(404).end("Job not found")
+        }
+
+        if (req.method === "DELETE") {
+            delete jobs[req.params.id]
+            return res.status(202).end()
+        }
+
+        if (job.hasOwnProperty("error")) {
+            return res.status(400).json(job.error)
+        }
+
+        if (job.result) {
+            return res.set(job.result.headers || {}).status(job.result.status || 200).json({
+                resourceType: "Bundle",
+                type: "batch-response",
+                entry: [{
+                    response: {
+                        status  : String(job.result.status || 200),
+                        location: job.location + "/" + job.result.body.id
+                    },
+                    resource: job.result.body
+                }]
+            })
+        }
+
+        return res.status(202).end()
+    }
+    
+    return kickOff
+}
+
+/**
+ * Creates and returns a route-wrapper function that allows for using an async
+ * route handlers without try/catch.
+ */
+export function asyncRouteWrap(fn: RequestHandler) {
+    return (req: Request, res: Response, next: NextFunction) => Promise.resolve(
+        fn(req, res, next)
+    ).catch(next);
+}
+
+interface MyErrorConstructor {
+    new (message?: string): Error;
+    readonly prototype: Error;
+}
+
+export function assert(condition: any, error?: string | MyErrorConstructor, ctor: MyErrorConstructor = Error, ...ctorArgs: any[]): asserts condition {
     if (!(condition)) {
         if (typeof error === "function") {
-            throw new error()
+            throw new error(...ctorArgs)
         }
         throw new ctor(error || "Assertion failed")
     }
 }
+
+export interface OperationOutcomeOptions {
+    /** @see http://hl7.org/fhir/valueset-issue-type.html */
+    severity : "fatal" | "error" | "warning" | "information"
+    issueCode: string
+    httpCode : number
+}
+
+export class OperationOutcomeError extends Error
+{
+    readonly issueCode: OperationOutcomeOptions["issueCode"];
+    readonly severity : OperationOutcomeOptions["severity"];
+    readonly httpCode : OperationOutcomeOptions["httpCode"];
+
+    constructor(msg?: string, options: Partial<OperationOutcomeOptions> = {}) {
+        super(msg)
+        this.name = "OperationOutcomeError"
+        this.issueCode = options.issueCode || "processing"
+        this.severity  = options.severity  || "error"
+        this.httpCode  = options.httpCode  || 400
+        Error.captureStackTrace(this, this.constructor)
+    }
+
+    toJSON() {
+        return createOperationOutcome(this.message, {
+            issueCode: this.issueCode,
+            severity : this.severity
+        })
+    }
+}
+
