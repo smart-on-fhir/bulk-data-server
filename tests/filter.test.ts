@@ -1,8 +1,9 @@
 import { expect }  from "chai"
-import { Encounter, FhirResource, Patient } from "fhir/r4"
+import { Encounter, FhirResource, Group, Patient } from "fhir/r4"
 import { filter, matches, typeFilter, validateQuery }  from "../typeFilter"
 import getDatabase from "../db"
 import config from "../config"
+import { getGroupMembers } from "../lib"
 
 
 const TEST_PATIENT: Patient = {
@@ -993,6 +994,32 @@ describe("typeFilter on all resources", () => {
     //         '_typeFilter=' + encodeURIComponent('Patient?gender=male&birthdate=gt1971')
     //     ).length
     // )
+})
+
+describe("getGroupMembers", () => {
+    let db = getDatabase();
+    let rows: any[];
+
+    before(async () => {
+        rows = await db.promise("all", `SELECT * FROM data`)
+    })
+
+    const matrix = new Map<string[], number>([
+        [["Patient?gender=female"]                                  , 40],
+        [["Patient?gender=male"]                                    , 60],
+        [["Patient?birthdate=gt1991-04-05"]                         , 41],
+        [["Patient?gender=female&birthdate=gt1991-04-05"]           , 15],
+        [["Patient?gender=female", "Patient?birthdate=gt1991-04-05"], 15],
+        [["Patient?gender=male", "MedicationRequest?status=stopped"], 98]
+    ]);
+
+    for (const [memberFilters, count] of matrix.entries()) {
+        it (JSON.stringify(memberFilters) + " => " + count, async () => {
+            const group = { modifierExtension: memberFilters.map(f => ({
+                "url": "/memberFilter", valueString: f })) } as Group;
+            expect(getGroupMembers(group, rows).size).to.equal(count)
+        })
+    }
 })
 
 describe("validateQuery", () => {

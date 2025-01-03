@@ -6,7 +6,7 @@ import jwt, { Algorithm }                  from "jsonwebtoken"
 import moment                              from "moment"
 import base64url                           from "base64-url"
 import { format }                          from "util"
-import FHIR, { OperationOutcome }          from "fhir/r4"
+import FHIR, { Group, OperationOutcome }   from "fhir/r4"
 import { Dirent }                          from "fs"
 import lockfile                            from "proper-lockfile"
 import cors                                from "cors"
@@ -14,6 +14,7 @@ import config                              from "./config"
 import getDB                               from "./db"
 import { JSONValue }                       from "./types"
 import { ScopeList }                       from "./scope"
+import { typeFilter }                      from "./typeFilter"
 
 
 const RE_GT    = />/g;
@@ -854,3 +855,48 @@ export class OperationOutcomeError extends Error
     }
 }
 
+export function getGroupMembers(group: Group, rows: any[]): Set<string> {
+    
+    const members = new Set<string>()
+
+    const filtersByType: any = {}
+
+    // Get group filters
+    group.modifierExtension!.filter(ext => ext.url.endsWith("/memberFilter"))
+        .map(ext => ext.valueString)
+        .forEach(f => {
+            if (f) {
+                const [resourceType, resourceQuery] = f.split("?")
+                if (filtersByType[resourceType]) {
+                    filtersByType[resourceType] += "&" + resourceQuery
+                } else {
+                    filtersByType[resourceType] = resourceQuery
+                }
+            }
+        });
+
+    const filters = Object.keys(filtersByType).map(k => `${k}?${filtersByType[k]}`)
+
+    for (const row of rows) {
+
+        if (members.has(row.patient_id + "")) {
+            continue
+        }
+
+        // If multiple memberFilter extensions are provided that contain
+        // criteria for different resource types, servers SHALL filter the
+        // group to only include Patients or Practitioners that have
+        // resources in their compartments that meet the conditions in all
+        // of the expressions.
+        const resource = JSON.parse(row.resource_json as string)
+        if (filters.some(f => typeFilter(
+            [resource],
+            "_typeFilter=" + encodeURIComponent(f),
+            { rejectOtherResourceTypes: true }
+        ).length > 0)) {
+            members.add(row.patient_id + "")
+        }
+    }
+
+    return members
+}
