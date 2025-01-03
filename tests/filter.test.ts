@@ -364,6 +364,24 @@ describe("filter patients", () => {
             expect(filtered.length).to.equal(matrix[query as keyof typeof matrix])
         })
     }
+
+    // male OR female
+    it ("_typeFilter=Patient?gender=female,male", async () => {
+        const filtered = typeFilter(patients, "_typeFilter=" + encodeURIComponent("Patient?gender=female,male"))
+        expect(filtered.length).to.equal(100)
+    })
+
+    // male OR female
+    it ("_typeFilter=Patient?gender=female&_typeFilter=Patient?gender=male", async () => {
+        const filtered = typeFilter(patients, "_typeFilter=" + encodeURIComponent("Patient?gender=female") + "&_typeFilter=" + encodeURIComponent("Patient?gender=male"))
+        expect(filtered.length).to.equal(100)
+    })
+
+    // male AND female
+    it ("_typeFilter=Patient?gender=female&gender=male", async () => {
+        const filtered = typeFilter(patients, "_typeFilter=" + encodeURIComponent("Patient?gender=female&gender=male"))
+        expect(filtered.length).to.equal(0)
+    })
 })
 
 describe("typeFilter on Encounter", () => {
