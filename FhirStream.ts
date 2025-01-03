@@ -1,4 +1,5 @@
 import { Readable }               from "stream"
+import { Group }                  from "fhir/r4"
 import QueryBuilder               from "./QueryBuilder"
 import { createTypeFilterTester } from "./typeFilter"
 import config                     from "./config"
@@ -42,18 +43,22 @@ export default class FhirStream extends Readable
     total: number;
     rowIndex: number;
     overflow: number;
-    typeFilter: any;
     count: number;
     timer: NodeJS.Timeout | null;
     builder: QueryBuilder;
     db: any;
     stratifier: "fhir_type" | "patient_id";
+    options: FhirStreamOptions;
+    typeFilter: any;
+    memberFilter: any;
 
     constructor(options: FhirStreamOptions)
     {
         super({ objectMode: true });
 
         this.db = getDB();
+
+        this.options = options;
 
         this.limit      = options.limit || config.defaultPageSize;
         this.multiplier = Lib.uInt(options.databaseMultiplier, 1);
@@ -71,9 +76,6 @@ export default class FhirStream extends Readable
         this.rowIndex   = 0;
         this.overflow   = 0;
         this.stratifier = options.stratifier || "fhir_type";
-        this.typeFilter = options.filter && options.filter.length ?
-            createTypeFilterTester(options.filter) :
-            null;
 
         this.timer = null
 
@@ -118,14 +120,58 @@ export default class FhirStream extends Readable
 
     async init()
     {
-        return this.countRecords()
-            .then(() => this.prepare())
-            .then(() => this.fetch())
-            .then(() => this)
-            .catch(error => {
-                this.emit('error', error);
-                return this;
-            });
+        try {
+            await this.setup()
+            await this.countRecords()
+            await this.prepare()
+            await this.fetch()
+        } catch(error) {
+            this.emit('error', error);
+        }
+        return this
+    }
+
+    async setup()
+    {
+        if (this.options.filter && this.options.filter.length) {
+            this.typeFilter = createTypeFilterTester(this.options.filter);
+        }
+
+        // custom groups
+        if (this.group.startsWith("custom-")) {
+
+            // Do not pass custom groups to QueryBuilder.
+            this.builder.setGroupId("")
+            
+            // Get Group
+            const group = JSON.parse((await this.db.promise(
+                "get",
+                `SELECT "resource_json" FROM "data" WHERE "resource_id" = ?`,
+                [this.group]
+            )).resource_json) as Group;
+
+            // Get all resources
+            const resources = await this.db.promise(
+                "all",
+                `SELECT * FROM "data" WHERE "fhir_type" IN ('${config.patientCompartment.join("','")}')`
+            );
+
+            // Get Group Members
+            const members = Lib.getGroupMembers(group, resources)
+
+            // Create member filter
+            this.memberFilter = (row:any) => members.has(row.patient_id)
+        }
+    }
+
+    filter(row: any): boolean {
+        if (this.memberFilter && !this.memberFilter(row)) {
+            return false
+        }
+        if (this.typeFilter && !this.typeFilter(JSON.parse(row.resource_json))) {
+            return false
+        }
+        return true
     }
 
     /**
@@ -191,7 +237,7 @@ export default class FhirStream extends Readable
 
         let row = this.cache.length ? this.cache.shift() : null;
 
-        if (row && this.typeFilter && !this.typeFilter(JSON.parse(row.resource_json))) {
+        if (row && !this.filter(row)) {
             this.rowIndex += 1;
 
             // Must defer this call to avoid max call stack exceeded errors

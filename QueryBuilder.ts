@@ -213,10 +213,7 @@ export default class QueryBuilder {
         this._offset = lib.uInt(n);
     }
 
-    setGroupId(gId: string) {
-        let id = String(gId).trim();
-        if (id) {
-            this._groupId = id;
-        }
+    setGroupId(gId: string | null) {
+        this._groupId = String(gId || "").trim() || null;
     }
 }
