@@ -385,10 +385,12 @@
                         <h5 class="text-success">
                             <i class="fa fa-users" aria-hidden="true"></i> Patients Group
                         </h5>
-                        <select class="form-control" id="group">
-                            <option>No Group (include all the patients)</option>
-                        </select>
-                        <p class="small text-muted help-block">Instead of exporting all patients, you can select a group and only work with patients within that group.</p>
+                        <datalist id="groups"></datalist>
+                        <input type="text" class="form-control" id="group" list="groups" placeholder="No Group (include all the patients)" />
+                        <p class="small text-muted help-block">
+                            Instead of exporting all patients, you can select a
+                            group and only work with patients within that group.
+                        </p>
                         <br/>
                     </div>
                     <div class="col-sm-6">

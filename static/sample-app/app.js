@@ -38,18 +38,13 @@
 
     function renderGroupSelector(groups)
     {
-        var select = $("#group").html(
-            '<option value="">No Group (include all the patients)</option>'
-        );
-        select.append(
-            '<option value="" disabled>---------------------------------------------------</option>'
-        );
+        var list = $("#groups");
         $.each(groups, function(i, g) {
             var opt = $("<option/>");
             // opt.attr("value", g.resource.id);
             opt.attr("value", g.resource.identifier[0].value);
             opt.text(g.resource.name + " (" + formatNumber(g.resource.quantity) + " patients)");
-            select.append(opt);
+            list.append(opt);
         });
     }
 
