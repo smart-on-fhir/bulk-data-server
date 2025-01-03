@@ -68,6 +68,10 @@
     function renderPatientCheckboxes(patients)
     {
         var div = $(".patient-select-options").empty();
+
+        if (!patients.length) {
+            return div.text("No patients found for this group")
+        }
         
         patients.filter((o, i) => i < 10).forEach((o, i) => {
             var cb = $('<input type="checkbox" />').attr({
@@ -297,9 +301,14 @@
         $.get(url).then(
             patients => MODEL.set({
                 patients: patients,
-                selectedPatients: []
+                selectedPatients: [],
+                error: null
             }),
-            xhr => MODEL.set("error", getAjaxError(xhr, "Requesting '/$get-patients' returned: "))
+            xhr => MODEL.set({
+                error: getAjaxError(xhr, "Requesting '/$get-patients' returned: "),
+                patients: [],
+                selectedPatients: []
+            })
         );
     }
 
@@ -911,9 +920,16 @@
         $.get(baseURL + "/$get-patients").then(
             patients => MODEL.set({
                 patients: patients,
-                selectedPatients: []
+                selectedPatients: [],
+                error: null
             }),
-            xhr => MODEL.set("error", getAjaxError(xhr, "Requesting '/$get-patients' returned: "))
+            xhr => {
+                MODEL.set({
+                    error: getAjaxError(xhr, "Requesting '/$get-patients' returned: "),
+                    patients: [],
+                    selectedPatients: []
+                })
+            }
         );
     }
 

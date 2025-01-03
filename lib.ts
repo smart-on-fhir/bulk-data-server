@@ -816,12 +816,18 @@ interface MyErrorConstructor {
     readonly prototype: Error;
 }
 
-export function assert(condition: any, error?: string | MyErrorConstructor, ctor: MyErrorConstructor = Error, ...ctorArgs: any[]): asserts condition {
+export function assert(
+    condition: any,
+    error?: string | MyErrorConstructor,
+    ctor: MyErrorConstructor = Error,
+    ...ctorArgs: any[]
+): asserts condition {
     if (!(condition)) {
         if (typeof error === "function") {
             throw new error(...ctorArgs)
         }
-        throw new ctor(error || "Assertion failed")
+        const args = [error || "Assertion failed", ...ctorArgs]
+        throw new ctor(...args)
     }
 }
 

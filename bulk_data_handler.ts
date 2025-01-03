@@ -102,7 +102,7 @@ router.delete("/Group/:id", cors({ origin: true }), Lib.asyncRouteWrap(group.del
 router.post("/Group", cors({ origin: true }), express.json({ type: jsonTypes }), Lib.asyncPatternHandler({ worker: group.create }));
 
 // $get-patients operation
-router.get("/\\$get-patients", cors({ origin: true }), patient);
+router.get("/\\$get-patients", cors({ origin: true }), Lib.asyncRouteWrap(patient));
 
 // $get-resource-counts operation
 router.get("/\\$get-resource-counts", cors({ origin: true }), getResourceCounts);
