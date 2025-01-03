@@ -90,6 +90,10 @@ function matchesFilter(filter: Filter, resource: FhirResource): boolean {
         return filter.value === "true" ? input === undefined : input !== undefined
     }
 
+    if (input === undefined) {
+        return false
+    }
+
     // date --------------------------------------------------------------------
     if (filter.type === "date") {
         if (filter.modifier) {
@@ -178,7 +182,11 @@ export function filter(resources: FhirResource[], query: string) {
  * for the same resource type, the server SHALL include resources of that
  * resource type that meet the criteria in any of the parameters (a logical "or").
  */
-export function typeFilter(resources: FhirResource[], query: string | URLSearchParams) {
+export function typeFilter(
+    resources: FhirResource[],
+    query: string | URLSearchParams,
+    options: { rejectOtherResourceTypes?: boolean } = {}
+) {
     query = new URLSearchParams(query)
     const typeFilters = query.getAll("_typeFilter").filter(Boolean)
 
@@ -189,7 +197,7 @@ export function typeFilter(resources: FhirResource[], query: string | URLSearchP
             const [resourceType, resourceQuery] = str.split("?")
 
             if (resource.resourceType !== resourceType) {
-                return true
+                return options.rejectOtherResourceTypes ? false : true
             }
 
             for (const [key, value] of new URLSearchParams(resourceQuery).entries()) {

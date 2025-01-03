@@ -61,7 +61,11 @@ export default class Token
 
         const [system, code] = parameterValue.split("|");
         assert(system || code, `Failed searching for "${parameterValue}"`)
-        assert(typeof this.value !== "string", `Searching with "|" can only be used against Coding ot Identifier values`)
+
+        assert(
+            this.value && typeof this.value !== "string",
+            `Searching with "|" can only be used against Coding or Identifier values (searched for "${parameterValue}")`
+        )
 
         // [parameter]=[system]| - any element where the value of [system]
         // matches the system property of the Identifier or Coding
