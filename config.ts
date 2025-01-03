@@ -37,6 +37,10 @@ export default {
 
     jobsPath: process.env.NODE_ENV === "test" ? __dirname + "/jobs/test" : __dirname + "/jobs",
 
+    // Used while testing to fix the current timestamp. Otherwise approximate
+    // dates can shift and test will start failing over time!
+    now: process.env.NODE_ENV === "test" ? +new Date(2024, 12, 20) : undefined,
+
     supportedSigningAlgorithms: [
         "HS256", "HS384", "HS512",
         "RS256", "RS384", "RS512",

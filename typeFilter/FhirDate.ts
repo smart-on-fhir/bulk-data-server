@@ -1,5 +1,12 @@
 import { Period } from "fhir/r4";
 import moment, { Moment, unitOfTime } from "moment";
+import config from "../config";
+
+// Used while testing to fix the current timestamp. Otherwise approximate dates
+// can shift and test will start failing over time!
+if (config.now) {
+    moment.now = () => config.now!
+}
 
 class TimeRange
 {

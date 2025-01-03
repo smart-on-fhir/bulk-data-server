@@ -448,17 +448,17 @@ describe("typeFilter on Observation", () => {
     // total: 16315
 
     const matrix = {
-        "_id=f25af686-ea75-46e9-89d9-369a28dd2860"                          : 1,
-        "subject=Patient/58c297c4-d684-4677-8024-01131d93835e"           : 116,
-        "patient=Patient/58c297c4-d684-4677-8024-01131d93835e"           : 116,
-        "patient=58c297c4-d684-4677-8024-01131d93835e"                   : 116,
-        "encounter=0c578fd3-3911-45e3-bb35-d059ecc31a7a"                 : 28,
-        "encounter=Encounter/0c578fd3-3911-45e3-bb35-d059ecc31a7a"       : 28,
-        "category=vital-signs"                                           : 7317,
-        "category=social-history"                                        : 72,
-        "device=efe0c5dc-85f9-4fcd-bd33-a61f770e75a1"                    : 0,
-        "status=final"                                                   : 16315,
-        "date=ap2017-10"                                                 : 2423,
+        "_id=f25af686-ea75-46e9-89d9-369a28dd2860"                 : 1,
+        "subject=Patient/58c297c4-d684-4677-8024-01131d93835e"     : 116,
+        "patient=Patient/58c297c4-d684-4677-8024-01131d93835e"     : 116,
+        "patient=58c297c4-d684-4677-8024-01131d93835e"             : 116,
+        "encounter=0c578fd3-3911-45e3-bb35-d059ecc31a7a"           : 28,
+        "encounter=Encounter/0c578fd3-3911-45e3-bb35-d059ecc31a7a" : 28,
+        "category=vital-signs"                                     : 7317,
+        "category=social-history"                                  : 72,
+        "device=efe0c5dc-85f9-4fcd-bd33-a61f770e75a1"              : 0,
+        "status=final"                                             : 16315,
+        "date=ap2017-10"                                           : 2433,
     }
 
     for (const query in matrix) {
@@ -494,7 +494,7 @@ describe("typeFilter on Procedure", () => {
         "status=completed"                                               : 2351,
         "reason-reference=Condition/9f0963f8-0840-428c-b480-2a851e454d22": 4,
         "reason-reference=9f0963f8-0840-428c-b480-2a851e454d22"          : 4,
-        "date=ap2017-10"                                                 : 343,
+        "date=ap2017-10"                                                 : 344,
     }
 
     for (const query in matrix) {
@@ -734,7 +734,7 @@ describe("typeFilter on DiagnosticReport", () => {
         "code=51990-0"                                            : 259,
         "date=2015-04-20T17:48:38-04:00"                          : 1,
         "date=eq2015-04-20T17:48:38-04:00"                        : 1,
-        "date=ap2015-04-20"                                       : 174,
+        "date=ap2015-04-20"                                       : 175,
         "issued=2017-04-24T17:48:38.194-04:00"                    : 3,
         "issued=eq2017-04-24T17:48:38.194-04:00"                  : 3,
         "issued=ap2017-04-24"                                     : 152,
