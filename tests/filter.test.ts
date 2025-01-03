@@ -138,7 +138,7 @@ describe("match", () => {
         expect(matches("gender=female", TEST_PATIENT)).to.equal(true )
         expect(matches("gender=male"  , TEST_PATIENT)).to.equal(false)
         expect(() => matches("gender=|female", TEST_PATIENT))
-            .to.throw('Searching with "|" can only be used against Coding ot Identifier values')
+            .to.throw('Searching with "|" can only be used against Coding or Identifier values')
     })
 
     it("Patient.telecom=…", () => {
