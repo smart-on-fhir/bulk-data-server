@@ -3,6 +3,18 @@ import { Group } from "fhir/r4";
 
 export default {
     type: "Group",
+    operation: [
+        {
+            extension: [
+                {
+                    "url": "http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation",
+                    "valueCode": "SHOULD"
+                }
+            ],
+            name: "export",
+            definition: "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/group-export"
+        }
+    ],
     profile: "http://hl7.org/fhir/StructureDefinition/Group",
     interaction: [
         {
