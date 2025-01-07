@@ -779,7 +779,7 @@ class ExportManager
             await this.save();
             return lib.operationOutcome(
                 res,
-                "An unknown error ocurred (transient_error). Please try again.",
+                "An unknown error occurred (transient_error). Please try again.",
                 {
                     httpCode : 500,
                     issueCode: "transient"

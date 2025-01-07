@@ -868,18 +868,19 @@ export function getGroupMembers(group: Group, rows: any[]): Set<string> {
     const filtersByType: any = {}
 
     // Get group filters
-    group.modifierExtension!.filter(ext => ext.url.endsWith("/memberFilter"))
-        .map(ext => ext.valueString)
-        .forEach(f => {
-            if (f) {
-                const [resourceType, resourceQuery] = f.split("?")
-                if (filtersByType[resourceType]) {
-                    filtersByType[resourceType] += "&" + resourceQuery
-                } else {
-                    filtersByType[resourceType] = resourceQuery
-                }
+    group.modifierExtension!
+    .filter(ext => ext.url.endsWith("/memberFilter"))
+    .map(ext => ext.valueString)
+    .forEach(f => {
+        if (f) {
+            const [resourceType, resourceQuery] = f.split("?")
+            if (filtersByType[resourceType]) {
+                filtersByType[resourceType] += "&" + resourceQuery
+            } else {
+                filtersByType[resourceType] = resourceQuery
             }
-        });
+        }
+    });
 
     const filters = Object.keys(filtersByType).map(k => `${k}?${filtersByType[k]}`)
 

@@ -116,7 +116,7 @@ class GroupResource
      */
     setType(type?: Group["type"]) {
         assert(type, "A Group type is required", OperationOutcomeError)
-        assert(["person", "practitioner"].includes(type), "The Group type can only be a 'person' or 'practitioner'", OperationOutcomeError)
+        assert(type === "person", "Only 'person' type is supported for groups", OperationOutcomeError)
         this.json.type = type
         return this
     }
@@ -289,6 +289,7 @@ export async function update(req: Request, res: Response)
     const { id } = req.params
     const resource = req.body as Group
     assert(resource, "No resource submitted in request body", OperationOutcomeError)
+    assert(resource.id, "The resource id is missing", OperationOutcomeError)
     assert(resource.id === id, "The resource id is different from the id used in the url", OperationOutcomeError)
 
     // Build the group to be saved
@@ -316,6 +317,7 @@ export async function patch(req: Request, res: Response)
     const { id } = req.params
     const resource = req.body as Group
     assert(resource, "No resource submitted in request body", OperationOutcomeError)
+    assert(resource.id, "The resource id is missing", OperationOutcomeError)
     assert(resource.id === id, "The resource id is different from the id used in the url", OperationOutcomeError)
     const rec = await DB().promise("get", `SELECT * FROM "data" WHERE "fhir_type" = 'Group' AND "resource_id" = ?`, id);
     assert(rec, "Group not found", OperationOutcomeError, { httpCode: 404 })
