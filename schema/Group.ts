@@ -16,6 +16,7 @@ export default {
         }
     ],
     profile: "http://hl7.org/fhir/StructureDefinition/Group",
+    supportedProfile: "http://hl7.org/fhir/uv/bulkdata/StructureDefinition/bulk-cohort-group",
     interaction: [
         {
             "code": "read"
