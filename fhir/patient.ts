@@ -30,11 +30,15 @@ export default async function(req: Request, res: Response) {
 
     if (req.query.group) {
         if (String(req.query.group).startsWith("custom-")) {
-            const groupRow = await db.promise("get", `SELECT "resource_json" FROM "data" WHERE "resource_id" = ?`, [req.query.group]);
-            assert(groupRow, "Group not found", OperationOutcomeError, { httpCode: 404 })
-            const resourceRows = await db.promise("all", `SELECT * FROM "data" WHERE "fhir_type" IN ('${config.patientCompartment.join("','")}')`)
-            const patientIds = getGroupMembers(JSON.parse(groupRow.resource_json), resourceRows);
-            sql += ` AND patient_id IN('${Array.from(patientIds).join("','")}')`;
+            try {
+                const groupRow = await db.promise("get", `SELECT "resource_json" FROM "data" WHERE "resource_id" = ?`, [req.query.group]);
+                assert(groupRow, "Group not found", OperationOutcomeError, { httpCode: 404 })
+                const resourceRows = await db.promise("all", `SELECT * FROM "data" WHERE "fhir_type" IN ('${config.patientCompartment.join("','")}')`)
+                const patientIds = getGroupMembers(JSON.parse(groupRow.resource_json), resourceRows);
+                sql += ` AND patient_id IN('${Array.from(patientIds).join("','")}')`;
+            } catch (ex) {
+                return operationOutcome(res, (ex as Error).message);
+            }
         } else {
             sql += " AND group_id = ?";
             params.push(req.query.group);
