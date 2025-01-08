@@ -7,13 +7,15 @@ import GroupEverything   from "./Group-i-everything"
 import ResourceCounts    from "./s-get-resource-counts"
 import GroupExport       from "./GroupExport"
 import PatientExport     from "./PatientExport"
+import SystemExport      from "./SystemExport"
 
 const entries = [
     PatientEverything,
     GroupEverything,
     ResourceCounts,
     GroupExport,
-    PatientExport
+    PatientExport,
+    SystemExport
 ];
 
 const SERVER_START_TIME = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -43,5 +45,6 @@ router.get("/Group-i-everything"    , (req, res) => res.json(GroupEverything  ))
 router.get("/-s-get-resource-counts", (req, res) => res.json(ResourceCounts   ));
 router.get("/GroupExport"           , (req, res) => res.json(GroupExport      ));
 router.get("/PatientExport"         , (req, res) => res.json(PatientExport    ));
+router.get("/SystemExport"          , (req, res) => res.json(SystemExport     ));
 
 export default router

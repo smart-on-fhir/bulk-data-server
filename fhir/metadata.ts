@@ -66,7 +66,7 @@ class CapabilityStatement
                   }
                 ],
                 "name": "export",
-                "definition": "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/export"
+                "definition": `${config.baseUrl}/fhir/OperationDefinition/SystemExport`
             }
         ];
     }
