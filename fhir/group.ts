@@ -43,9 +43,7 @@ class GroupResource
         actual: true,
         type: "person",
         id: "",
-        meta: {
-            id: ""
-        }
+        meta: {}
     };
 
     constructor(resource?: Partial<Group>) {
@@ -71,7 +69,6 @@ class GroupResource
 
     setId(id: string) {
         this.json.id = id
-        this.json.meta!.id = id
         return this
     }
 
@@ -87,8 +84,7 @@ class GroupResource
      */
     setMeta(meta: Group["meta"]) {
         Object.assign(this.json.meta!, meta, {
-            id: this.json.id,
-            versionId: "1",
+            versionId  : "1",
             lastUpdated: this.json.meta!.lastUpdated
         })
         return this
