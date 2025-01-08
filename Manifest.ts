@@ -31,7 +31,7 @@ interface ManifestOptions {
 // The output files referenced in the manifest SHALL NOT be altered once they
 // have been included in a manifest that has been returned to a client.
 
-export class Manifest {
+export default class Manifest {
 
     transactionTime: ExportManifest["transactionTime"];
 
@@ -153,42 +153,43 @@ export class Manifest {
         
         return index
     }
+
+    static getPage(jobId: string, manifest: ExportManifest, pageNumber = 1)
+    {
+        // Requested a page that is not ready yet
+        if (pageNumber > manifest._pages.length) {
+            return null
+        }
+    
+        const page = manifest._pages[pageNumber - 1] || manifest._pages[0]
+    
+        if (!page) {
+            return { ...manifest, _pages: undefined }
+        }
+    
+        const [outputOffset, outputLimit, errorOffset, errorLimit, deletedOffset, deletedLimit] = page
+        var out: any = {
+            transactionTime    : manifest.transactionTime,
+            request            : manifest.request,
+            requiresAccessToken: manifest.requiresAccessToken,
+            outputOrganizedBy  : manifest.outputOrganizedBy,
+            deleted            : manifest.deleted?.slice(deletedOffset, deletedLimit),
+            output             : manifest.output  .slice(outputOffset , outputLimit ),
+            error              : manifest.error   .slice(errorOffset  , errorLimit  ),
+        }
+    
+        if (pageNumber < manifest._pages.length + 1 && (
+            manifest.output.length > outputLimit ||
+            manifest.error.length  > errorLimit  ||
+            (manifest.deleted?.length || 0) > deletedLimit)
+         ) {
+            out.link = [{
+                relation: "next",
+                url: lib.buildUrlPath(config.baseUrl, `/fhir/bulkstatus/${jobId}?page=${pageNumber+1}`)
+            }]
+        }
+    
+        return out
+    }
 }
 
-export function getManifestPage(jobId: string, manifest: ExportManifest, pageNumber = 1)
-{
-    // Requested a page that is not ready yet
-    if (pageNumber > manifest._pages.length) {
-        return null
-    }
-
-    const page = manifest._pages[pageNumber - 1] || manifest._pages[0]
-
-    if (!page) {
-        return { ...manifest, _pages: undefined }
-    }
-
-    const [outputOffset, outputLimit, errorOffset, errorLimit, deletedOffset, deletedLimit] = page
-    var out: any = {
-        transactionTime    : manifest.transactionTime,
-        request            : manifest.request,
-        requiresAccessToken: manifest.requiresAccessToken,
-        outputOrganizedBy  : manifest.outputOrganizedBy,
-        deleted            : manifest.deleted?.slice(deletedOffset, deletedLimit),
-        output             : manifest.output  .slice(outputOffset , outputLimit ),
-        error              : manifest.error   .slice(errorOffset  , errorLimit  ),
-    }
-
-    if (pageNumber < manifest._pages.length + 1 && (
-        manifest.output.length > outputLimit ||
-        manifest.error.length  > errorLimit  ||
-        (manifest.deleted?.length || 0) > deletedLimit)
-     ) {
-        out.link = [{
-            relation: "next",
-            url: lib.buildUrlPath(config.baseUrl, `/fhir/bulkstatus/${jobId}?page=${pageNumber+1}`)
-        }]
-    }
-
-    return out
-}

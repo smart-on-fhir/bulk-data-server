@@ -14,7 +14,7 @@ import prependFileHeader                         from "./transforms/prependFileH
 import FhirStream                                from "./FhirStream"
 import { ExportManifest, RequestWithSim }        from "./types"
 import { ScopeList }                             from "./scope"
-import { getManifestPage, Manifest }             from "./Manifest"
+import Manifest                                  from "./Manifest"
 
 const supportedFormats = {
     "application/fhir+ndjson" : "ndjson",
@@ -802,9 +802,9 @@ class ExportManager
             }).status(202);
 
             if (this.allowPartialManifests && this.manifest) {
-                const page = getManifestPage(this.id, this.manifest, lib.uInt(req.query.page, 1))
+                const page = Manifest.getPage(this.id, this.manifest, lib.uInt(req.query.page, 1))
                 try {
-                    res.json(page)
+                    res.json({ ...page, _pages: undefined })
                 } catch (ex) {
                     console.log(page)
                     console.log(ex)
@@ -825,9 +825,9 @@ class ExportManager
         const expires = new Date(this.createdAt + config.maxExportAge * 60000).toUTCString()
 
         if (this.allowPartialManifests) {
-            const page = getManifestPage(this.id, this.manifest, lib.uInt(req.query.page, 1))
+            const page = Manifest.getPage(this.id, this.manifest, lib.uInt(req.query.page, 1))
             if (page) {
-                return res.set({ expires }).json(page);
+                return res.set({ expires }).json({ ...page, _pages: undefined });
             } else {
                 return res.set({
                     "X-Progress" : Math.floor(this.progress) + "% complete, " + this.statusMessage,
@@ -836,7 +836,7 @@ class ExportManager
             }
         }
 
-        res.set({ expires }).json(this.manifest);
+        res.set({ expires }).json({ ...this.manifest, _pages: undefined });
     };
 
     async download(req: Request, res: Response)
