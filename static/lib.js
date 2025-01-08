@@ -77,22 +77,22 @@
 
     function equals(a, b)
     {
-        if (Array.isArray(a)) {
-            if (!Array.isArray(b) || a.length !== b.length) {
-                return false;
-            }
-            return a.every((x, i) => equals(x, b[i]));
-        }
+        // if (Array.isArray(a)) {
+        //     if (!Array.isArray(b) || a.length !== b.length) {
+        //         return false;
+        //     }
+        //     return a.every((x, i) => equals(x, b[i]));
+        // }
 
-        if (a && typeof b == "object") {
-            if (!b || typeof b != "object") {
-                return false;
-            }
-            if (!equals(Object.keys(a), Object.keys(b))) {
-                return false;
-            }
-            return Object.keys(a).every(key => equals(a[key], b[key]));
-        }
+        // if (a && typeof b == "object") {
+        //     if (!b || typeof b != "object") {
+        //         return false;
+        //     }
+        //     if (!equals(Object.keys(a), Object.keys(b))) {
+        //         return false;
+        //     }
+        //     return Object.keys(a).every(key => equals(a[key], b[key]));
+        // }
 
         return a === b;
     }
