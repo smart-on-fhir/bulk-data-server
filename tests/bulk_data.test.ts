@@ -66,6 +66,7 @@ interface KickOffOptions {
     _typeFilter            ?: string | string[]
     organizeOutputBy       ?: string
     allowPartialManifests  ?: boolean
+    outputPerPage          ?: number
 }
 
 interface Sim {
@@ -76,6 +77,7 @@ interface Sim {
     fileError?: string
     del      ?: number
     page     ?: number
+    opp      ?: number
 };
 
 interface ResponseResult<T=any> {
@@ -104,7 +106,8 @@ class Client
             extended : !!options.extended,
             secure   : !!options.secure,
             fileError: options.fileError,
-            del      : options.del
+            del      : options.del,
+            opp      : options.outputPerPage
         };
 
         if (options.resourcesPerFile) {
@@ -1224,7 +1227,7 @@ describe("Progress Updates", function() {
         // per file, the result should contain 45 files of 22 resources and one
         // of 10 resources.
         const client = new Client();
-        await client.kickOff({ _type: "Patient", resourcesPerFile: 22, databaseMultiplier: 10 });
+        await client.kickOff({ _type: "Patient", resourcesPerFile: 22, databaseMultiplier: 10, outputPerPage: 10 });
         await client.waitForExport();
         
         const { output } = client.statusResult!.parsedBody!;
@@ -1314,7 +1317,8 @@ describe("Partial manifests and pagination", function() {
         await client.kickOff({
             allowPartialManifests: true,
             resourcesPerFile: 1000,
-            _type: "Device,DocumentReference,Patient,AllergyIntolerance,ImagingStudy,CareTeam,CarePlan,Condition,DiagnosticReport,Encounter,Claim"
+            _type: "Device,DocumentReference,Patient,AllergyIntolerance,ImagingStudy,CareTeam,CarePlan,Condition,DiagnosticReport,Encounter,Claim",
+            outputPerPage: 10
         });
         const manifests = await client.waitForExport2({ delay: 10 })
         const statusUrl = client.kickOffResult?.response.headers.get("content-location")!

@@ -131,6 +131,7 @@ interface JobState {
     organizeOutputBy       ?: keyof typeof SUPPORTED_ORGANIZE_BY_TYPES
     allowPartialManifests  ?: boolean
     exportError            ?: string
+    outputPerPage          ?: number
 };
 
 class ExportManager
@@ -266,6 +267,8 @@ class ExportManager
 
     exportError: string = ""
 
+    outputPerPage: number = 10
+
     getAbortController() {
         let ctl = ABORT_CONTROLLERS.get(this.id)
         if (!ctl) {
@@ -398,8 +401,9 @@ class ExportManager
         
         ["resourceTypes", "fhirElements", "id", "requestStart", "secure",
         "patients", "outputFormat", "request", "fileError","jobStatus",
-        "extended", "createdAt", "ignoreTransientError", "progress", "exportError",
-        "statusMessage", "manifest", "tooManyFiles", "allowPartialManifests"]
+        "extended", "createdAt", "ignoreTransientError", "progress",
+        "exportError", "statusMessage", "manifest", "tooManyFiles",
+        "allowPartialManifests", "outputPerPage"]
         .forEach(key => {
             if (key in options) {
                 // @ts-ignore
@@ -466,7 +470,8 @@ class ExportManager
             tooManyFiles           : this.tooManyFiles,
             organizeOutputBy       : this.organizeOutputBy,
             allowPartialManifests  : this.allowPartialManifests,
-            exportError            : this.exportError
+            exportError            : this.exportError,
+            outputPerPage          : this.outputPerPage
         };
     }
 
@@ -503,6 +508,8 @@ class ExportManager
         this.setSystemLevel(system);
 
         this.extended = !!sim.extended;
+
+        this.outputPerPage = lib.uInt(sim.opp, 10);
 
         const _type                  = getExportParam(req, "_type")         || "";
         const _patient               = getExportParam(req, "patient")       || "";
@@ -609,7 +616,7 @@ class ExportManager
             request          : this.request,
             outputOrganizedBy: this.organizeOutputBy,
             outputFormat     : this.outputFormat,
-            outputPerPage    : this.allowPartialManifests ? 10 : Infinity,
+            outputPerPage    : this.allowPartialManifests ? this.outputPerPage : Infinity,
             _pages           : []
         })
 
@@ -809,14 +816,14 @@ class ExportManager
             }).status(202);
 
             if (this.allowPartialManifests && this.manifest) {
-                const page = Manifest.getPage(this.id, this.manifest, lib.uInt(req.query.page, 1))
                 try {
-                    res.json({ ...page, _pages: undefined })
+                    const page = Manifest.getPage(this.id, this.manifest, lib.uInt(req.query.page, 1))
+                    if (page) {
+                        res.json({ ...page, _pages: undefined })
+                    }
                 } catch (ex) {
-                    console.log(page)
                     console.log(ex)
                 }
-                return
             }
 
             return res.end();

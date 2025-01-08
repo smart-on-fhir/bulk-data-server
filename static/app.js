@@ -10,6 +10,7 @@
         m         : { type: "number", defaultValue: 1 },
         del       : { type: "number", defaultValue: 0 },
         secure    : { type: "number", defaultValue: 1 },
+        opp       : { type: "number", defaultValue: 10 },
     };
 
     var MODEL    = new Lib.Model();
@@ -135,6 +136,7 @@
             m     : +MODEL.get("m"),
             del   : +MODEL.get("del"),
             secure: +MODEL.get("secure"),
+            opp   : +MODEL.get("opp")
         })));
         MODEL.set("openLaunchData", Lib.base64UrlEncode(JSON.stringify({
             err   :  MODEL.get("err"),
@@ -287,7 +289,7 @@
         MODEL.on("change:jwks change:jwks_url change:err change:tlt", generateClientId);
 
         // Whenever the advanced options change (re)generate the launchData
-        MODEL.on("change:page change:del change:err change:tlt change:m change:secure", updateLaunchData);
+        MODEL.on("change:page change:del change:err change:tlt change:m change:secure change:opp", updateLaunchData);
         
         // Whenever launchData changes, update the fhir server fhir_server_url
         MODEL.on("change:launchData", function updateFhirUrl(e) {

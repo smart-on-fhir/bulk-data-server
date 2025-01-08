@@ -18,6 +18,7 @@ export interface Sim {
     offset    ?: number
     extended  ?: boolean
     stratifier?: string
+    opp       ?: number // outputPerPage
 }
 
 export interface RequestWithSim extends Request {

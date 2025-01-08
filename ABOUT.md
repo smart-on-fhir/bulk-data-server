@@ -1,6 +1,6 @@
-- This is a reference implementation...
-- Support FHIR R4, but is NOT a fhir server...
-- We currently support Bulk Data v3 (although it says 2.0.0 at https://build.fhir.org/ig/HL7/bulk-data/branches/argo24/export.html)
+- TODO: This is a reference implementation...
+- TODO: Support FHIR R4, but is NOT a fhir server...
+- TODO: We currently support Bulk Data v3 (although it says 2.0.0 at https://build.fhir.org/ig/HL7/bulk-data/branches/argo24/export.html)
 
 
 ### What data is included
@@ -26,7 +26,8 @@ For example, if no `organizeOutputBy` parameter is
     `2.output.ndjson`, etc.
 
 ### Output file splitting
-There is a default limit of `10,000` resources per file. If there are more resources they will overflow into the next file. For testing purposes that limit can be configured on the home page.
+- There is a default limit of `10,000` resources per file. If there are more resources they will overflow into the next file. For testing purposes that limit can be configured on the home page.
+- If the client uses `allowPartialManifests`, then there is a default limit of 10 manifest output entries per manifest page. This can also be changed from the home page.
 
 ### Other output file limitations
 - The number of output files is limited to 150. If your export parameters result in more than 150 files, you will get a "too many files" error.
