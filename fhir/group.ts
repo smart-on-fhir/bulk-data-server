@@ -122,8 +122,7 @@ class GroupResource
      * individuals. If false, the group defines a set of intended individuals.
      */
     setActual(actual?: Group["actual"]) {
-        assert(actual !== false, "This server supports actual groups only", OperationOutcomeError)
-        this.json.actual = true
+        this.json.actual = !!actual
         return this
     }
 
@@ -200,6 +199,7 @@ class GroupResource
                         throw new Error(`Invalid memberFilter "${extension.valueString}". ${ex}`)
                     }
                     this.json.modifierExtension.push(extension)
+                    this.json.actual = false
                 }
             }
         }
