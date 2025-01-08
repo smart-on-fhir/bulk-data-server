@@ -130,6 +130,7 @@ interface JobState {
     tooManyFiles           ?: boolean
     organizeOutputBy       ?: keyof typeof SUPPORTED_ORGANIZE_BY_TYPES
     allowPartialManifests  ?: boolean
+    exportError            ?: string
 };
 
 class ExportManager
@@ -263,6 +264,8 @@ class ExportManager
 
     allowPartialManifests = true
 
+    exportError: string = ""
+
     getAbortController() {
         let ctl = ABORT_CONTROLLERS.get(this.id)
         if (!ctl) {
@@ -395,7 +398,7 @@ class ExportManager
         
         ["resourceTypes", "fhirElements", "id", "requestStart", "secure",
         "patients", "outputFormat", "request", "fileError","jobStatus",
-        "extended", "createdAt", "ignoreTransientError", "progress",
+        "extended", "createdAt", "ignoreTransientError", "progress", "exportError",
         "statusMessage", "manifest", "tooManyFiles", "allowPartialManifests"]
         .forEach(key => {
             if (key in options) {
@@ -462,7 +465,8 @@ class ExportManager
             manifest               : this.manifest,
             tooManyFiles           : this.tooManyFiles,
             organizeOutputBy       : this.organizeOutputBy,
-            allowPartialManifests  : this.allowPartialManifests
+            allowPartialManifests  : this.allowPartialManifests,
+            exportError            : this.exportError
         };
     }
 
@@ -587,24 +591,13 @@ class ExportManager
 
         await this.save();
 
+        res.set("Content-Location", url);
+        lib.outcomes.exportAccepted(res, url);
+
         // This is what starts the actual export job but we don't wait for it to
         // complete here! This means we cannot catch errors here, unless the job
         // Failed to be created
-        this.buildManifest(abortSignal).then(
-            () => {
-                res.set("Content-Location", url);
-                lib.outcomes.exportAccepted(res, url);
-            },
-            e => {
-                if (!(e instanceof lib.AbortError)) {
-                    console.error(e)
-                }
-                // In the case that errors prevent the export from completing,
-                // the server SHOULD respond with a FHIR OperationOutcome
-                // resource in JSON format.
-                res.status(400).json(lib.createOperationOutcome(e.message, { severity: "error" }))
-            }
-        );
+        this.buildManifest(abortSignal).catch(() => {});
     }
 
     async buildManifest(signal: AbortSignal) {
@@ -696,7 +689,16 @@ class ExportManager
         }
 
         // The entire export will fail if init fails!
-        await stream.init()
+        try {
+            await stream.init()
+        } catch(e) {
+            console.error(e)
+            if (!(e instanceof lib.AbortError)) {
+                this.exportError = (e as Error).message
+                await this.save();
+                throw e
+            }
+        }
 
         return new Promise((resolve, reject) => {
             let count   = 0;
@@ -767,6 +769,11 @@ class ExportManager
     }
 
     async handleStatus(req: Request, res: Response) {
+
+        // exportError
+        if (this.exportError) {
+            return lib.operationOutcome(res, this.exportError, { httpCode: 400 });
+        }
 
         // Reject unauthorized
         if (this.secure && !req.headers.authorization) {
