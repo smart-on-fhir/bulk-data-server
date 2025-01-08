@@ -825,6 +825,8 @@
         const QUERY   = Lib.getUrlQuery({ camelCaseKeys: true });
         const baseURL = QUERY.server//new URL(QUERY.server).pathname;
 
+        $("a.capability-statement").attr("href", baseURL + "/metadata");
+
         // Debug events? Do this first if needed
         if (Lib.bool(QUERY.debug)) {
             MODEL.on("change", e => console.log("STATE:", e.type, e.data));
