@@ -1,4 +1,5 @@
 import { Group } from "fhir/r4";
+import config    from "../config";
 
 
 export default {
@@ -12,7 +13,7 @@ export default {
                 }
             ],
             name: "export",
-            definition: "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/group-export"
+            definition: `${config.baseUrl}/fhir/OperationDefinition/GroupExport`
         }
     ],
     profile: "http://hl7.org/fhir/StructureDefinition/Group",

@@ -6,11 +6,13 @@ import { Router } from "express"
 import PatientEverything from "./Patient--everything"
 import GroupEverything   from "./Group-i-everything"
 import ResourceCounts    from "./s-get-resource-counts"
+import GroupExport       from "./GroupExport"
 
 const entries = [
     PatientEverything,
     GroupEverything,
-    ResourceCounts
+    ResourceCounts,
+    GroupExport
 ];
 
 const SERVER_START_TIME = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -35,8 +37,9 @@ router.get("/", (req, res) => res.json({
     entry: entries
 }));
 
-router.get("/Patient--everything"   , (req, res) => res.json(entries[0]));
-router.get("/Group-i-everything"    , (req, res) => res.json(entries[1]));
-router.get("/-s-get-resource-counts", (req, res) => res.json(entries[2]));
+router.get("/Patient--everything"   , (req, res) => res.json(PatientEverything));
+router.get("/Group-i-everything"    , (req, res) => res.json(GroupEverything  ));
+router.get("/-s-get-resource-counts", (req, res) => res.json(ResourceCounts   ));
+router.get("/GroupExport"           , (req, res) => res.json(GroupExport      ));
 
 export default router
