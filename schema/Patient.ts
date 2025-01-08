@@ -1,4 +1,5 @@
 import { Patient } from "fhir/r4"
+import config      from "../config"
 
 export default {
     type: "Patient",
@@ -11,7 +12,7 @@ export default {
                 }
             ],
             name: "export",
-            definition: "http://hl7.org/fhir/uv/bulkdata/OperationDefinition/patient-export"
+            definition: `${config.baseUrl}/fhir/OperationDefinition/PatientExport`
         }
     ],
     profile: "http://hl7.org/fhir/StructureDefinition/Patient",
