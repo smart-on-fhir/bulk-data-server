@@ -677,7 +677,26 @@ class ExportManager
             if (this.simulatedError == "some_file_generation_failed" && fileCount % 2) {
                 manifestInstance.addError(entry, `Failed to export ${fileName}`)
             } else {
-                if (manifestInstance.addFile(entry, { limit: count, offset, stratifier: this.organizeOutputBy ? undefined : stratifier })) {
+
+                // Here we know we have a list of {count} resources that we can
+                // put into a file by generating the proper link to it. However,
+                // if {this.simulateDeletedPct} is set, certain percentage of
+                // them should go into the "deleted" array instead!
+                if (this.simulateDeletedPct && this.since) {
+                    let cnt = Math.round(entry.count / 100 * this.simulateDeletedPct);
+                    if (cnt) {
+                        manifestInstance.addDeleted(
+                            fileName.replace(/\.([a-z]+)$/, ".deleted.$1"),
+                            cnt,
+                            offset,
+                            cnt
+                        );
+                        entry.count -= cnt
+                        offset += cnt;
+                    }
+                }
+
+                if (manifestInstance.addFile(entry, { limit: entry.count, offset, stratifier: this.organizeOutputBy ? undefined : stratifier })) {
                     if (this.allowPartialManifests) {
                         this.manifest = manifestInstance.toJSON()
                     }
@@ -896,7 +915,7 @@ class ExportManager
         const stratifier = SUPPORTED_ORGANIZE_BY_TYPES[this.organizeOutputBy] as any
 
         let input = new FhirStream({
-            types      : this.organizeOutputBy ? this.resourceTypes : [sim.stratifier!],
+            types      : this.organizeOutputBy || sim.del ? this.resourceTypes : [sim.stratifier!],
             databaseMultiplier: this.databaseMultiplier,
             extended   : this.extended,
             group      : this.group,
@@ -923,7 +942,7 @@ class ExportManager
             }));
 
             // Prepend header row if needed
-            if (this.organizeOutputBy) {
+            if (this.organizeOutputBy && !sim.del) {
                 pipeline = pipeline.pipe(prependFileHeader(this.organizeOutputBy))
             }
 

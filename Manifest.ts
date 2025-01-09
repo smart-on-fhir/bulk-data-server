@@ -103,11 +103,11 @@ export default class Manifest {
         return false
     }
 
-    addDeleted(resourceType: string, limit: number, offset: number, count: number) {
+    addDeleted(fileName: string, limit: number, offset: number, count: number) {
         this.deleted!.push({
             type: "Bundle",
             count,
-            url: this.buildUrl({ del: 1, limit, offset }, resourceType)
+            url: this.buildUrl({ del: 1, limit, offset }, fileName)
         }); 
     }
 

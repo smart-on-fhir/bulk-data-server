@@ -19,11 +19,10 @@ All export types are supported. That includes System, Group and Patient-level ex
 
 ### Output file naming conventions
 Files are named as `{index}.{ResourceType}.{extension}` or `{index}.output.{extension}`, where `{index}` is an auto-incrementing numeric prefix starting from `1`, `{ResourceType}` is the resourceType of the resources included in that file, and `{extension}` is `ndjson` or `csv`.
-For example, if no `organizeOutputBy` parameter is
-    provided and there are multiple patient files, they will be named `1.Patient.ndjson`,
-    `2.Patient.ndjson`, etc. However, if `organizeOutputBy` is used the files will contain
-    resources of different types, therefore the files will be named `1.output.ndjson`,
-    `2.output.ndjson`, etc.
+For example, if no `organizeOutputBy` parameter is provided and there are multiple patient files, they will be named `1.Patient.ndjson`, `2.Patient.ndjson`, etc. However, if `organizeOutputBy` is used the files will contain resources of different types, therefore the files will be named `1.output.ndjson`, `2.output.ndjson`, etc.
+
+For "deleted" files (listed in the "deleted" section of the manifest) the names will look like `{index}.{ResourceType}.deleted.{extension}` or `{index}.output.deleted.{extension}`.
+
 
 ### Output file splitting
 - There is a default limit of `10,000` resources per file. If there are more resources they will overflow into the next file. For testing purposes that limit can be configured on the home page.
