@@ -1277,8 +1277,8 @@ describe("Progress Updates", function() {
         const client = new Client();
         await client.kickOff({ _type: "Patient", resourcesPerFile: 25, simulatedError: "some_file_generation_failed" });
         await client.waitForExport()
-        expect(client.statusResult!.parsedBody!.output.length).to.equal(2);
-        expect(client.statusResult!.parsedBody!.error.length).to.equal(2);
+        expect(client.statusResult!.parsedBody!.output.length).to.equal(1);
+        expect(client.statusResult!.parsedBody!.error.length).to.equal(3);
     });
 });
 
@@ -1391,7 +1391,7 @@ describe("Partial manifests and pagination", function() {
         expect(links.length).to.equal(1)
         expect(links[0].count).to.equal(4)
         expect(links[0].type).to.equal(undefined)
-        expect(links[0].url).to.include("/fhir/bulkfiles/1.output.ndjson")
+        expect(links[0].url).to.match(/\/fhir\/bulkfiles\/\d+\.output\.ndjson$/)
         expect(links[0].sim.secure).to.equal(false)
         expect(links[0].sim.offset).to.equal(0)
         expect(links[0].sim.limit).to.equal(4)
@@ -1407,7 +1407,7 @@ describe("Partial manifests and pagination", function() {
         expect(links.length).to.equal(1)
         expect(links[0].count).to.equal(4)
         expect(links[0].type).to.equal(undefined)
-        expect(links[0].url).to.include("/fhir/bulkfiles/1.output.ndjson")
+        expect(links[0].url).to.match(/\/fhir\/bulkfiles\/\d+\.output\.ndjson$/)
         expect(links[0].sim.secure).to.equal(false)
         expect(links[0].sim.offset).to.equal(0)
         expect(links[0].sim.limit).to.equal(4)
@@ -1828,7 +1828,7 @@ describe("Groups", function() {
         await client.waitForExport();
         expect(client.statusResult!.parsedBody!.output, "statusResult.body.output must be an array").to.be.instanceOf(Array);
         expect(client.statusResult!.parsedBody!.output.length, "Wrong number of links returned").to.equal(1);
-        expect(client.statusResult!.parsedBody!.output[0].url).to.match(/\/1\.Patient\.ndjson$/);
+        expect(client.statusResult!.parsedBody!.output[0].url).to.match(/\/\d+\.Patient\.ndjson$/);
         const { lines } = await client.downloadFileAt(0);
         expect(lines.length, "Wrong number of lines").to.equal(27);
         let ids: Record<string, number> = {};

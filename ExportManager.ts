@@ -640,9 +640,10 @@ class ExportManager
 
         signal.addEventListener("abort", () => stream.destroy())
 
-        let fileCount      = 0;
-        let offset         = 0;
-        let lastStratifier = "";
+        let globalFileCount = 0;
+        // let fileCount       = 0;
+        let offset          = 0;
+        let lastStratifier  = "";
 
         const addOutputEntry = async ({ stratifier, count, continues }: {
             stratifier: string
@@ -650,18 +651,20 @@ class ExportManager
             continues?: boolean
         }) => {
 
+            ++globalFileCount;
+
             if (lastStratifier !== stratifier) {
                 offset = 0
             }
 
             if (!this.organizeOutputBy && lastStratifier !== stratifier) {
                 lastStratifier = stratifier
-                fileCount = 0
+                // fileCount = 0
             }
 
             const fileName = this.organizeOutputBy ?
-                ++fileCount + ".output." + this.outputFormat :
-                ++fileCount + "." + stratifier + "." + this.outputFormat
+                ++globalFileCount + ".output." + this.outputFormat :
+                ++globalFileCount + "." + stratifier + "." + this.outputFormat
 
             const entry: any = { url: fileName, count }
 
@@ -670,11 +673,11 @@ class ExportManager
             }
 
             if (continues) {
-                entry.continuesInFile = (fileCount + 1) + "." + (this.organizeOutputBy ? "output" : stratifier) + ".ndjson"
+                entry.continuesInFile = (globalFileCount + 1) + "." + (this.organizeOutputBy ? "output" : stratifier) + ".ndjson"
             }
 
             // ~ half of the links might fail if such error is requested
-            if (this.simulatedError == "some_file_generation_failed" && fileCount % 2) {
+            if (this.simulatedError == "some_file_generation_failed" && globalFileCount % 3) {
                 manifestInstance.addError(entry, `Failed to export ${fileName}`)
             } else {
 
