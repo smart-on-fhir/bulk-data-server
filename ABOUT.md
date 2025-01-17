@@ -60,7 +60,7 @@ There are 8 built-in groups and every patient is a member of one of those groups
 ### Managing Groups
 In addition to the "fixed" groups described above, it is also possible to create temporary custom groups with the Argonaut [Bulk Cohort API](https://build.fhir.org/ig/HL7/bulk-data/branches/argo24/group.html#bulk-cohort-api). There are some limitations/requirements to consider when creating a custom group:
 - Every group is required to have a `name`, the `type` property must be set to `"person"`, and the `actual` property must be set to `false`.
-- The `member` property is accepted but it is ignored because custom groups are only intended to work using their `memberFilter` extension.
-- `modifierExtension` should be provided and should include one or more `memberFilter` extensions. Otherwise the group will be useless since it won't have any expressions to use for finding members.
+- The `member` property is accepted but it is ignored because custom groups are only intended to work using their `member-filter` extension.
+- `modifierExtension` should be provided and should include one or more `member-filter` extensions. Otherwise the group will be useless since it won't have any expressions to use for finding members.
 - Custom groups are temporary and are automatically deleted 7 days after the time if their last update (or create). Also, in some cases we might redeploy or restart the server which would delete any custom groups prematurely!
 - Custom groups are only intended for personal testing and won't appear in the groups listing (`[fhirBaseUrl]/Group`)

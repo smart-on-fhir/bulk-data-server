@@ -869,7 +869,7 @@ export function getGroupMembers(group: Group, rows: any[]): Set<string> {
 
     // Get group filters
     group.modifierExtension!
-    .filter(ext => ext.url.endsWith("/memberFilter"))
+    .filter(ext => ext.url.endsWith("/member-filter"))
     .map(ext => ext.valueString)
     .forEach(f => {
         if (f) {
@@ -890,7 +890,7 @@ export function getGroupMembers(group: Group, rows: any[]): Set<string> {
             continue
         }
 
-        // If multiple memberFilter extensions are provided that contain
+        // If multiple member-filter extensions are provided that contain
         // criteria for different resource types, servers SHALL filter the
         // group to only include Patients or Practitioners that have
         // resources in their compartments that meet the conditions in all

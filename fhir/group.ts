@@ -142,16 +142,16 @@ class GroupResource
      * Practitioner resource, or Group resource that is a group of Patient
      * resources or Practitioner resources.
      * 
-     * When members are provided, the expression in the memberFilter extension
+     * When members are provided, the expression in the member-filter extension
      * for the Group SHALL only be applied to the compartments of the referenced
      * resources, or those of the members of referenced Group resources.
      * 
      * When members are not provided and the Group's type element is set to
-     * person, the expression in the memberFilter extension SHALL be applied to
+     * person, the expression in the member-filter extension SHALL be applied to
      * all of the Patient compartments the client is authorized to access.
      * 
      * When members are not provided and the Group's type element is set to
-     * practitioner, the expression in the memberFilter extension SHALL be
+     * practitioner, the expression in the member-filter extension SHALL be
      * applied to all of the Practitioner compartments the client is authorized
      * to access.
      */
@@ -163,32 +163,32 @@ class GroupResource
     }
 
     /**
-     * memberFilter ModifierExtension (1..*)
+     * member-filter ModifierExtension (1..*)
      * 
-     * A server SHALL support the inclusion of one or more memberFilter modifier
+     * A server SHALL support the inclusion of one or more member-filter modifier
      * extensions containing a valueExpression with a language of
      * application/x-fhir-query and an expression populated with a FHIR REST API
      * query for a resource type included in the Patient or Practitioner
-     * compartment. If multiple memberFilter extensions are provided that
+     * compartment. If multiple member-filter extensions are provided that
      * contain criteria for different resource types, servers SHALL filter the
      * group to only include Patients or Practitioners that have resources in
      * their compartments that meet the conditions in all of the expressions.
-     * If multiple memberFilter extensions are provided that contain criteria
+     * If multiple member-filter extensions are provided that contain criteria
      * for a single resource type, the server SHALL include Patients or
      * Practitioners who have resources in their compartments that meet the
      * criteria for that resource type in any of those expressions (a logical
      * "or"). A server MAY also support other expression languages such as
      * text/cql. When more than one language is supported by a server a client
-     * SHALL use a single language type for all of the memberFilter expressions
+     * SHALL use a single language type for all of the member-filter expressions
      * included in a single Group.
      */
     setModifierExtension(modifierExtension?: Group["modifierExtension"]) {
         if (Array.isArray(modifierExtension) && modifierExtension.length) {
             this.json.modifierExtension = []
             for (const extension of modifierExtension) {
-                if (extension.url.endsWith("/memberFilter") && extension.valueString) {
+                if (extension.url.endsWith("/member-filter") && extension.valueString) {
                     // Servers SHALL reject Group creation requests that include
-                    // unsupported search parameters in a memberFilter expression
+                    // unsupported search parameters in a member-filter expression
                     try {
                         validateQuery(extension.valueString, {
                             compartment: this.json.type === "person" ?
@@ -196,7 +196,7 @@ class GroupResource
                                 config.practitionerCompartment
                         })
                     } catch (ex) {
-                        throw new Error(`Invalid memberFilter "${extension.valueString}". ${ex}`)
+                        throw new Error(`Invalid member-filter "${extension.valueString}". ${ex}`)
                     }
                     this.json.modifierExtension.push(extension)
                     this.json.actual = false

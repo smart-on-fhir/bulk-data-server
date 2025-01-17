@@ -1016,7 +1016,7 @@ describe("getGroupMembers", () => {
     for (const [memberFilters, count] of matrix.entries()) {
         it (JSON.stringify(memberFilters) + " => " + count, async () => {
             const group = { modifierExtension: memberFilters.map(f => ({
-                "url": "/memberFilter", valueString: f })) } as Group;
+                "url": "/member-filter", valueString: f })) } as Group;
             expect(getGroupMembers(group, rows).size).to.equal(count)
         })
     }
