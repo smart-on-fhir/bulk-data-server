@@ -67,6 +67,7 @@ interface KickOffOptions {
     organizeOutputBy       ?: string
     allowPartialManifests  ?: boolean
     outputPerPage          ?: number
+    maxFiles               ?: number
 }
 
 interface Sim {
@@ -78,6 +79,7 @@ interface Sim {
     del      ?: number
     page     ?: number
     opp      ?: number
+    mf       ?: number
 };
 
 interface ResponseResult<T=any> {
@@ -107,7 +109,8 @@ class Client
             secure   : !!options.secure,
             fileError: options.fileError,
             del      : options.del,
-            opp      : options.outputPerPage
+            opp      : options.outputPerPage,
+            mf       : options.maxFiles || undefined
         };
 
         if (options.resourcesPerFile) {
@@ -1263,7 +1266,7 @@ describe("Progress Updates", function() {
 
     it ("protects against too many generated files", async () => {
         const client = new Client();
-        await client.kickOff({ _type: "Observation", resourcesPerFile: 1 });
+        await client.kickOff({ _type: "Observation", resourcesPerFile: 1, maxFiles: 2 });
         return client.waitForExport().then(
             () => { throw new Error("Should have failed"); },
             err => {

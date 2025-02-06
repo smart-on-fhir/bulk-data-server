@@ -132,6 +132,7 @@ interface JobState {
     allowPartialManifests  ?: boolean
     exportError            ?: string
     outputPerPage          ?: number
+    maxFiles               ?: number
 };
 
 class ExportManager
@@ -269,6 +270,8 @@ class ExportManager
 
     outputPerPage: number = 10
 
+    maxFiles: number = config.maxFiles
+
     getAbortController() {
         let ctl = ABORT_CONTROLLERS.get(this.id)
         if (!ctl) {
@@ -403,7 +406,7 @@ class ExportManager
         "patients", "outputFormat", "request", "fileError","jobStatus",
         "extended", "createdAt", "ignoreTransientError", "progress",
         "exportError", "statusMessage", "manifest", "tooManyFiles",
-        "allowPartialManifests", "outputPerPage"]
+        "allowPartialManifests", "outputPerPage", "maxFiles"]
         .forEach(key => {
             if (key in options) {
                 // @ts-ignore
@@ -707,7 +710,7 @@ class ExportManager
             }
 
             // Limit the manifest size based on total number of file links
-            if (manifestInstance.size() > config.maxFiles) {
+            if (manifestInstance.size() > this.maxFiles) {
                 this.tooManyFiles = true;
                 await this.save();
                 stream.destroy(new Error("Too many files"))

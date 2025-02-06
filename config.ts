@@ -23,7 +23,7 @@ export default {
     defaultTokenLifeTime: 15,
 
     // The maximum number of files that can be downloaded
-    maxFiles: 150,
+    maxFiles: 1500,
 
     // How many rows to select (load into memory and then stream them one by one).
     // The bigger the number the fewer sql queries will be executed but more

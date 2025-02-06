@@ -47,7 +47,7 @@ For "deleted" files (listed in the "deleted" section of the manifest) the names 
 - If the client uses `allowPartialManifests`, then there is a default limit of 10 manifest output entries per manifest page. This can also be changed from the server's home page.
 
 ### Other output file limitations
-- The number of output files is limited to 150. If your export parameters result in more than 150 files, you will get a "too many files" error.
+- The number of output files is limited to 1500. If your export parameters result in more than 1500 files, you will get a "too many files" error.
 - The exported files expire in 60 minutes and the entire export is automatically deleted after that.
 
 ### Additional supporting resources

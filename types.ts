@@ -19,6 +19,7 @@ export interface Sim {
     extended  ?: boolean
     stratifier?: string
     opp       ?: number // outputPerPage
+    mf        ?: number // maxFiles
 }
 
 export interface RequestWithSim extends Request {
