@@ -422,7 +422,7 @@ export function getOne(req: Request, res: Response) {
 
         const json = JSON.parse(row.resource_json)
 
-        res.json({ ...json, quantity: json.quantity * multiplier });
+        res.json({ ...json, quantity: (json.quantity * multiplier) || undefined });
     })
 }
 
