@@ -144,11 +144,13 @@ export default class FhirStream extends Readable
             this.builder.setGroupId("")
             
             // Get Group
-            const group = JSON.parse((await this.db.promise(
-                "get",
-                `SELECT "resource_json" FROM "data" WHERE "resource_id" = ?`,
-                [this.group]
-            )).resource_json) as Group;
+            const groupRow = await this.db.promise("get", `SELECT "resource_json" FROM "data" WHERE "resource_id" = ?`, [this.group])
+
+            if (!groupRow?.resource_json) {
+                throw new Error(`Group ${this.group} does not exist`)
+            }
+
+            const group = JSON.parse(groupRow.resource_json) as Group;
 
             // Get all resources
             const resources = await this.db.promise(

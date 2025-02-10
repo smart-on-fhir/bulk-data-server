@@ -864,17 +864,26 @@ class ExportManager
         const expires = new Date(this.createdAt + config.maxExportAge * 60000).toUTCString()
 
         if (this.allowPartialManifests) {
+
+            // Try getting a page
             const page = Manifest.getPage(this.id, this.manifest, lib.uInt(req.query.page, 1))
             if (page) {
                 return res.set({ expires }).json({ ...page, _pages: undefined });
-            } else {
-                return res.set({
-                    "X-Progress" : Math.floor(this.progress) + "% complete, " + this.statusMessage,
-                    "Retry-After": 1
-                }).status(202).end()
             }
+            
+            // No page but progress is 100% - finished with no results
+            if (this.progress === 100) {
+                return res.set({ expires }).json({ ...this.manifest, _pages: undefined });    
+            }
+            
+            // Still working
+            return res.set({
+                "X-Progress" : Math.floor(this.progress) + "% complete, " + this.statusMessage,
+                "Retry-After": 1
+            }).status(202).end()
         }
 
+        // Single-page manifest
         res.set({ expires }).json({ ...this.manifest, _pages: undefined });
     };
 
