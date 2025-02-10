@@ -760,7 +760,9 @@ export function asyncPatternHandler({
         // Process directly
         job.then(
             result => res.set(result.headers || {}).status(result.status || 200).json(result.body),
-            error  => operationOutcome(res, error.message, { httpCode: 500 })
+            error  => error instanceof OperationOutcomeError ?
+                res.status(error.httpCode).json(error) :
+                operationOutcome(res, error.message, { httpCode: 500 })
         )
     }
 
@@ -870,10 +872,10 @@ export function getGroupMembers(group: Group, rows: any[]): Set<string> {
     // Get group filters
     group.modifierExtension!
     .filter(ext => ext.url.endsWith("/member-filter"))
-    .map(ext => ext.valueString)
-    .forEach(f => {
-        if (f) {
-            const [resourceType, resourceQuery] = f.split("?")
+    .map(ext => ext.valueExpression?.expression)
+    .forEach(expression => {
+        if (expression) {
+            const [resourceType, resourceQuery] = expression.split("?")
             if (filtersByType[resourceType]) {
                 filtersByType[resourceType] += "&" + resourceQuery
             } else {

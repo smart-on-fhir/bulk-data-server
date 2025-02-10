@@ -62,9 +62,9 @@ class GroupResource
             .setType(resource.type)
             .setActual(resource.actual)
             .setCharacteristic(resource.characteristic)
-            .setMember(resource.member)
             .setModifierExtension(resource.modifierExtension)
             .setLastUpdated(new Date().toISOString())
+            .setMember(resource.member)
     }
 
     setId(id: string) {
@@ -156,9 +156,15 @@ class GroupResource
      * to access.
      */
     setMember(member?: Group["member"]) {
-        if (Array.isArray(member) && member.length) {
-            this.json.member = member
+        if (member) {
+            throw new OperationOutcomeError(
+                "Member based groups are not supported by this server. Please remove the member property from your payload.",
+                { httpCode: 501 }
+            )
         }
+        // if (Array.isArray(member) && member.length) {
+        //     this.json.member = member
+        // }
         return this
     }
 
@@ -186,17 +192,17 @@ class GroupResource
         if (Array.isArray(modifierExtension) && modifierExtension.length) {
             this.json.modifierExtension = []
             for (const extension of modifierExtension) {
-                if (extension.url.endsWith("/member-filter") && extension.valueString) {
+                if (extension.url.endsWith("/member-filter") && extension.valueExpression?.expression) {
                     // Servers SHALL reject Group creation requests that include
                     // unsupported search parameters in a member-filter expression
                     try {
-                        validateQuery(extension.valueString, {
+                        validateQuery(extension.valueExpression.expression, {
                             compartment: this.json.type === "person" ?
                                 config.patientCompartment :
                                 config.practitionerCompartment
                         })
                     } catch (ex) {
-                        throw new Error(`Invalid member-filter "${extension.valueString}". ${ex}`)
+                        throw new Error(`Invalid member-filter "${extension.valueExpression.expression}". ${ex}`)
                     }
                     this.json.modifierExtension.push(extension)
                     this.json.actual = false
